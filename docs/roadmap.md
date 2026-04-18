@@ -31,6 +31,7 @@
 - document how this repo should ingest future missed-review cases from linked GitHub repos
 - start moving GitHub-facing workflows behind plugin-owned interfaces instead of loose repo scripts
 - make the plugin MCP boundary, not ambient `gh`, the primary live GitHub access path
+- add a Codex-side capture helper so GitHub connector output becomes a pipeline artifact without manual save steps
 
 ## Next Execution Plan
 

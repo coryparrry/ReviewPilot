@@ -131,6 +131,7 @@ The plugin should own the intake workflow under:
 
 Initial planned script surface:
 
+- `capture_github_mcp_feedback.py`
 - `ingest_github_review_feedback.py`
 - `fetch_github_review_feedback.py`
 - `propose_corpus_updates.py`
@@ -246,6 +247,7 @@ Exit criteria:
 The first live GitHub slice should remain read-only:
 
 - prefer the plugin's GitHub MCP connector as the live fetch boundary
+- add a Codex-side capture helper that turns GitHub MCP tool output into a stable raw artifact file without requiring the user to save connector output manually
 - import raw PR review comments and review threads from MCP-produced JSON snapshots
 - save raw artifacts under ignored `artifacts/`
 - hand off into the existing proposal-only normalizer

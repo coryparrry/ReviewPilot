@@ -44,6 +44,10 @@ The first proposal-only intake script lives at:
 
 - `plugins/codex-review/scripts/ingest_github_review_feedback.py`
 
+The Codex-side MCP capture helper lives at:
+
+- `plugins/codex-review/scripts/capture_github_mcp_feedback.py`
+
 The legacy `gh`-based live GitHub fetch script lives at:
 
 - `plugins/codex-review/scripts/fetch_github_review_feedback.py`
@@ -103,7 +107,23 @@ For MCP-native live intake, use the plugin's GitHub connector to capture one of 
 - PR comments timeline output compatible with `github_mcp_pr_comments`
 - review-thread output compatible with `github_mcp_review_threads`
 
-Then feed that saved raw JSON file into `--raw-input`.
+The intended Codex-side flow is:
+
+1. use the GitHub connector to fetch either PR comments or review threads
+2. write that tool output into a local raw artifact with `capture_github_mcp_feedback.py`
+3. feed the captured artifact into `--raw-input`
+
+Example capture step for PR comments:
+
+```powershell
+python .\plugins\codex-review\scripts\capture_github_mcp_feedback.py `
+  --repo owner/name `
+  --pr 123 `
+  --kind pr_comments `
+  --input .\artifacts\github-intake\mcp-tool-output.json
+```
+
+In Codex usage, the tool output file can be created by the agent automatically after the GitHub MCP call, so the user does not need to save connector output by hand.
 
 To compare a real review output against the corpus before and after apply in the same run:
 
