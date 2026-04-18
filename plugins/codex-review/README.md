@@ -131,6 +131,7 @@ That wrapper runs:
 - optional candidate-quality gate
 - optional promote
 - apply
+- optional probationary-to-primary promotion when you ask for it explicitly
 
 For the actual review-authoring path, use:
 
@@ -220,6 +221,26 @@ That path:
 - requires at least one strict expected-group match by default
 - removes promoted cases from the probationary corpus
 - appends them into the primary corpus only when the promotion gate clears
+
+The wrapper can now drive that same durable promotion step in the same run directory:
+
+```powershell
+python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
+  --repo owner/name `
+  --pr 123 `
+  --raw-input .\artifacts\github-intake\mcp\pr-123-comments.json `
+  --raw-format github_mcp_pr_comments `
+  --score-review-artifacts .\.codex-review `
+  --gate-candidates `
+  --apply-mode auto `
+  --promote-probationary-ids feature-gates-preserve-existing
+```
+
+That keeps the normal safe intake path unchanged by default, but lets one wrapper run:
+
+- learn into the probationary lane
+- then evaluate selected probationary cases for durable promotion
+- write a separate promotion result artifact in the same run folder
 
 If the review was prepared through the bundled pre-PR helper, the wrapper can consume the prepared artifact directory directly:
 

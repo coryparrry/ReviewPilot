@@ -101,6 +101,11 @@ The current safe learning shape is:
 - keep the primary GitHub corpus curated and harder to change
 - require repeated review-artifact evidence before a probationary case can graduate into the primary corpus
 
+The main wrapper can now run both steps:
+
+- safe intake into probationary
+- optional durable promotion into primary when you explicitly ask for it and provide review artifacts
+
 The external SWE-bench lane exists to harden the review brain without depending only on your own buggy PR history. It should pressure the review prompt and benchmark workflow, not auto-write directly into the GitHub-derived corpus lanes.
 
 ## Initial Goals

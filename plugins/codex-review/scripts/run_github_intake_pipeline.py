@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Run the GitHub review-intake pipeline end-to-end: fetch, ingest, propose, "
-            "optional promote, and apply."
+            "optional promote, apply, and optional durable promotion."
         )
     )
     parser.add_argument("--repo", required=True, help="GitHub repo in owner/name form.")
@@ -76,6 +76,35 @@ def parse_args() -> argparse.Namespace:
         help="Promote all generated candidates before apply.",
     )
     parser.add_argument(
+        "--promote-probationary-ids",
+        nargs="*",
+        default=[],
+        help="Probationary case ids to evaluate for promotion into the durable primary corpus after apply.",
+    )
+    parser.add_argument(
+        "--promote-probationary-all",
+        action="store_true",
+        help="Evaluate every probationary case for promotion into the durable primary corpus after apply.",
+    )
+    parser.add_argument(
+        "--probationary-promotion-mode",
+        default="review",
+        choices=["auto", "review", "force"],
+        help="Mode for the probationary-to-primary promotion step. Defaults to review.",
+    )
+    parser.add_argument(
+        "--probationary-promotion-min-matches",
+        type=int,
+        default=2,
+        help="Minimum distinct review artifacts required for durable promotion. Defaults to 2.",
+    )
+    parser.add_argument(
+        "--probationary-promotion-min-strict-matches",
+        type=int,
+        default=1,
+        help="Minimum strict expected-group matches required for durable promotion. Defaults to 1.",
+    )
+    parser.add_argument(
         "--reviewer",
         default="local-review",
         help="Reviewer label for promotion metadata. Defaults to local-review.",
@@ -88,6 +117,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--corpus",
         help="Optional path to the target review corpus JSON file.",
+    )
+    parser.add_argument(
+        "--primary-corpus",
+        help="Optional override for the durable primary corpus path used by scoring and durable promotion.",
+    )
+    parser.add_argument(
+        "--probationary-corpus",
+        help="Optional override for the probationary corpus path used by scoring and durable promotion.",
     )
     parser.add_argument(
         "--apply-target",
@@ -136,7 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--stop-after",
         default="apply",
-        choices=["fetch", "ingest", "propose", "promote", "apply"],
+        choices=["fetch", "ingest", "propose", "promote", "apply", "promote-primary"],
         help="Stop after the named stage. Defaults to apply.",
     )
     parser.add_argument(
@@ -231,6 +268,7 @@ def print_summary(
     apply_input_path: Path,
     apply_result_path: Path | None,
     benchmark_delta_path: Path | None,
+    promotion_result_path: Path | None,
 ) -> None:
     print(f"Pipeline run directory: {output_dir}")
     print(f"Selected raw input: {selected_raw}")
@@ -242,6 +280,8 @@ def print_summary(
         print(f"Apply result artifact: {apply_result_path}")
     if benchmark_delta_path is not None:
         print(f"Benchmark delta artifact: {benchmark_delta_path}")
+    if promotion_result_path is not None:
+        print(f"Primary promotion result artifact: {promotion_result_path}")
 
 
 def resolve_corpus_path(repo_root: Path, requested_path: str | None, apply_target: str) -> Path:
@@ -249,6 +289,12 @@ def resolve_corpus_path(repo_root: Path, requested_path: str | None, apply_targe
         return Path(requested_path).resolve()
     default_corpus = DEFAULT_CORPUS_PATH if apply_target == "primary" else DEFAULT_PROBATIONARY_CORPUS_PATH
     return (repo_root / default_corpus).resolve()
+
+
+def resolve_lane_corpus_path(repo_root: Path, requested_path: str | None, default_path: Path) -> Path:
+    if requested_path:
+        return Path(requested_path).resolve()
+    return (repo_root / default_path).resolve()
 
 
 def run_benchmarks(
@@ -334,8 +380,11 @@ def artifact_prefix_for_raw_format(raw_format: str) -> str:
 
 def main() -> int:
     args = parse_args()
+    run_primary_promotion = bool(args.promote_probationary_all or args.promote_probationary_ids)
     if args.promote_all and args.promote_ids:
         raise ValueError("Use either --promote-all or --promote-ids, not both.")
+    if args.promote_probationary_all and args.promote_probationary_ids:
+        raise ValueError("Use either --promote-probationary-all or --promote-probationary-ids, not both.")
     if args.score_review_artifacts and args.score_review_file:
         raise ValueError("Use either --score-review-artifacts or --score-review-file, not both.")
     resolved_review_file: str | None = None
@@ -347,6 +396,13 @@ def main() -> int:
         raise ValueError("Use either --score-review-artifacts or --score-review-text, not both.")
     if resolved_review_file is None:
         resolved_review_file = args.score_review_file
+    if args.stop_after == "promote-primary" and not run_primary_promotion:
+        raise ValueError("--stop-after promote-primary requires --promote-probationary-all or --promote-probationary-ids.")
+    if run_primary_promotion and not (resolved_review_file or args.score_review_artifacts):
+        raise ValueError(
+            "Probationary-to-primary promotion requires --score-review-file or --score-review-artifacts. "
+            "Inline review text is not supported for that step."
+        )
 
     script_path = Path(__file__).resolve()
     repo_root = repo_root_from_script()
@@ -362,12 +418,52 @@ def main() -> int:
     ingest_script = script_path.parent / "ingest_github_review_feedback.py"
     propose_script = script_path.parent / "propose_corpus_updates.py"
     promote_script = script_path.parent / "promote_corpus_candidates.py"
+    promote_probationary_script = script_path.parent / "promote_probationary_cases.py"
     quality_gate_script = script_path.parent / "score_candidate_quality.py"
     apply_script = script_path.parent / "apply_corpus_updates.py"
     benchmark_script = (
         script_path.parent.parent / "skills" / "bug-hunting-code-review" / "scripts" / "run_review_benchmarks.py"
     )
     corpus_path = resolve_corpus_path(repo_root, args.corpus, args.apply_target)
+    primary_corpus_path = resolve_lane_corpus_path(repo_root, args.primary_corpus, DEFAULT_CORPUS_PATH)
+    probationary_corpus_path = resolve_lane_corpus_path(
+        repo_root, args.probationary_corpus, DEFAULT_PROBATIONARY_CORPUS_PATH
+    )
+
+    def build_promote_primary_cmd() -> list[str]:
+        cmd = [
+            sys.executable,
+            str(promote_probationary_script),
+            "--mode",
+            args.probationary_promotion_mode,
+            "--primary-corpus",
+            str(primary_corpus_path),
+            "--probationary-corpus",
+            str(probationary_corpus_path),
+            "--result-output",
+            str(promotion_result_path),
+            "--min-matches",
+            str(args.probationary_promotion_min_matches),
+            "--min-strict-matches",
+            str(args.probationary_promotion_min_strict_matches),
+        ]
+        if args.promote_probationary_all:
+            cmd.append("--all")
+        else:
+            cmd.append("--ids")
+            cmd.extend(args.promote_probationary_ids)
+        if args.score_review_artifacts:
+            cmd.extend(["--review-artifacts", args.score_review_artifacts])
+        elif resolved_review_file:
+            cmd.extend(["--review-file", resolved_review_file])
+        else:
+            raise ValueError(
+                "Probationary-to-primary promotion requires --score-review-file or --score-review-artifacts. "
+                "Inline review text is not supported for that step."
+            )
+        if allow_outside_artifacts:
+            cmd.append("--allow-outside-artifacts")
+        return cmd
 
     proposal_path = output_dir / f"{selected_prefix}-proposal.json"
     candidates_path = output_dir / f"{selected_prefix}-candidates.json"
@@ -375,13 +471,12 @@ def main() -> int:
     quality_result_path = output_dir / f"{selected_prefix}-candidate-quality.json"
     gated_candidates_path = output_dir / f"{selected_prefix}-gate-approved-candidates.json"
     apply_result_path = output_dir / f"{selected_prefix}-apply-result.json"
+    promotion_result_path = output_dir / f"{selected_prefix}-primary-promotion-result.json"
     benchmark_before_path = output_dir / f"{selected_prefix}-benchmarks-before.json"
     benchmark_after_path = output_dir / f"{selected_prefix}-benchmarks-after.json"
     benchmark_delta_path = output_dir / f"{selected_prefix}-benchmark-delta.json"
     benchmark_before_primary_snapshot = output_dir / f"{selected_prefix}-primary-corpus-before.json"
     benchmark_before_probationary_snapshot = output_dir / f"{selected_prefix}-probationary-corpus-before.json"
-    primary_corpus_path = (repo_root / DEFAULT_CORPUS_PATH).resolve()
-    probationary_corpus_path = (repo_root / DEFAULT_PROBATIONARY_CORPUS_PATH).resolve()
     raw_format_for_ingest = args.raw_format
     if args.raw_input:
         selected_raw_path = Path(args.raw_input).resolve()
@@ -462,6 +557,7 @@ def main() -> int:
             apply_input_path=candidates_path,
             apply_result_path=None,
             benchmark_delta_path=None,
+            promotion_result_path=None,
         )
         return 0
 
@@ -491,6 +587,7 @@ def main() -> int:
             apply_input_path=candidates_path,
             apply_result_path=None,
             benchmark_delta_path=None,
+            promotion_result_path=None,
         )
         return 0
 
@@ -519,6 +616,7 @@ def main() -> int:
             apply_input_path=apply_input_path,
             apply_result_path=None,
             benchmark_delta_path=None,
+            promotion_result_path=None,
         )
         return 0
 
@@ -557,6 +655,7 @@ def main() -> int:
             apply_input_path=apply_input_path,
             apply_result_path=None,
             benchmark_delta_path=None,
+            promotion_result_path=None,
         )
         return 0
 
@@ -572,9 +671,9 @@ def main() -> int:
             "--input",
             str(apply_input_path),
             "--primary-corpus",
-            str((repo_root / DEFAULT_CORPUS_PATH).resolve()),
+            str(primary_corpus_path),
             "--probationary-corpus",
-            str((repo_root / DEFAULT_PROBATIONARY_CORPUS_PATH).resolve()),
+            str(probationary_corpus_path),
             "--output",
             str(quality_result_path),
             "--filtered-output",
@@ -623,6 +722,11 @@ def main() -> int:
         apply_cmd.append("--allow-outside-artifacts")
     run_step(apply_cmd)
 
+    printed_promotion_result_path: Path | None = None
+    if run_primary_promotion and args.stop_after in {"apply", "promote-primary"}:
+        run_step(build_promote_primary_cmd())
+        printed_promotion_result_path = promotion_result_path
+
     printed_benchmark_delta_path: Path | None = None
     if scoring_enabled:
         after_primary_corpus = corpus_path if args.apply_target == "primary" else primary_corpus_path
@@ -647,6 +751,7 @@ def main() -> int:
         apply_input_path=apply_input_path,
         apply_result_path=apply_result_path,
         benchmark_delta_path=printed_benchmark_delta_path,
+        promotion_result_path=printed_promotion_result_path,
     )
     return 0
 

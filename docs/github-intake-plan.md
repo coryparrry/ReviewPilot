@@ -240,6 +240,7 @@ Exit criteria:
 - require evidence-based gating before a GitHub-derived candidate can auto-apply into the probationary lane
 - require a later promotion step before probationary cases are treated as durable primary corpus entries
 - require that later promotion step to use repeated review-artifact evidence, not just a convenience flag
+- let the wrapper orchestrate that later promotion step explicitly without making it part of the default safe path
 
 Exit criteria:
 
@@ -254,6 +255,7 @@ Exit criteria:
 - the wrapper can resume from the next missing stage instead of rerunning fetch/ingest/propose once those artifacts already exist
 - the wrapper can gate GitHub-derived candidates against duplicate checks plus review-artifact evidence before auto-applying them into the probationary lane
 - probationary cases can be promoted into the primary corpus only when repeated review artifacts support them strongly enough to count as durable knowledge
+- the wrapper can optionally run that durable-promotion step and write a separate promotion result artifact in the same run directory
 
 ## Phase D. Live GitHub Input
 
