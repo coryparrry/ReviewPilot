@@ -32,9 +32,9 @@ The first plugin-owned GitHub workflow should:
 1. read review feedback from GitHub or a GitHub-derived export
 2. normalize that feedback into a stable local schema
 3. produce a proposed corpus-update artifact
-4. avoid direct corpus mutation in v1
+4. support a controlled corpus-apply step with safe defaults
 
-The first version should be read-first, proposal-only, and easy to validate.
+The first version should stay easy to validate, with raw fetch, normalization, proposal output, and apply behavior kept as separate explicit steps.
 
 ## Scope
 
@@ -48,7 +48,6 @@ The first version should be read-first, proposal-only, and easy to validate.
 
 ### Out of Scope For V1
 
-- automatic writes into `review-corpus-cases.json`
 - automatic edits to Knowledge-Hub lessons
 - auto-resolving severity or regex patterns without review
 - full GitHub app or MCP server implementation
@@ -104,13 +103,13 @@ That artifact is the review boundary for humans and later automation.
 
 ### Step 4. Curate Into Corpus
 
-Only after review should a follow-up workflow convert selected proposals into:
+After proposal generation, a follow-up workflow can convert selected proposals into:
 
 - corpus cases
 - benchmark metadata
 - Knowledge-Hub lessons when the miss is durable enough
 
-That write path is explicitly not part of v1.
+That write path should stay explicit and auditable even when `auto` is the default apply mode.
 
 ## Proposed Plugin Boundary
 
@@ -194,6 +193,21 @@ Exit criteria:
 Exit criteria:
 
 - there is a written manual review loop for turning proposals into durable improvements
+
+## Phase E. Controlled Corpus Apply
+
+- add `plugins/codex-review/scripts/apply_corpus_updates.py`
+- make `auto` the default mode for straightforward safe additions
+- keep `review` as an explicit no-write option
+- keep `force` available for intentionally overriding soft warnings
+- treat exact duplicates as idempotent no-ops instead of new corpus entries
+- block malformed candidates and conflicting IDs instead of overwriting existing cases
+
+Exit criteria:
+
+- one command can apply clean corpus-candidate artifacts into `review-corpus-cases.json`
+- repeat runs are idempotent for exact duplicates
+- review mode can preview application without mutating the corpus
 
 ## Phase D. Live GitHub Input
 

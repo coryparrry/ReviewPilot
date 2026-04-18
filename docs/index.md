@@ -37,7 +37,7 @@ That is large enough to justify its own repo and docs.
 ## Active Plans
 
 - [GitHub Intake Plan](github-intake-plan.md)
-  First plugin-owned workflow plan for ingesting GitHub PR review feedback into structured improvement proposals
+  Plugin-owned workflow plan for ingesting GitHub PR review feedback, generating corpus candidates, and applying safe additions
 
 ## Near-Term Direction
 

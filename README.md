@@ -98,5 +98,5 @@ The repo should keep the skill measurable and self-improving through:
 ## Next Steps
 
 1. Add post-sync verification so the installed runtime can be proven to match plugin-contained source.
-2. Add plugin-native GitHub intake and scoring workflows for corpus updates and safer review automation.
+2. Harden the GitHub self-improvement loop around real repo data, corpus scoring, and apply safety.
 3. Add plugin install/runtime documentation before broader CI or packaging work.

@@ -34,8 +34,9 @@
 ## Next Execution Plan
 
 - implement the [GitHub Intake Plan](github-intake-plan.md) as the first plugin-owned workflow
-- keep v1 proposal-only and non-destructive
-- define the normalized schema before adding direct GitHub-backed writes
+- keep live GitHub fetch read-only while the self-improvement loop hardens
+- make `auto` the default corpus-apply mode, with `review` as the explicit no-write option
+- define the normalized schema and apply safety checks before broader automation
 
 ## Phase 4
 

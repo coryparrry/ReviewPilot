@@ -55,6 +55,25 @@ Safety notes for the live fetch step:
 - the fetch script refuses to write outside that tree unless explicitly overridden
 - the proposal normalizer follows the same default output boundary
 
-The next non-destructive review-mapping script lives at:
+The non-destructive review-mapping script lives at:
 
 - `plugins/codex-review/scripts/propose_corpus_updates.py`
+
+The corpus apply script now lives at:
+
+- `plugins/codex-review/scripts/apply_corpus_updates.py`
+
+Apply modes:
+
+- `auto`
+  Default mode. Apply candidates that pass hard validation and do not carry soft warnings.
+- `review`
+  No-write mode for previewing what would be applied or held back.
+- `force`
+  Apply candidates that pass hard validation even if soft warnings remain.
+
+Current apply safety rules:
+
+- exact existing matches are treated as already present and do not append duplicates
+- conflicting IDs block instead of overwriting existing corpus entries
+- malformed candidates fail closed

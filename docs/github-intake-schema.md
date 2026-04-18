@@ -19,7 +19,7 @@ The intake script should emit a JSON object with this top-level structure:
 {
   "schema_version": "codex-review.github-intake.v1",
   "generated_at": "2026-04-18T14:00:00Z",
-  "source_file": "C:/path/to/input.json",
+  "source_file": "github-rest-review-comments-sample.json",
   "source_format": "github_rest_review_comments",
   "records": []
 }
@@ -137,3 +137,20 @@ A normalized proposal record should become a corpus candidate only when:
 - the comment is concrete enough to express as a review expectation
 - the inferred category aligns to an existing corpus lane or justifies a new durable category
 - a human has checked that the wording is not overfit to one raw comment
+
+## Apply Modes
+
+Candidate application is a later workflow than normalization.
+
+- `auto`
+  Default mode. Apply candidates that pass structural checks and have no soft warnings.
+- `review`
+  Do not mutate the corpus. Emit an apply-result artifact showing what would be applied or held.
+- `force`
+  Apply candidates that pass hard validation even if they still carry soft warnings.
+
+Auto mode should stay idempotent:
+
+- exact existing matches should no-op as already present
+- conflicting IDs should block instead of overwriting
+- malformed candidates should fail closed
