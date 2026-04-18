@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any
 
 
+PR_URL_PATTERN = re.compile(r"github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<pr>\d+)", re.IGNORECASE)
+
+
 CATEGORY_RULES = [
     {
         "category": "fixture-masking",
@@ -127,6 +130,8 @@ def parse_args() -> argparse.Namespace:
             "custom_review_bundle",
             "github_rest_review_comments",
             "github_graphql_review_threads",
+            "github_mcp_pr_comments",
+            "github_mcp_review_threads",
         ],
         help="Input format. Defaults to auto-detection.",
     )
@@ -177,14 +182,25 @@ def detect_format(payload: Any) -> str:
     if nested_get(payload, "repository", "pullRequest", "reviewThreads", "nodes") is not None:
         return "github_graphql_review_threads"
 
+    if isinstance(payload, dict) and isinstance(payload.get("review_threads"), list):
+        return "github_mcp_review_threads"
+
     if payload.get("source") == "github-rest-review-comments":
         return "github_rest_review_comments"
 
     if payload.get("source") == "github-graphql-review-threads":
         return "github_graphql_review_threads"
 
+    if payload.get("source") == "github-mcp-pr-comments":
+        return "github_mcp_pr_comments"
+
+    if payload.get("source") == "github-mcp-review-threads":
+        return "github_mcp_review_threads"
+
     raw_comments = payload.get("comments")
     if isinstance(raw_comments, list):
+        if any(key in payload for key in ("url", "display_url", "title", "display_title")):
+            return "github_mcp_pr_comments"
         if not raw_comments and "repo" in payload and "pr_number" in payload:
             return "github_rest_review_comments"
         if raw_comments:
@@ -201,6 +217,16 @@ def detect_format(payload: Any) -> str:
         return "custom_review_bundle"
 
     raise ValueError("Could not auto-detect input format.")
+
+
+def parse_pr_url_context(candidate: str | None) -> tuple[str, int | None]:
+    if not candidate:
+        return ("unknown", None)
+    match = PR_URL_PATTERN.search(candidate)
+    if not match:
+        return ("unknown", None)
+    repo = f"{match.group('owner')}/{match.group('repo')}"
+    return (repo, int(match.group("pr")))
 
 
 def extract_repo_context(payload: Any, format_name: str) -> dict[str, Any]:
@@ -223,6 +249,28 @@ def extract_repo_context(payload: Any, format_name: str) -> dict[str, Any]:
             "source": "github-rest-review-comments",
             "repo": "unknown",
             "pr_number": None,
+        }
+
+    if format_name == "github_mcp_pr_comments":
+        assert isinstance(payload, dict)
+        repo, pr_number = parse_pr_url_context(
+            payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
+        )
+        return {
+            "source": payload.get("source", "github-mcp-pr-comments"),
+            "repo": repo,
+            "pr_number": pr_number,
+        }
+
+    if format_name == "github_mcp_review_threads":
+        assert isinstance(payload, dict)
+        repo, pr_number = parse_pr_url_context(
+            payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
+        )
+        return {
+            "source": payload.get("source", "github-mcp-review-threads"),
+            "repo": repo,
+            "pr_number": pr_number,
         }
 
     root = payload.get("data", payload) if isinstance(payload, dict) else {}
@@ -299,6 +347,45 @@ def iter_github_graphql_review_threads(payload: dict[str, Any]) -> list[dict[str
     return comments
 
 
+def iter_github_mcp_pr_comments(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    comments: list[dict[str, Any]] = []
+    for comment in payload.get("comments", []):
+        # The MCP timeline payload may include top-level review summaries or issue comments.
+        # Keep the inline review-comment surface only so the learning lane matches the legacy fetch semantics.
+        if not (comment.get("path") or comment.get("line") or comment.get("start_line")):
+            continue
+        comments.append(
+            {
+                "review_id": comment.get("pull_request_review_id") or comment.get("review_id"),
+                "comment_id": comment.get("id") or comment.get("comment_id"),
+                "source_type": "github_review_comment",
+                "file_path": comment.get("path") or comment.get("file_path"),
+                "line": comment.get("line") or comment.get("start_line"),
+                "body": comment.get("body", ""),
+            }
+        )
+    return comments
+
+
+def iter_github_mcp_review_threads(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    comments: list[dict[str, Any]] = []
+    for thread in payload.get("review_threads", []):
+        thread_path = thread.get("path")
+        thread_line = thread.get("line") or thread.get("start_line") or thread.get("original_line")
+        for comment in thread.get("comments", []):
+            comments.append(
+                {
+                    "review_id": None,
+                    "comment_id": comment.get("id"),
+                    "source_type": "github_review_comment",
+                    "file_path": thread_path,
+                    "line": thread_line,
+                    "body": comment.get("body", ""),
+                }
+            )
+    return comments
+
+
 def iter_comments(payload: Any, format_name: str) -> list[dict[str, Any]]:
     if format_name == "custom_review_bundle":
         assert isinstance(payload, dict)
@@ -310,6 +397,14 @@ def iter_comments(payload: Any, format_name: str) -> list[dict[str, Any]]:
     if format_name == "github_graphql_review_threads":
         assert isinstance(payload, dict)
         return iter_github_graphql_review_threads(payload)
+
+    if format_name == "github_mcp_pr_comments":
+        assert isinstance(payload, dict)
+        return iter_github_mcp_pr_comments(payload)
+
+    if format_name == "github_mcp_review_threads":
+        assert isinstance(payload, dict)
+        return iter_github_mcp_review_threads(payload)
 
     raise ValueError(f"Unsupported format: {format_name}")
 

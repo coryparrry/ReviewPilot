@@ -81,7 +81,10 @@ query($threadId: ID!, $cursor: String) {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch GitHub PR review feedback into raw artifacts for proposal-only normalization."
+        description=(
+            "Legacy gh-based fetch: read GitHub PR review feedback into raw artifacts for proposal-only normalization. "
+            "Prefer MCP-produced raw input with run_github_intake_pipeline.py --raw-input for the normal live path."
+        )
     )
     parser.add_argument("--repo", required=True, help="GitHub repo in owner/name form.")
     parser.add_argument("--pr", required=True, type=int, help="Pull request number.")

@@ -30,6 +30,7 @@
 - make the GitHub PR review lane a first-class input to skill improvement
 - document how this repo should ingest future missed-review cases from linked GitHub repos
 - start moving GitHub-facing workflows behind plugin-owned interfaces instead of loose repo scripts
+- make the plugin MCP boundary, not ambient `gh`, the primary live GitHub access path
 
 ## Next Execution Plan
 
@@ -41,6 +42,7 @@
 - let the wrapper consume prepared `.codex-review` artifact directories directly so Codex-authored reviews can flow into scoring without manual file extraction
 - let the wrapper reuse a prepared review run directory and stop after proposal generation so the full authoring loop can stay in one folder
 - let the wrapper resume from existing shared-run artifacts instead of repeating the early read-only stages
+- make MCP-shaped GitHub raw artifacts a first-class wrapper input and keep `gh` fetch as an explicit fallback only
 - define the normalized schema and apply safety checks before broader automation
 
 ## Phase 4

@@ -22,10 +22,38 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo", required=True, help="GitHub repo in owner/name form.")
     parser.add_argument("--pr", required=True, type=int, help="Pull request number.")
     parser.add_argument(
+        "--raw-input",
+        help=(
+            "Optional raw review-feedback JSON file. This is the preferred MCP-native path and skips live fetch. "
+            "The file can be a GitHub export, an MCP tool output snapshot, or an existing fetch artifact."
+        ),
+    )
+    parser.add_argument(
+        "--raw-format",
+        default="auto",
+        choices=[
+            "auto",
+            "custom_review_bundle",
+            "github_rest_review_comments",
+            "github_graphql_review_threads",
+            "github_mcp_pr_comments",
+            "github_mcp_review_threads",
+        ],
+        help="Format for --raw-input. Defaults to auto-detection.",
+    )
+    parser.add_argument(
         "--source",
         default="rest",
         choices=["rest", "graphql"],
-        help="Which fetched source artifact to normalize. Defaults to rest.",
+        help="Which fetched legacy-gh source artifact to normalize. Defaults to rest.",
+    )
+    parser.add_argument(
+        "--use-gh-legacy-fetch",
+        action="store_true",
+        help=(
+            "Opt into the legacy gh-based live GitHub fetch path. The preferred path is to provide --raw-input "
+            "from the plugin's MCP-backed GitHub connector."
+        ),
     )
     parser.add_argument(
         "--apply-mode",
@@ -280,6 +308,14 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def artifact_prefix_for_raw_format(raw_format: str) -> str:
+    if raw_format in {"github_graphql_review_threads", "github_mcp_review_threads"}:
+        return "graphql"
+    if raw_format in {"github_rest_review_comments", "github_mcp_pr_comments"}:
+        return "rest"
+    return "input"
+
+
 def main() -> int:
     args = parse_args()
     if args.promote_all and args.promote_ids:
@@ -304,7 +340,7 @@ def main() -> int:
     allow_outside_artifacts = args.allow_outside_artifacts
     output_dir = resolve_output_dir(repo_root, args.repo, args.pr, resolved_output_dir, allow_outside_artifacts)
     fetch_dir = output_dir / "fetches"
-    selected_prefix = args.source
+    selected_prefix = artifact_prefix_for_raw_format(args.raw_format) if args.raw_input else args.source
 
     fetch_script = script_path.parent / "fetch_github_review_feedback.py"
     ingest_script = script_path.parent / "ingest_github_review_feedback.py"
@@ -324,58 +360,76 @@ def main() -> int:
     benchmark_after_path = output_dir / f"{selected_prefix}-benchmarks-after.json"
     benchmark_delta_path = output_dir / f"{selected_prefix}-benchmark-delta.json"
     benchmark_before_corpus_snapshot = output_dir / f"{selected_prefix}-primary-corpus-before.json"
+    raw_format_for_ingest = args.raw_format
+    if args.raw_input:
+        selected_raw_path = Path(args.raw_input).resolve()
+        if not selected_raw_path.is_file():
+            raise FileNotFoundError(f"Raw input file does not exist: {selected_raw_path}")
+    else:
+        if not args.use_gh_legacy_fetch:
+            raise ValueError(
+                "Live GitHub fetch now expects MCP-backed raw input by default. "
+                "Provide --raw-input from the plugin GitHub MCP path, or pass --use-gh-legacy-fetch to opt into "
+                "the legacy gh-based fetch script."
+            )
 
-    rest_raw_path = find_optional_single_artifact(fetch_dir, "*-rest-review-comments.json")
-    graphql_raw_path = find_optional_single_artifact(fetch_dir, "*-graphql-review-threads.json")
-    need_fetch = not (args.resume and rest_raw_path is not None and (args.source == "rest" or graphql_raw_path is not None))
-
-    if need_fetch:
-        fetch_cmd = [
-            sys.executable,
-            str(fetch_script),
-            "--repo",
-            args.repo,
-            "--pr",
-            str(args.pr),
-            "--output-dir",
-            str(fetch_dir),
-        ]
-        if allow_outside_artifacts:
-            fetch_cmd.append("--allow-outside-artifacts")
-        fetch_result = run_cmd_with_result(fetch_cmd)
-        if fetch_result.stdout:
-            print(fetch_result.stdout, end="")
-        if fetch_result.stderr:
-            print(fetch_result.stderr, end="", file=sys.stderr)
-
-        rest_raw_path = find_single_artifact(fetch_dir, "*-rest-review-comments.json")
+        rest_raw_path = find_optional_single_artifact(fetch_dir, "*-rest-review-comments.json")
         graphql_raw_path = find_optional_single_artifact(fetch_dir, "*-graphql-review-threads.json")
+        need_fetch = not (
+            args.resume and rest_raw_path is not None and (args.source == "rest" or graphql_raw_path is not None)
+        )
 
-        if fetch_result.returncode != 0:
-            if args.source == "rest" and graphql_raw_path is None:
-                print(
-                    "Continuing with REST artifact after GraphQL fetch failure because --source rest was selected.",
-                    file=sys.stderr,
+        if need_fetch:
+            fetch_cmd = [
+                sys.executable,
+                str(fetch_script),
+                "--repo",
+                args.repo,
+                "--pr",
+                str(args.pr),
+                "--output-dir",
+                str(fetch_dir),
+            ]
+            if allow_outside_artifacts:
+                fetch_cmd.append("--allow-outside-artifacts")
+            fetch_result = run_cmd_with_result(fetch_cmd)
+            if fetch_result.stdout:
+                print(fetch_result.stdout, end="")
+            if fetch_result.stderr:
+                print(fetch_result.stderr, end="", file=sys.stderr)
+
+            rest_raw_path = find_single_artifact(fetch_dir, "*-rest-review-comments.json")
+            graphql_raw_path = find_optional_single_artifact(fetch_dir, "*-graphql-review-threads.json")
+
+            if fetch_result.returncode != 0:
+                if args.source == "rest" and graphql_raw_path is None:
+                    print(
+                        "Continuing with REST artifact after GraphQL fetch failure because --source rest was selected.",
+                        file=sys.stderr,
+                    )
+                else:
+                    raise subprocess.CalledProcessError(
+                        fetch_result.returncode,
+                        fetch_cmd,
+                        output=fetch_result.stdout,
+                        stderr=fetch_result.stderr,
+                    )
+        else:
+            print(f"Reusing existing fetch artifacts in {fetch_dir}")
+
+        if rest_raw_path is None:
+            raise FileNotFoundError(f"No REST review artifact was found under {fetch_dir}.")
+
+        if args.source == "rest":
+            selected_raw_path = rest_raw_path
+            raw_format_for_ingest = "github_rest_review_comments"
+        else:
+            if graphql_raw_path is None:
+                raise FileNotFoundError(
+                    f"GraphQL source was requested but no GraphQL artifact was written under {fetch_dir}."
                 )
-            else:
-                raise subprocess.CalledProcessError(
-                    fetch_result.returncode,
-                    fetch_cmd,
-                    output=fetch_result.stdout,
-                    stderr=fetch_result.stderr,
-                )
-    else:
-        print(f"Reusing existing fetch artifacts in {fetch_dir}")
-
-    if rest_raw_path is None:
-        raise FileNotFoundError(f"No REST review artifact was found under {fetch_dir}.")
-
-    if args.source == "rest":
-        selected_raw_path = rest_raw_path
-    else:
-        if graphql_raw_path is None:
-            raise FileNotFoundError(f"GraphQL source was requested but no GraphQL artifact was written under {fetch_dir}.")
-        selected_raw_path = graphql_raw_path
+            selected_raw_path = graphql_raw_path
+            raw_format_for_ingest = "github_graphql_review_threads"
 
     if args.stop_after == "fetch":
         print_summary(
@@ -398,6 +452,8 @@ def main() -> int:
             "--output",
             str(proposal_path),
         ]
+        if raw_format_for_ingest != "auto":
+            ingest_cmd.extend(["--format", raw_format_for_ingest])
         if allow_outside_artifacts:
             ingest_cmd.append("--allow-outside-artifacts")
         run_step(ingest_cmd)

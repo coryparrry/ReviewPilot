@@ -1,0 +1,26 @@
+{
+  "source": "github-mcp-review-threads",
+  "url": "https://github.com/example/repo/pull/42",
+  "title": "example/repo PR #42 review threads",
+  "review_threads": [
+    {
+      "id": "PRRT_example_1",
+      "is_resolved": false,
+      "is_outdated": false,
+      "path": "internal/skills/discovery/discovery.go",
+      "line": 530,
+      "start_line": 522,
+      "comments": [
+        {
+          "id": "PRRC_example_1",
+          "body": "The discovery package's error message hard-codes an install-only flag. Return typed data and format guidance at the CLI layer instead.",
+          "created_at": "2026-04-17T18:59:34Z",
+          "updated_at": "2026-04-17T18:59:35Z",
+          "author": {
+            "login": "copilot-pull-request-reviewer"
+          }
+        }
+      ]
+    }
+  ]
+}

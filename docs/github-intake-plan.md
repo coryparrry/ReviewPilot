@@ -54,13 +54,13 @@ That shared-run reuse should not silently weaken local output confinement: if th
 - local normalized schema for review misses
 - one plugin-owned script that reads input and emits a proposed normalized output
 - support for GitHub-derived input files first, with direct GitHub integration as a follow-up layer
+- support for MCP-derived input files directly so the plugin's GitHub connector can own the live access boundary
 - repo docs that define the workflow and expected review of proposed updates
 
 ### Out of Scope For V1
 
 - automatic edits to the durable lessons log
 - auto-resolving severity or regex patterns without review
-- full GitHub app or MCP server implementation
 - plugin marketplace or runtime installation automation
 
 ## Design Principles
@@ -87,6 +87,8 @@ Initial supported shapes should include:
 - repo-local custom review bundles
 - exported GitHub REST review comment JSON
 - exported GitHub GraphQL review-thread JSON
+- GitHub MCP PR comment timeline JSON
+- GitHub MCP review-thread JSON
 
 V1 should not require live GitHub access to be useful.
 
@@ -243,7 +245,8 @@ Exit criteria:
 
 The first live GitHub slice should remain read-only:
 
-- fetch raw PR review comments and review threads
+- prefer the plugin's GitHub MCP connector as the live fetch boundary
+- import raw PR review comments and review threads from MCP-produced JSON snapshots
 - save raw artifacts under ignored `artifacts/`
 - hand off into the existing proposal-only normalizer
 - avoid direct corpus writes or automatic proposal application
@@ -252,6 +255,8 @@ The first live GitHub slice should remain read-only:
 - keep proposal artifact writes inside the ignored artifacts tree by default as well
 - treat `--allow-outside-artifacts` as a local-output escape hatch only, not as any expansion of GitHub permissions or write behavior
 - keep repository identifiers and GraphQL usage narrowly constrained so the fetch path remains auditable and read-only by construction
+- configure the plugin MCP boundary with read-only mode and only the `pull_requests` toolset for this workflow
+- keep the old `gh`-based fetch script as an explicit migration fallback, not the default live path
 
 Exit criteria:
 

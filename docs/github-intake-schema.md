@@ -96,7 +96,8 @@ Each normalized record must contain:
   Input file name used to generate the artifact. Keep this file-oriented rather than embedding full local absolute paths.
 - `source_format`
   Detected or selected input adapter. Current values:
-  `custom_review_bundle`, `github_rest_review_comments`, `github_graphql_review_threads`.
+  `custom_review_bundle`, `github_rest_review_comments`, `github_graphql_review_threads`,
+  `github_mcp_pr_comments`, `github_mcp_review_threads`.
 - `records`
   Normalized proposal records.
 
