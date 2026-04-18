@@ -79,7 +79,7 @@ The repo should keep the skill measurable and self-improving through:
 - the bundled review corpus built from real GitHub PR review misses
 - curated external review-oriented datasets
 - repeatable benchmark commands that can score a draft review against both lanes
-- future GitHub-facing plugin integration so review outputs and missed findings can be fed back into the corpus cleanly
+- GitHub-facing plugin integration so review outputs and missed findings can be fed back into the corpus cleanly through one wrapper pipeline plus explicit underlying stages
 
 ## Initial Goals
 

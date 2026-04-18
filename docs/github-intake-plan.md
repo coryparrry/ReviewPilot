@@ -36,6 +36,8 @@ The first plugin-owned GitHub workflow should:
 
 The first version should stay easy to validate, with raw fetch, normalization, proposal output, and apply behavior kept as separate explicit steps.
 
+The repo can still expose a single wrapper command for normal use, but that wrapper should remain a thin orchestrator over the explicit underlying stages.
+
 ## Scope
 
 ### In Scope For V1
@@ -123,6 +125,7 @@ Initial planned script surface:
 - `fetch_github_review_feedback.py`
 - `propose_corpus_updates.py`
 - `promote_corpus_candidates.py`
+- `run_github_intake_pipeline.py`
 
 Likely future additions:
 
@@ -179,6 +182,7 @@ Exit criteria:
 - support repo-local JSON input first
 - emit normalized proposal JSON
 - add a small fixture and smoke validation path
+- keep room for a later wrapper command without collapsing the explicit artifact boundaries
 
 Exit criteria:
 
@@ -199,6 +203,7 @@ Exit criteria:
 
 - add `plugins/codex-review/scripts/apply_corpus_updates.py`
 - add `plugins/codex-review/scripts/promote_corpus_candidates.py`
+- add `plugins/codex-review/scripts/run_github_intake_pipeline.py` as the thin orchestration entrypoint
 - make `auto` the default mode for straightforward safe additions
 - keep `review` as an explicit no-write option
 - keep `force` available for intentionally overriding soft warnings
@@ -212,6 +217,7 @@ Exit criteria:
 - repeat runs are idempotent for exact duplicates
 - review mode can preview application without mutating the corpus
 - promoted candidates can be marked auto-eligible without weakening default intake heuristics
+- the wrapper command can run fetch, ingest, propose, optional promote, and apply into one per-run artifact directory
 
 ## Phase D. Live GitHub Input
 
@@ -261,6 +267,7 @@ The next implementation batch should produce:
 3. a plugin-owned proposal-only intake script
 4. one or more fixtures for local validation
 5. usage docs for the proposal flow
+6. a thin wrapper command for the full live pipeline once the underlying stages are stable
 
 ## Decision Record
 

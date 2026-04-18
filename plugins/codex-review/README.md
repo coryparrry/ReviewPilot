@@ -48,6 +48,10 @@ The first read-only live GitHub fetch script lives at:
 
 - `plugins/codex-review/scripts/fetch_github_review_feedback.py`
 
+The wrapper entrypoint for the full live intake flow now lives at:
+
+- `plugins/codex-review/scripts/run_github_intake_pipeline.py`
+
 Safety notes for the live fetch step:
 
 - raw fetched review artifacts may contain private review content for private repos
@@ -68,6 +72,20 @@ That script exists to turn selected reviewed candidates into auto-eligible candi
 The corpus apply script now lives at:
 
 - `plugins/codex-review/scripts/apply_corpus_updates.py`
+
+Recommended entrypoint for normal use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_github_intake_pipeline.py --repo owner/name --pr 123 --apply-mode review
+```
+
+That wrapper runs:
+
+- fetch
+- ingest
+- propose
+- optional promote
+- apply
 
 Apply modes:
 
