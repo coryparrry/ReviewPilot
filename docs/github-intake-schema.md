@@ -20,6 +20,7 @@ The intake script should emit a JSON object with this top-level structure:
   "schema_version": "codex-review.github-intake.v1",
   "generated_at": "2026-04-18T14:00:00Z",
   "source_file": "C:/path/to/input.json",
+  "source_format": "github_rest_review_comments",
   "records": []
 }
 ```
@@ -84,6 +85,20 @@ Each normalized record must contain:
   Short phrases that may help a later workflow build corpus expectations or matching heuristics.
 - `notes`
   Freeform normalization notes.
+
+## Top-Level Fields
+
+- `schema_version`
+  Current proposal schema identifier.
+- `generated_at`
+  UTC timestamp for artifact creation.
+- `source_file`
+  Local input path used to generate the artifact.
+- `source_format`
+  Detected or selected input adapter. Current values:
+  `custom_review_bundle`, `github_rest_review_comments`, `github_graphql_review_threads`.
+- `records`
+  Normalized proposal records.
 
 ## Category Set
 

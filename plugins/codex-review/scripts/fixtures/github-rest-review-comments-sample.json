@@ -1,0 +1,26 @@
+{
+  "source": "rest-export-sample",
+  "repo": "example/repo",
+  "pr_number": 77,
+  "comments": [
+    {
+      "id": 1001,
+      "pull_request_review_id": 7001,
+      "path": "src/runtime/heartbeat.ts",
+      "line": 41,
+      "body": "This queue update changes status but never clears the pending approval summary, so the state surfaces can drift."
+    },
+    {
+      "id": 1002,
+      "pull_request_review_id": 7002,
+      "path": "src/contracts/health.ts",
+      "line": 13,
+      "body": "The request payload shape here still looks copied from the response contract. That usually rejects valid patch payloads."
+    },
+    {
+      "id": 1003,
+      "pull_request_review_id": 7002,
+      "body": "This feels risky but I cannot yet map it cleanly to one of the durable bug classes."
+    }
+  ]
+}

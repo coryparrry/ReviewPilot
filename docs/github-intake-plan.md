@@ -73,6 +73,12 @@ Accepted input should initially be one of:
 - manually curated JSON from a GitHub review thread
 - repo-local fixtures that represent real review feedback
 
+Initial supported shapes should include:
+
+- repo-local custom review bundles
+- exported GitHub REST review comment JSON
+- exported GitHub GraphQL review-thread JSON
+
 V1 should not require live GitHub access to be useful.
 
 ### Step 2. Normalize Review Feedback
@@ -204,8 +210,10 @@ For Phase B and later, validation should include:
 
 - JSON parse validation for produced artifacts
 - fixture-based smoke test for the intake script
+- at least one fixture for each supported input adapter
 - at least one test case with multiple findings from one review
 - at least one uncertain classification that stays flagged for human review
+- at least one comment with no file path or line
 - confirmation that no corpus files are mutated in proposal-only mode
 
 ## Non-Goals

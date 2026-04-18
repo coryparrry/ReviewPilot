@@ -1,0 +1,50 @@
+{
+  "source": "graphql-export-sample",
+  "data": {
+    "repository": {
+      "owner": {
+        "login": "example"
+      },
+      "name": "repo",
+      "pullRequest": {
+        "number": 105,
+        "reviewThreads": {
+          "nodes": [
+            {
+              "path": "src/runtime/preview.ts",
+              "line": 88,
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "PRRC_kwGraph1",
+                    "databaseId": 9001,
+                    "body": "The preview readiness path drifted from the canonical resolver again. That can report support when the real path would fail closed.",
+                    "pullRequestReview": {
+                      "id": "PRR_kwGraphReview1",
+                      "databaseId": 8101
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "PRRC_kwGraph2",
+                    "databaseId": 9002,
+                    "body": "Please double-check this test. It targets seed ordering rather than the named run we actually care about.",
+                    "pullRequestReview": {
+                      "id": "PRR_kwGraphReview2",
+                      "databaseId": 8102
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
