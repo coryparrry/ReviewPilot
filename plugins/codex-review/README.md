@@ -73,6 +73,10 @@ The non-destructive review-mapping script lives at:
 
 - `plugins/codex-review/scripts/propose_corpus_updates.py`
 
+The candidate-quality gate now lives at:
+
+- `plugins/codex-review/scripts/score_candidate_quality.py`
+
 The reviewed promotion script now lives at:
 
 - `plugins/codex-review/scripts/promote_corpus_candidates.py`
@@ -82,6 +86,13 @@ That script exists to turn selected reviewed candidates into auto-eligible candi
 The corpus apply script now lives at:
 
 - `plugins/codex-review/scripts/apply_corpus_updates.py`
+
+The current learning policy is intentionally two-lane:
+
+- gate-approved GitHub-derived cases can auto-apply into the probationary corpus
+- the primary GitHub corpus should stay harder to change and should not be treated as the raw output lane for fresh PR feedback
+
+The external SWE-bench lane is the hardening lane for broader review pressure. It helps the review brain improve without depending only on your own buggy PRs, but it should not auto-write directly into the GitHub-derived corpus lanes.
 
 Recommended entrypoint for normal use:
 
@@ -99,6 +110,7 @@ That wrapper runs:
 - normalize imported raw input
 - ingest
 - propose
+- optional candidate-quality gate
 - optional promote
 - apply
 
@@ -138,6 +150,26 @@ python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
 ```
 
 That writes before, after, and delta benchmark artifacts into the same pipeline run directory.
+
+To run the safer self-learning path into the probationary corpus:
+
+```powershell
+python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
+  --repo owner/name `
+  --pr 123 `
+  --raw-input .\artifacts\github-intake\mcp\pr-123-comments.json `
+  --raw-format github_mcp_pr_comments `
+  --apply-target probationary `
+  --gate-candidates `
+  --score-review-file .\draft-review.md `
+  --apply-mode auto
+```
+
+That path:
+
+- gates candidates against duplicate checks and review-artifact evidence
+- auto-applies only the gate-approved subset
+- targets the probationary lane rather than the durable primary corpus
 
 If the review was prepared through the bundled pre-PR helper, the wrapper can consume the prepared artifact directory directly:
 

@@ -33,12 +33,19 @@ The first plugin-owned GitHub workflow should:
 2. normalize that feedback into a stable local schema
 3. produce a proposed corpus-update artifact
 4. support a controlled corpus-apply step with safe defaults
+5. gate new GitHub-derived cases into a probationary lane before they are treated as durable primary corpus cases
 
 The first version should stay easy to validate, with raw fetch, normalization, proposal output, and apply behavior kept as separate explicit steps.
 
 The repo can still expose a single wrapper command for normal use, but that wrapper should remain a thin orchestrator over the explicit underlying stages.
 
 If the wrapper reports benchmark improvement, it should do so only by scoring a supplied review artifact before and after apply, not by inferring improvement from corpus growth alone.
+
+GitHub-derived learning should still be policy-gated even when `auto` is the default mode:
+
+- gate candidates first
+- auto-apply only into the probationary lane
+- require a later promotion step before a case is considered durable enough for the primary GitHub corpus
 
 Prepared `.codex-review` run directories should count as valid review-artifact inputs so the benchmark path stays plugin-native end to end.
 
@@ -70,6 +77,8 @@ That shared-run reuse should not silently weaken local output confinement: if th
 - Separate raw evidence from normalized interpretation from final curated corpus entries.
 - Prefer proposal artifacts over direct mutation until the schema and categorization are trustworthy.
 - Keep GitHub access narrow, auditable, and replaceable.
+- Separate probationary admission from durable primary-corpus promotion.
+- Use external benchmark data to pressure the review brain without auto-writing synthetic cases into the GitHub-derived corpus.
 - Optimize for repeatability, not cleverness.
 
 ## Proposed Workflow
@@ -117,7 +126,8 @@ That artifact is the review boundary for humans and later automation.
 
 After proposal generation, a follow-up workflow can convert selected proposals into:
 
-- corpus cases
+- probationary corpus cases
+- later promoted primary corpus cases
 - benchmark metadata
 - durable lessons log updates when the miss is durable enough
 
@@ -135,6 +145,7 @@ Initial planned script surface:
 - `ingest_github_review_feedback.py`
 - `fetch_github_review_feedback.py`
 - `propose_corpus_updates.py`
+- `score_candidate_quality.py`
 - `promote_corpus_candidates.py`
 - `run_github_intake_pipeline.py`
 
@@ -214,6 +225,7 @@ Exit criteria:
 
 - add `plugins/codex-review/scripts/apply_corpus_updates.py`
 - add `plugins/codex-review/scripts/promote_corpus_candidates.py`
+- add `plugins/codex-review/scripts/score_candidate_quality.py`
 - add `plugins/codex-review/scripts/run_github_intake_pipeline.py` as the thin orchestration entrypoint
 - allow the wrapper to run optional before/after benchmark comparison when a real review artifact is supplied
 - allow the wrapper to consume prepared `.codex-review` run directories directly instead of requiring manual extraction of `review.md`
@@ -224,7 +236,8 @@ Exit criteria:
 - keep `force` available for intentionally overriding soft warnings
 - treat exact duplicates as idempotent no-ops instead of new corpus entries
 - block malformed candidates and conflicting IDs instead of overwriting existing cases
-- require an explicit reviewed promotion step before untrusted candidates become auto-eligible
+- require evidence-based gating before a GitHub-derived candidate can auto-apply into the probationary lane
+- require a later promotion step before probationary cases are treated as durable primary corpus entries
 
 Exit criteria:
 
@@ -237,6 +250,7 @@ Exit criteria:
 - prepared review artifact directories can flow directly into wrapper scoring without an extra manual handoff step
 - the wrapper can reuse a prepared review run directory and stop early so the review-authoring loop does not need path juggling across different artifact roots
 - the wrapper can resume from the next missing stage instead of rerunning fetch/ingest/propose once those artifacts already exist
+- the wrapper can gate GitHub-derived candidates against duplicate checks plus review-artifact evidence before auto-applying them into the probationary lane
 
 ## Phase D. Live GitHub Input
 
@@ -281,6 +295,7 @@ For Phase B and later, validation should include:
 - building a generic GitHub analytics product
 - replacing the current curated corpus with raw PR data
 - auto-learning directly from all comments without review
+- auto-promoting GitHub-derived probationary cases straight into the durable primary corpus
 - making GitHub integration broader than needed for review improvement
 
 ## Initial Deliverables

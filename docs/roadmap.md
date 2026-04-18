@@ -45,6 +45,9 @@
 - let the wrapper resume from existing shared-run artifacts instead of repeating the early read-only stages
 - make MCP-shaped GitHub raw artifacts a first-class wrapper input and keep `gh` fetch as an explicit fallback only
 - define the normalized schema and apply safety checks before broader automation
+- gate GitHub-derived candidates into a probationary corpus before they can influence the primary GitHub corpus
+- use the curated SWE-bench lane as external hardening pressure so the skill can improve without relying only on your own buggy PRs
+- keep strict benchmark scoring separate from softer probationary admission evidence so learning stays safer than raw regex matching alone
 
 ## Phase 4
 

@@ -154,6 +154,13 @@ Promotion can sit between candidate generation and apply:
 - reviewed candidates can be re-emitted with `approved_for_auto: true`
 - that keeps raw intake conservative while still allowing explicit promotion into the auto path
 
+Candidate-quality gating can also sit between candidate generation and apply:
+
+- gate-approved candidates can be re-emitted with `approved_for_auto: true`
+- that path is intended for probationary-lane admission, not direct durable-corpus promotion
+- the gate should use duplicate checks plus review-artifact evidence
+- strict benchmark scoring remains useful, but probationary admission may use softer title and expectation overlap evidence than the final durable corpus scorer
+
 - `auto`
   Default mode. Apply candidates that pass structural checks and clear a higher-confidence bar with no soft warnings.
 - `review`
@@ -180,3 +187,5 @@ Reviewed promotion can explicitly clear some of those apply warnings by stamping
 - `review_notes.needs_human_review = false`
 - `review_notes.confidence = "high"`
 - `review_notes.approved_for_auto = true`
+
+The current probationary gate stamps the same fields when a candidate passes duplicate checks and review-artifact evidence strongly enough to justify probationary admission.

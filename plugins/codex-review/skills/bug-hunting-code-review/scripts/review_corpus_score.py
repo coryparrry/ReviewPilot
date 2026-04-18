@@ -34,7 +34,7 @@ class CaseResult:
 
 
 def load_corpus(path: Path) -> list[dict[str, Any]]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(data, list):
         raise ValueError("Corpus file must contain a JSON array.")
     return data

@@ -1,5 +1,6 @@
 import argparse
 import json
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -131,7 +132,50 @@ def corpus_fingerprint(entry: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
-def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str, str]]) -> list[str]:
+def normalize_title(value: str) -> str:
+    return " ".join(token for token in value.lower().split() if token)
+
+
+def expectation_tokens(expected_groups: Any) -> set[str]:
+    tokens: set[str] = set()
+    if not isinstance(expected_groups, list):
+        return tokens
+    for group in expected_groups:
+        if not isinstance(group, list):
+            continue
+        for token in group:
+            if not isinstance(token, str):
+                continue
+            for word in "".join(ch if ch.isalnum() else " " for ch in token.lower()).split():
+                if len(word) >= 4:
+                    tokens.add(word)
+    return tokens
+
+
+def token_overlap(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    return len(left & right) / max(1, min(len(left), len(right)))
+
+
+def has_near_duplicate(candidate: dict[str, Any], corpus: list[dict[str, Any]]) -> bool:
+    candidate_category = candidate.get("category")
+    candidate_title = normalize_title(str(candidate.get("title", "")))
+    candidate_tokens = expectation_tokens(candidate.get("expected_groups"))
+
+    for entry in corpus:
+        if entry.get("category") != candidate_category:
+            continue
+        title_similarity = SequenceMatcher(
+            None, candidate_title, normalize_title(str(entry.get("title", "")))
+        ).ratio()
+        overlap = token_overlap(candidate_tokens, expectation_tokens(entry.get("expected_groups")))
+        if title_similarity >= 0.88 or overlap >= 0.75:
+            return True
+    return False
+
+
+def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str, str]], corpus: list[dict[str, Any]]) -> list[str]:
     warnings: list[str] = []
     review_notes = candidate.get("review_notes")
     approved_for_auto = False
@@ -167,6 +211,8 @@ def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str,
         title_key = (category, title.strip().lower())
         if title_key in existing_title_keys:
             warnings.append("similar-title-category-exists")
+    if has_near_duplicate(candidate, corpus):
+        warnings.append("near-duplicate-corpus-match")
 
     return warnings
 
@@ -272,7 +318,7 @@ def main() -> int:
             continue
 
         blockers = hard_blockers(candidate, existing_ids, batch_ids)
-        warnings = soft_warnings(candidate, existing_title_keys)
+        warnings = soft_warnings(candidate, existing_title_keys, corpus)
         candidate_id = candidate.get("id")
         existing_entry = existing_by_id.get(candidate_id) if isinstance(candidate_id, str) else None
         if existing_entry is not None:

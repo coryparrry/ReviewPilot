@@ -438,6 +438,10 @@ def extract_comment_summary(body: str) -> tuple[str, str]:
             continue
         if "auto-generated comment by coderabbit" in lowered:
             continue
+        if "potential issue" in lowered and len(paragraph) <= 80:
+            continue
+        if any(label in lowered for label in (" major", " minor", " critical", " warning")) and "potential issue" in lowered:
+            continue
         cleaned_paragraphs.append(paragraph)
 
     if not cleaned_paragraphs:

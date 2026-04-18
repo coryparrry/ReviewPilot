@@ -20,10 +20,12 @@ It is not a benchmark for style. It is a benchmark for whether a review output c
 
 - `references/review-corpus-cases.json`
   The structured cases and matching expectations.
+- `references/probationary-review-cases.json`
+  Gate-approved GitHub-derived cases that are still in the probationary lane.
 - `scripts/review_corpus_score.py`
   Score a review output against those cases.
 - `scripts/run_review_benchmarks.py`
-  Run both the primary GitHub corpus and the external benchmark lane together.
+  Run the primary GitHub corpus, probationary GitHub corpus, and external benchmark lane together.
 - `scripts/run_pre_pr_review.py`
   Prepare diff and scan context, then score a supplied review artifact in one command. The direct OpenAI API path is optional legacy behavior.
 
@@ -77,13 +79,15 @@ python "<skill-path>\scripts\run_pre_pr_review.py" `
 When you add a new raw clip under the GitHub review-comment lane:
 
 1. Leave the raw file immutable.
-2. Distill only durable cases into `review-corpus-cases.json`.
-3. Keep each case concrete:
+2. Gate new cases into `probationary-review-cases.json` first when they are evidence-backed but not yet durable enough for the primary lane.
+3. Distill only durable cases into `review-corpus-cases.json`.
+4. Keep each case concrete:
    - bug title
    - category
    - severity
    - source raw file
    - regex groups that represent what a good review should mention
-4. Update the durable lessons log if the new case reflects a recurring miss class.
+5. Promote from probationary into the primary corpus only after the case has proved durable enough to justify that stricter lane.
+6. Update the durable lessons log if the new case reflects a recurring miss class.
 
 Do not add every nit. Add the cases that should change the review skill.

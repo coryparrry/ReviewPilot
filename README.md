@@ -77,6 +77,7 @@ This is a transition path. The plugin scaffold now exists in the repo, but the r
 The repo should keep the skill measurable and self-improving through:
 
 - the bundled review corpus built from real GitHub PR review misses
+- a probationary GitHub review corpus for gate-approved new cases that are not yet durable enough for the primary lane
 - curated external review-oriented datasets
 - repeatable benchmark commands that can score a draft review against both lanes
 - GitHub-facing plugin integration so review outputs and missed findings can be fed back into the corpus cleanly through one wrapper pipeline plus explicit underlying stages
@@ -84,6 +85,16 @@ The repo should keep the skill measurable and self-improving through:
 The wrapper pipeline can now optionally score a supplied review artifact before and after corpus apply so benchmark deltas come from an actual review output, not just a larger corpus.
 
 That scoring path can now consume prepared `.codex-review` artifact directories directly, so the Codex-native review loop no longer requires manually pulling out `review.md`.
+
+The current safe learning shape is:
+
+- ingest real GitHub review feedback into proposal artifacts
+- generate corpus candidates
+- gate those candidates against duplicates plus review-artifact evidence
+- auto-apply only the gate-approved candidates into the probationary lane
+- keep the primary GitHub corpus curated and harder to change
+
+The external SWE-bench lane exists to harden the review brain without depending only on your own buggy PR history. It should pressure the review prompt and benchmark workflow, not auto-write directly into the GitHub-derived corpus lanes.
 
 ## Initial Goals
 
@@ -102,5 +113,5 @@ That scoring path can now consume prepared `.codex-review` artifact directories 
 ## Next Steps
 
 1. Add post-sync verification so the installed runtime can be proven to match plugin-contained source.
-2. Harden the GitHub self-improvement loop around real repo data, corpus scoring, and apply safety.
+2. Keep hardening the learning policy around probationary admission, duplicate detection, and promotion from probationary into the primary GitHub corpus.
 3. Add plugin install/runtime documentation before broader CI or packaging work.

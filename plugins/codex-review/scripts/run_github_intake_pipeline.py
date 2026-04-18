@@ -10,6 +10,9 @@ from pathlib import Path
 DEFAULT_CORPUS_PATH = Path(
     "plugins/codex-review/skills/bug-hunting-code-review/references/review-corpus-cases.json"
 )
+DEFAULT_PROBATIONARY_CORPUS_PATH = Path(
+    "plugins/codex-review/skills/bug-hunting-code-review/references/probationary-review-cases.json"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -85,6 +88,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--corpus",
         help="Optional path to the target review corpus JSON file.",
+    )
+    parser.add_argument(
+        "--apply-target",
+        default="primary",
+        choices=["primary", "probationary"],
+        help="Target corpus lane for apply. Defaults to primary.",
+    )
+    parser.add_argument(
+        "--gate-candidates",
+        action="store_true",
+        help=(
+            "Run candidate-quality gating before apply. Requires a review artifact or review text and is intended "
+            "for safer self-learning into the probationary lane."
+        ),
     )
     parser.add_argument(
         "--score-review-file",
@@ -227,15 +244,17 @@ def print_summary(
         print(f"Benchmark delta artifact: {benchmark_delta_path}")
 
 
-def resolve_corpus_path(repo_root: Path, requested_path: str | None) -> Path:
+def resolve_corpus_path(repo_root: Path, requested_path: str | None, apply_target: str) -> Path:
     if requested_path:
         return Path(requested_path).resolve()
-    return (repo_root / DEFAULT_CORPUS_PATH).resolve()
+    default_corpus = DEFAULT_CORPUS_PATH if apply_target == "primary" else DEFAULT_PROBATIONARY_CORPUS_PATH
+    return (repo_root / default_corpus).resolve()
 
 
 def run_benchmarks(
     benchmark_script: Path,
     primary_corpus: Path,
+    probationary_corpus: Path,
     review_file: str | None,
     review_text: str | None,
 ) -> dict:
@@ -245,6 +264,8 @@ def run_benchmarks(
         "--json",
         "--primary-corpus",
         str(primary_corpus),
+        "--probationary-corpus",
+        str(probationary_corpus),
     ]
     if review_file:
         cmd.extend(["--review-file", review_file])
@@ -295,12 +316,7 @@ def build_benchmark_delta(before: dict, after: dict) -> dict:
             "critical_or_high_misses_after": after_summary.get("critical_or_high_misses") or [],
         }
 
-    return {
-        "primary_github_corpus": lane_delta(before["primary_github_corpus"], after["primary_github_corpus"]),
-        "external_swebench_verified": lane_delta(
-            before["external_swebench_verified"], after["external_swebench_verified"]
-        ),
-    }
+    return {lane_name: lane_delta(before[lane_name], after[lane_name]) for lane_name in before if lane_name in after}
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -346,20 +362,26 @@ def main() -> int:
     ingest_script = script_path.parent / "ingest_github_review_feedback.py"
     propose_script = script_path.parent / "propose_corpus_updates.py"
     promote_script = script_path.parent / "promote_corpus_candidates.py"
+    quality_gate_script = script_path.parent / "score_candidate_quality.py"
     apply_script = script_path.parent / "apply_corpus_updates.py"
     benchmark_script = (
         script_path.parent.parent / "skills" / "bug-hunting-code-review" / "scripts" / "run_review_benchmarks.py"
     )
-    corpus_path = resolve_corpus_path(repo_root, args.corpus)
+    corpus_path = resolve_corpus_path(repo_root, args.corpus, args.apply_target)
 
     proposal_path = output_dir / f"{selected_prefix}-proposal.json"
     candidates_path = output_dir / f"{selected_prefix}-candidates.json"
     promoted_candidates_path = output_dir / f"{selected_prefix}-promoted-candidates.json"
+    quality_result_path = output_dir / f"{selected_prefix}-candidate-quality.json"
+    gated_candidates_path = output_dir / f"{selected_prefix}-gate-approved-candidates.json"
     apply_result_path = output_dir / f"{selected_prefix}-apply-result.json"
     benchmark_before_path = output_dir / f"{selected_prefix}-benchmarks-before.json"
     benchmark_after_path = output_dir / f"{selected_prefix}-benchmarks-after.json"
     benchmark_delta_path = output_dir / f"{selected_prefix}-benchmark-delta.json"
-    benchmark_before_corpus_snapshot = output_dir / f"{selected_prefix}-primary-corpus-before.json"
+    benchmark_before_primary_snapshot = output_dir / f"{selected_prefix}-primary-corpus-before.json"
+    benchmark_before_probationary_snapshot = output_dir / f"{selected_prefix}-probationary-corpus-before.json"
+    primary_corpus_path = (repo_root / DEFAULT_CORPUS_PATH).resolve()
+    probationary_corpus_path = (repo_root / DEFAULT_PROBATIONARY_CORPUS_PATH).resolve()
     raw_format_for_ingest = args.raw_format
     if args.raw_input:
         selected_raw_path = Path(args.raw_input).resolve()
@@ -539,11 +561,47 @@ def main() -> int:
         return 0
 
     scoring_enabled = bool(resolved_review_file or args.score_review_text is not None)
+    if args.gate_candidates:
+        if not scoring_enabled:
+            raise ValueError(
+                "--gate-candidates requires --score-review-file, --score-review-artifacts, or --score-review-text."
+            )
+        quality_cmd = [
+            sys.executable,
+            str(quality_gate_script),
+            "--input",
+            str(apply_input_path),
+            "--primary-corpus",
+            str((repo_root / DEFAULT_CORPUS_PATH).resolve()),
+            "--probationary-corpus",
+            str((repo_root / DEFAULT_PROBATIONARY_CORPUS_PATH).resolve()),
+            "--output",
+            str(quality_result_path),
+            "--filtered-output",
+            str(gated_candidates_path),
+        ]
+        if resolved_review_file:
+            quality_cmd.extend(["--review-file", resolved_review_file])
+        else:
+            quality_cmd.extend(["--review-text", args.score_review_text])
+        if allow_outside_artifacts:
+            quality_cmd.append("--allow-outside-artifacts")
+        run_step(quality_cmd)
+        apply_input_path = gated_candidates_path
+
     if scoring_enabled:
-        shutil.copyfile(corpus_path, benchmark_before_corpus_snapshot)
+        before_primary_corpus = primary_corpus_path
+        before_probationary_corpus = probationary_corpus_path
+        if args.apply_target == "primary":
+            shutil.copyfile(corpus_path, benchmark_before_primary_snapshot)
+            before_primary_corpus = benchmark_before_primary_snapshot
+        else:
+            shutil.copyfile(corpus_path, benchmark_before_probationary_snapshot)
+            before_probationary_corpus = benchmark_before_probationary_snapshot
         before_benchmarks = run_benchmarks(
             benchmark_script,
-            benchmark_before_corpus_snapshot,
+            before_primary_corpus,
+            before_probationary_corpus,
             resolved_review_file,
             args.score_review_text,
         )
@@ -556,20 +614,23 @@ def main() -> int:
         str(apply_input_path),
         "--mode",
         args.apply_mode,
+        "--corpus",
+        str(corpus_path),
         "--result-output",
         str(apply_result_path),
     ]
-    if args.corpus:
-        apply_cmd.extend(["--corpus", args.corpus])
     if allow_outside_artifacts:
         apply_cmd.append("--allow-outside-artifacts")
     run_step(apply_cmd)
 
     printed_benchmark_delta_path: Path | None = None
     if scoring_enabled:
+        after_primary_corpus = corpus_path if args.apply_target == "primary" else primary_corpus_path
+        after_probationary_corpus = corpus_path if args.apply_target == "probationary" else probationary_corpus_path
         after_benchmarks = run_benchmarks(
             benchmark_script,
-            corpus_path,
+            after_primary_corpus,
+            after_probationary_corpus,
             resolved_review_file,
             args.score_review_text,
         )

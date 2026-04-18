@@ -21,6 +21,8 @@ Use it to add broader correctness pressure on bug classes that may not appear of
 - mixed-type interop behavior
 - missing guard rails around malformed input
 
+This lane is useful when you want the skill to keep learning and hardening without manufacturing buggy PRs in your own repos. It should influence prompts, scorer expectations, and benchmark pressure, but it should not auto-write directly into the GitHub-derived corpus lanes.
+
 ## Workflow
 
 1. Fetch candidate rows from Hugging Face:
