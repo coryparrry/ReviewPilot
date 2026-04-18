@@ -114,6 +114,23 @@ That accepts either:
 - a specific prepared run directory containing `review.md`
 - the parent `.codex-review` directory, in which case the newest child run with `review.md` is used
 
+To reuse a prepared review run directory directly and stop after proposal generation:
+
+```powershell
+python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
+  --repo owner/name `
+  --pr 123 `
+  --review-run-dir .\.codex-review\20260418-120000 `
+  --stop-after propose
+```
+
+That lets the same run directory hold:
+
+- prepared diff and prompt artifacts
+- intake proposal and candidate artifacts
+- the eventual `review.md`
+- later benchmark and apply artifacts after a follow-up wrapper run
+
 Apply modes:
 
 - `auto`

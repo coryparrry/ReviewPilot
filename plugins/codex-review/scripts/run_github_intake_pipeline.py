@@ -82,6 +82,19 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--review-run-dir",
+        help=(
+            "Optional prepared review run directory to reuse as the pipeline working directory. "
+            "This allows prepare -> write review -> benchmark/apply to happen in one shared run folder."
+        ),
+    )
+    parser.add_argument(
+        "--stop-after",
+        default="apply",
+        choices=["fetch", "ingest", "propose", "promote", "apply"],
+        help="Stop after the named stage. Defaults to apply.",
+    )
+    parser.add_argument(
         "--allow-outside-artifacts",
         action="store_true",
         help="Allow writing outside the repo's ignored artifacts/github-intake tree.",
@@ -152,7 +165,7 @@ def print_summary(
     proposal_path: Path,
     candidates_path: Path,
     apply_input_path: Path,
-    apply_result_path: Path,
+    apply_result_path: Path | None,
     benchmark_delta_path: Path | None,
 ) -> None:
     print(f"Pipeline run directory: {output_dir}")
@@ -161,7 +174,8 @@ def print_summary(
     print(f"Candidate artifact: {candidates_path}")
     if apply_input_path != candidates_path:
         print(f"Apply input artifact: {apply_input_path}")
-    print(f"Apply result artifact: {apply_result_path}")
+    if apply_result_path is not None:
+        print(f"Apply result artifact: {apply_result_path}")
     if benchmark_delta_path is not None:
         print(f"Benchmark delta artifact: {benchmark_delta_path}")
 
@@ -265,7 +279,11 @@ def main() -> int:
 
     script_path = Path(__file__).resolve()
     repo_root = repo_root_from_script()
-    output_dir = resolve_output_dir(repo_root, args.repo, args.pr, args.output_dir, args.allow_outside_artifacts)
+    if args.review_run_dir and args.output_dir:
+        raise ValueError("Use either --review-run-dir or --output-dir, not both.")
+    resolved_output_dir = args.review_run_dir or args.output_dir
+    allow_outside_artifacts = args.allow_outside_artifacts or args.review_run_dir is not None
+    output_dir = resolve_output_dir(repo_root, args.repo, args.pr, resolved_output_dir, allow_outside_artifacts)
     fetch_dir = output_dir / "fetches"
     selected_prefix = args.source
 
@@ -298,7 +316,7 @@ def main() -> int:
         "--output-dir",
         str(fetch_dir),
     ]
-    if args.allow_outside_artifacts:
+    if allow_outside_artifacts:
         fetch_cmd.append("--allow-outside-artifacts")
     fetch_result = run_cmd_with_result(fetch_cmd)
     if fetch_result.stdout:
@@ -337,6 +355,18 @@ def main() -> int:
             raise FileNotFoundError(f"GraphQL source was requested but no GraphQL artifact was written under {fetch_dir}.")
         selected_raw_path = graphql_raw_path
 
+    if args.stop_after == "fetch":
+        print_summary(
+            output_dir=output_dir,
+            selected_raw=selected_raw_path,
+            proposal_path=proposal_path,
+            candidates_path=candidates_path,
+            apply_input_path=candidates_path,
+            apply_result_path=None,
+            benchmark_delta_path=None,
+        )
+        return 0
+
     ingest_cmd = [
         sys.executable,
         str(ingest_script),
@@ -345,9 +375,21 @@ def main() -> int:
         "--output",
         str(proposal_path),
     ]
-    if args.allow_outside_artifacts:
+    if allow_outside_artifacts:
         ingest_cmd.append("--allow-outside-artifacts")
     run_step(ingest_cmd)
+
+    if args.stop_after == "ingest":
+        print_summary(
+            output_dir=output_dir,
+            selected_raw=selected_raw_path,
+            proposal_path=proposal_path,
+            candidates_path=candidates_path,
+            apply_input_path=candidates_path,
+            apply_result_path=None,
+            benchmark_delta_path=None,
+        )
+        return 0
 
     propose_cmd = [
         sys.executable,
@@ -357,11 +399,23 @@ def main() -> int:
         "--output",
         str(candidates_path),
     ]
-    if args.allow_outside_artifacts:
+    if allow_outside_artifacts:
         propose_cmd.append("--allow-outside-artifacts")
     run_step(propose_cmd)
 
     apply_input_path = candidates_path
+    if args.stop_after == "propose":
+        print_summary(
+            output_dir=output_dir,
+            selected_raw=selected_raw_path,
+            proposal_path=proposal_path,
+            candidates_path=candidates_path,
+            apply_input_path=apply_input_path,
+            apply_result_path=None,
+            benchmark_delta_path=None,
+        )
+        return 0
+
     if args.promote_all or args.promote_ids:
         promote_cmd = [
             sys.executable,
@@ -380,10 +434,22 @@ def main() -> int:
         else:
             promote_cmd.append("--ids")
             promote_cmd.extend(args.promote_ids)
-        if args.allow_outside_artifacts:
+        if allow_outside_artifacts:
             promote_cmd.append("--allow-outside-artifacts")
         run_step(promote_cmd)
         apply_input_path = promoted_candidates_path
+
+    if args.stop_after == "promote":
+        print_summary(
+            output_dir=output_dir,
+            selected_raw=selected_raw_path,
+            proposal_path=proposal_path,
+            candidates_path=candidates_path,
+            apply_input_path=apply_input_path,
+            apply_result_path=None,
+            benchmark_delta_path=None,
+        )
+        return 0
 
     scoring_enabled = bool(resolved_review_file or args.score_review_text is not None)
     if scoring_enabled:
@@ -408,7 +474,7 @@ def main() -> int:
     ]
     if args.corpus:
         apply_cmd.extend(["--corpus", args.corpus])
-    if args.allow_outside_artifacts:
+    if allow_outside_artifacts:
         apply_cmd.append("--allow-outside-artifacts")
     run_step(apply_cmd)
 

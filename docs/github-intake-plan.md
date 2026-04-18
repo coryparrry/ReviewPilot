@@ -42,6 +42,8 @@ If the wrapper reports benchmark improvement, it should do so only by scoring a 
 
 Prepared `.codex-review` run directories should count as valid review-artifact inputs so the benchmark path stays plugin-native end to end.
 
+Prepared review run directories should also be reusable as the wrapper working directory so prepare, review authoring, and intake artifacts can live in one shared run folder.
+
 ## Scope
 
 ### In Scope For V1
@@ -210,6 +212,7 @@ Exit criteria:
 - add `plugins/codex-review/scripts/run_github_intake_pipeline.py` as the thin orchestration entrypoint
 - allow the wrapper to run optional before/after benchmark comparison when a real review artifact is supplied
 - allow the wrapper to consume prepared `.codex-review` run directories directly instead of requiring manual extraction of `review.md`
+- allow the wrapper to stop after proposal generation so Codex can write the review into the same shared run directory before a later scoring/apply pass
 - make `auto` the default mode for straightforward safe additions
 - keep `review` as an explicit no-write option
 - keep `force` available for intentionally overriding soft warnings
@@ -226,6 +229,7 @@ Exit criteria:
 - the wrapper command can run fetch, ingest, propose, optional promote, and apply into one per-run artifact directory
 - optional benchmark comparison can produce before, after, and delta artifacts without inventing a fake improvement signal
 - prepared review artifact directories can flow directly into wrapper scoring without an extra manual handoff step
+- the wrapper can reuse a prepared review run directory and stop early so the review-authoring loop does not need path juggling across different artifact roots
 
 ## Phase D. Live GitHub Input
 

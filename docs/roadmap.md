@@ -39,6 +39,7 @@
 - make `auto` the default corpus-apply mode, with `review` as the explicit no-write option
 - wire before/after benchmark comparison into the wrapper when a real review output is available
 - let the wrapper consume prepared `.codex-review` artifact directories directly so Codex-authored reviews can flow into scoring without manual file extraction
+- let the wrapper reuse a prepared review run directory and stop after proposal generation so the full authoring loop can stay in one folder
 - define the normalized schema and apply safety checks before broader automation
 
 ## Phase 4
