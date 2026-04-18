@@ -63,6 +63,14 @@ def parse_args() -> argparse.Namespace:
         help="Optional review output file to benchmark before and after apply.",
     )
     parser.add_argument(
+        "--score-review-artifacts",
+        help=(
+            "Optional prepared review-artifact directory. Accepts either a specific run directory "
+            "containing review.md or a parent .codex-review directory, in which case the newest "
+            "child run with review.md is used."
+        ),
+    )
+    parser.add_argument(
         "--score-review-text",
         help="Optional inline review text to benchmark before and after apply.",
     )
@@ -186,6 +194,31 @@ def run_benchmarks(
     return run_json_cmd(cmd)
 
 
+def resolve_review_artifact_file(review_artifacts: str) -> Path:
+    candidate = Path(review_artifacts).resolve()
+    if candidate.is_file():
+        return candidate
+    if not candidate.is_dir():
+        raise FileNotFoundError(f"Review artifact path does not exist: {candidate}")
+
+    direct_review = candidate / "review.md"
+    if direct_review.is_file():
+        return direct_review
+
+    child_runs = sorted(
+        (child for child in candidate.iterdir() if child.is_dir() and (child / "review.md").is_file()),
+        key=lambda child: child.name,
+        reverse=True,
+    )
+    if child_runs:
+        return child_runs[0] / "review.md"
+
+    raise FileNotFoundError(
+        f"Could not find review.md under {candidate}. "
+        "Pass a run directory containing review.md or a parent .codex-review directory with scored runs."
+    )
+
+
 def build_benchmark_delta(before: dict, after: dict) -> dict:
     def lane_delta(before_lane: dict, after_lane: dict) -> dict:
         before_summary = before_lane["summary"]
@@ -218,8 +251,17 @@ def main() -> int:
     args = parse_args()
     if args.promote_all and args.promote_ids:
         raise ValueError("Use either --promote-all or --promote-ids, not both.")
+    if args.score_review_artifacts and args.score_review_file:
+        raise ValueError("Use either --score-review-artifacts or --score-review-file, not both.")
+    resolved_review_file: str | None = None
+    if args.score_review_artifacts:
+        resolved_review_file = str(resolve_review_artifact_file(args.score_review_artifacts))
     if args.score_review_file and args.score_review_text is not None:
         raise ValueError("Use either --score-review-file or --score-review-text, not both.")
+    if args.score_review_artifacts and args.score_review_text is not None:
+        raise ValueError("Use either --score-review-artifacts or --score-review-text, not both.")
+    if resolved_review_file is None:
+        resolved_review_file = args.score_review_file
 
     script_path = Path(__file__).resolve()
     repo_root = repo_root_from_script()
@@ -343,13 +385,13 @@ def main() -> int:
         run_step(promote_cmd)
         apply_input_path = promoted_candidates_path
 
-    scoring_enabled = bool(args.score_review_file or args.score_review_text is not None)
+    scoring_enabled = bool(resolved_review_file or args.score_review_text is not None)
     if scoring_enabled:
         shutil.copyfile(corpus_path, benchmark_before_corpus_snapshot)
         before_benchmarks = run_benchmarks(
             benchmark_script,
             benchmark_before_corpus_snapshot,
-            args.score_review_file,
+            resolved_review_file,
             args.score_review_text,
         )
         write_json(benchmark_before_path, before_benchmarks)
@@ -375,7 +417,7 @@ def main() -> int:
         after_benchmarks = run_benchmarks(
             benchmark_script,
             corpus_path,
-            args.score_review_file,
+            resolved_review_file,
             args.score_review_text,
         )
         benchmark_delta = build_benchmark_delta(before_benchmarks, after_benchmarks)

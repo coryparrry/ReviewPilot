@@ -38,6 +38,7 @@
 - keep live GitHub fetch read-only while the self-improvement loop hardens
 - make `auto` the default corpus-apply mode, with `review` as the explicit no-write option
 - wire before/after benchmark comparison into the wrapper when a real review output is available
+- let the wrapper consume prepared `.codex-review` artifact directories directly so Codex-authored reviews can flow into scoring without manual file extraction
 - define the normalized schema and apply safety checks before broader automation
 
 ## Phase 4

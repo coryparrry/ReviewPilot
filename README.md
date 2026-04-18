@@ -83,6 +83,8 @@ The repo should keep the skill measurable and self-improving through:
 
 The wrapper pipeline can now optionally score a supplied review artifact before and after corpus apply so benchmark deltas come from an actual review output, not just a larger corpus.
 
+That scoring path can now consume prepared `.codex-review` artifact directories directly, so the Codex-native review loop no longer requires manually pulling out `review.md`.
+
 ## Initial Goals
 
 - keep the review skill CodeRabbit-style and release-blocking

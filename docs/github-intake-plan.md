@@ -40,6 +40,8 @@ The repo can still expose a single wrapper command for normal use, but that wrap
 
 If the wrapper reports benchmark improvement, it should do so only by scoring a supplied review artifact before and after apply, not by inferring improvement from corpus growth alone.
 
+Prepared `.codex-review` run directories should count as valid review-artifact inputs so the benchmark path stays plugin-native end to end.
+
 ## Scope
 
 ### In Scope For V1
@@ -207,6 +209,7 @@ Exit criteria:
 - add `plugins/codex-review/scripts/promote_corpus_candidates.py`
 - add `plugins/codex-review/scripts/run_github_intake_pipeline.py` as the thin orchestration entrypoint
 - allow the wrapper to run optional before/after benchmark comparison when a real review artifact is supplied
+- allow the wrapper to consume prepared `.codex-review` run directories directly instead of requiring manual extraction of `review.md`
 - make `auto` the default mode for straightforward safe additions
 - keep `review` as an explicit no-write option
 - keep `force` available for intentionally overriding soft warnings
@@ -222,6 +225,7 @@ Exit criteria:
 - promoted candidates can be marked auto-eligible without weakening default intake heuristics
 - the wrapper command can run fetch, ingest, propose, optional promote, and apply into one per-run artifact directory
 - optional benchmark comparison can produce before, after, and delta artifacts without inventing a fake improvement signal
+- prepared review artifact directories can flow directly into wrapper scoring without an extra manual handoff step
 
 ## Phase D. Live GitHub Input
 

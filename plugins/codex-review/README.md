@@ -99,6 +99,21 @@ python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
 
 That writes before, after, and delta benchmark artifacts into the same pipeline run directory.
 
+If the review was prepared through the bundled pre-PR helper, the wrapper can consume the prepared artifact directory directly:
+
+```powershell
+python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
+  --repo owner/name `
+  --pr 123 `
+  --apply-mode review `
+  --score-review-artifacts .\.codex-review
+```
+
+That accepts either:
+
+- a specific prepared run directory containing `review.md`
+- the parent `.codex-review` directory, in which case the newest child run with `review.md` is used
+
 Apply modes:
 
 - `auto`
