@@ -142,6 +142,11 @@ A normalized proposal record should become a corpus candidate only when:
 
 Candidate application is a later workflow than normalization.
 
+Promotion can sit between candidate generation and apply:
+
+- reviewed candidates can be re-emitted with `approved_for_auto: true`
+- that keeps raw intake conservative while still allowing explicit promotion into the auto path
+
 - `auto`
   Default mode. Apply candidates that pass structural checks and clear a higher-confidence bar with no soft warnings.
 - `review`
@@ -162,3 +167,9 @@ Current soft-warning examples that hold a candidate out of `auto`:
 - the review comment already says the issue was addressed in a later commit
 - the finding only touches test-only surfaces
 - severity is below `critical`
+
+Reviewed promotion can explicitly clear some of those apply warnings by stamping:
+
+- `review_notes.needs_human_review = false`
+- `review_notes.confidence = "high"`
+- `review_notes.approved_for_auto = true`

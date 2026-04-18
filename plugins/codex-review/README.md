@@ -59,6 +59,12 @@ The non-destructive review-mapping script lives at:
 
 - `plugins/codex-review/scripts/propose_corpus_updates.py`
 
+The reviewed promotion script now lives at:
+
+- `plugins/codex-review/scripts/promote_corpus_candidates.py`
+
+That script exists to turn selected reviewed candidates into auto-eligible candidates without weakening the default intake heuristics.
+
 The corpus apply script now lives at:
 
 - `plugins/codex-review/scripts/apply_corpus_updates.py`

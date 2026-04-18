@@ -122,6 +122,7 @@ Initial planned script surface:
 - `ingest_github_review_feedback.py`
 - `fetch_github_review_feedback.py`
 - `propose_corpus_updates.py`
+- `promote_corpus_candidates.py`
 
 Likely future additions:
 
@@ -197,17 +198,20 @@ Exit criteria:
 ## Phase E. Controlled Corpus Apply
 
 - add `plugins/codex-review/scripts/apply_corpus_updates.py`
+- add `plugins/codex-review/scripts/promote_corpus_candidates.py`
 - make `auto` the default mode for straightforward safe additions
 - keep `review` as an explicit no-write option
 - keep `force` available for intentionally overriding soft warnings
 - treat exact duplicates as idempotent no-ops instead of new corpus entries
 - block malformed candidates and conflicting IDs instead of overwriting existing cases
+- require an explicit reviewed promotion step before untrusted candidates become auto-eligible
 
 Exit criteria:
 
 - one command can apply clean corpus-candidate artifacts into `review-corpus-cases.json`
 - repeat runs are idempotent for exact duplicates
 - review mode can preview application without mutating the corpus
+- promoted candidates can be marked auto-eligible without weakening default intake heuristics
 
 ## Phase D. Live GitHub Input
 

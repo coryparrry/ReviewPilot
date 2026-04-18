@@ -134,22 +134,31 @@ def corpus_fingerprint(entry: dict[str, Any]) -> tuple[Any, ...]:
 def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str, str]]) -> list[str]:
     warnings: list[str] = []
     review_notes = candidate.get("review_notes")
+    approved_for_auto = False
     if isinstance(review_notes, dict):
-        if review_notes.get("needs_human_review") is not False:
+        approved_for_auto = review_notes.get("approved_for_auto") is True
+        if review_notes.get("needs_human_review") is not False and not approved_for_auto:
             warnings.append("needs-human-review")
         confidence = review_notes.get("confidence")
-        if confidence != "high":
+        if confidence != "high" and not approved_for_auto:
             warnings.append("non-high-confidence")
         file_path = review_notes.get("file_path")
         if isinstance(file_path, str):
             normalized_path = file_path.replace("\\", "/").lower()
-            if normalized_path.endswith(".test.ts") or normalized_path.endswith(".test.tsx") or "/test/" in normalized_path:
+            if (
+                not approved_for_auto
+                and (
+                    normalized_path.endswith(".test.ts")
+                    or normalized_path.endswith(".test.tsx")
+                    or "/test/" in normalized_path
+                )
+            ):
                 warnings.append("test-only-surface")
         body = review_notes.get("body")
         if isinstance(body, str) and "addressed in commit" in body.lower():
             warnings.append("already-addressed-upstream")
 
-    if candidate.get("severity") != "critical":
+    if candidate.get("severity") != "critical" and not approved_for_auto:
         warnings.append("non-critical-severity")
 
     title = candidate.get("title")
