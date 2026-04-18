@@ -34,6 +34,7 @@
 ## Next Execution Plan
 
 - implement the [GitHub Intake Plan](github-intake-plan.md) as the first plugin-owned workflow
+- run the first live `ReviewPilot` PR through fetch, ingest, propose, and apply
 - keep live GitHub fetch read-only while the self-improvement loop hardens
 - make `auto` the default corpus-apply mode, with `review` as the explicit no-write option
 - define the normalized schema and apply safety checks before broader automation
