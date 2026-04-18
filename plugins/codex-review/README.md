@@ -96,6 +96,8 @@ The current learning policy is intentionally two-lane:
 - gate-approved GitHub-derived cases can auto-apply into the probationary corpus
 - the primary GitHub corpus should stay harder to change and should not be treated as the raw output lane for fresh PR feedback
 
+The wrapper now defaults `--apply-target` to `probationary` so the safer lane is the default behavior, not an extra flag the caller has to remember.
+
 The external SWE-bench lane is the hardening lane for broader review pressure. It helps the review brain improve without depending only on your own buggy PRs, but it should not auto-write directly into the GitHub-derived corpus lanes.
 
 Recommended entrypoint for normal use:

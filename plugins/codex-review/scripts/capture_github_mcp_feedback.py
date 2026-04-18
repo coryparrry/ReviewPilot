@@ -159,9 +159,10 @@ def main() -> int:
     print(f"Wrote MCP capture artifact: {output_path}")
     print()
     print("Next pipeline command:")
+    allow_flag = " --allow-outside-artifacts" if args.allow_outside_artifacts else ""
     print(
         f'{sys.executable} ".\\plugins\\codex-review\\scripts\\run_github_intake_pipeline.py" '
-        f'--repo {args.repo} --pr {args.pr} --raw-input "{output_path}" --raw-format {raw_format} --apply-mode review'
+        f'--repo {args.repo} --pr {args.pr} --raw-input "{output_path}" --raw-format {raw_format} --apply-mode review{allow_flag}'
     )
     return 0
 

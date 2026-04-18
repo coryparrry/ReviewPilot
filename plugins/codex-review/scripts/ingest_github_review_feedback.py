@@ -370,9 +370,23 @@ def iter_github_mcp_pr_comments(payload: dict[str, Any]) -> list[dict[str, Any]]
 def iter_github_mcp_review_threads(payload: dict[str, Any]) -> list[dict[str, Any]]:
     comments: list[dict[str, Any]] = []
     for thread in payload.get("review_threads", []):
+        if thread.get("is_resolved") or thread.get("is_outdated"):
+            continue
         thread_path = thread.get("path")
         thread_line = thread.get("line") or thread.get("start_line") or thread.get("original_line")
-        for comment in thread.get("comments", []):
+        thread_comments = thread.get("comments", [])
+        reviewer_login = None
+        for comment in thread_comments:
+            author = comment.get("author")
+            if isinstance(author, dict) and isinstance(author.get("login"), str) and author["login"].strip():
+                reviewer_login = author["login"].strip().lower()
+                break
+        for comment in thread_comments:
+            author = comment.get("author")
+            if reviewer_login and isinstance(author, dict):
+                author_login = author.get("login")
+                if isinstance(author_login, str) and author_login.strip().lower() != reviewer_login:
+                    continue
             comments.append(
                 {
                     "review_id": None,

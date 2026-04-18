@@ -91,9 +91,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--apply-target",
-        default="primary",
+        default="probationary",
         choices=["primary", "probationary"],
-        help="Target corpus lane for apply. Defaults to primary.",
+        help="Target corpus lane for apply. Defaults to probationary.",
     )
     parser.add_argument(
         "--gate-candidates",
