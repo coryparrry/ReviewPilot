@@ -1,10 +1,12 @@
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 
 GRAPHQL_THREADS_QUERY = """
@@ -100,23 +102,46 @@ def run_cmd(cmd: list[str]) -> str:
     return completed.stdout.decode("utf-8", errors="replace")
 
 
+def ensure_read_only_graphql_query(query: str) -> None:
+    normalized = query.lstrip().lower()
+    if not normalized.startswith("query"):
+        raise ValueError("GitHub GraphQL fetches must be read-only queries.")
+    if re.search(r"\bmutation\b", normalized):
+        raise ValueError("GitHub GraphQL fetches may not contain mutations.")
+
+
 def split_repo(repo: str) -> tuple[str, str]:
     if "/" not in repo:
         raise ValueError(f"Repo must be in owner/name form, got: {repo}")
     owner, name = repo.split("/", 1)
     if not owner or not name:
         raise ValueError(f"Repo must be in owner/name form, got: {repo}")
+    if owner in {".", ".."} or name in {".", ".."}:
+        raise ValueError(f"Repo path segments may not be dot-segments, got: {repo}")
     for segment in (owner, name):
         if not all(ch.isalnum() or ch in "._-" for ch in segment):
             raise ValueError(f"Repo must contain only GitHub-safe owner/name characters, got: {repo}")
     return owner, name
 
 
+def encode_repo_path(repo: str) -> str:
+    owner, name = split_repo(repo)
+    return f"{quote(owner, safe='')}/{quote(name, safe='')}"
+
+
 def ensure_gh_auth() -> None:
     subprocess.run(["gh", "auth", "status"], capture_output=True, check=True)
 
 
+def gh_api_read_only(path: str, paginate: bool = False) -> dict[str, Any] | list[dict[str, Any]]:
+    cmd = ["gh", "api", path]
+    if paginate:
+        cmd.append("--paginate")
+    return json.loads(run_cmd(cmd))
+
+
 def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    ensure_read_only_graphql_query(query)
     cmd = ["gh", "api", "graphql", "-f", f"query={query}"]
     for key, value in variables.items():
         if isinstance(value, int):
@@ -129,15 +154,8 @@ def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
 
 
 def fetch_rest_comments(repo: str, pr_number: int) -> dict[str, Any]:
-    output = run_cmd(
-        [
-            "gh",
-            "api",
-            f"repos/{repo}/pulls/{pr_number}/comments",
-            "--paginate",
-        ]
-    )
-    comments = json.loads(output)
+    encoded_repo = encode_repo_path(repo)
+    comments = gh_api_read_only(f"repos/{encoded_repo}/pulls/{pr_number}/comments", paginate=True)
     return {
         "source": "github-rest-review-comments",
         "repo": repo,

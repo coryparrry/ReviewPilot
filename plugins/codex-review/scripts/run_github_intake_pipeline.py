@@ -95,9 +95,17 @@ def parse_args() -> argparse.Namespace:
         help="Stop after the named stage. Defaults to apply.",
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from existing artifacts in the run directory instead of rerunning completed earlier stages.",
+    )
+    parser.add_argument(
         "--allow-outside-artifacts",
         action="store_true",
-        help="Allow writing outside the repo's ignored artifacts/github-intake tree.",
+        help=(
+            "Unsafe local-write override: allow pipeline artifacts to be written outside the repo's "
+            "ignored artifacts/github-intake tree. This does not change GitHub access, which remains read-only."
+        ),
     )
     return parser.parse_args()
 
@@ -155,6 +163,17 @@ def find_single_artifact(fetch_dir: Path, pattern: str) -> Path:
     if len(matches) != 1:
         raise FileNotFoundError(
             f"Expected exactly one artifact matching {pattern} under {fetch_dir}, found {len(matches)}."
+        )
+    return matches[0]
+
+
+def find_optional_single_artifact(fetch_dir: Path, pattern: str) -> Path | None:
+    matches = sorted(fetch_dir.glob(pattern))
+    if not matches:
+        return None
+    if len(matches) != 1:
+        raise FileNotFoundError(
+            f"Expected at most one artifact matching {pattern} under {fetch_dir}, found {len(matches)}."
         )
     return matches[0]
 
@@ -282,7 +301,7 @@ def main() -> int:
     if args.review_run_dir and args.output_dir:
         raise ValueError("Use either --review-run-dir or --output-dir, not both.")
     resolved_output_dir = args.review_run_dir or args.output_dir
-    allow_outside_artifacts = args.allow_outside_artifacts or args.review_run_dir is not None
+    allow_outside_artifacts = args.allow_outside_artifacts
     output_dir = resolve_output_dir(repo_root, args.repo, args.pr, resolved_output_dir, allow_outside_artifacts)
     fetch_dir = output_dir / "fetches"
     selected_prefix = args.source
@@ -306,47 +325,50 @@ def main() -> int:
     benchmark_delta_path = output_dir / f"{selected_prefix}-benchmark-delta.json"
     benchmark_before_corpus_snapshot = output_dir / f"{selected_prefix}-primary-corpus-before.json"
 
-    fetch_cmd = [
-        sys.executable,
-        str(fetch_script),
-        "--repo",
-        args.repo,
-        "--pr",
-        str(args.pr),
-        "--output-dir",
-        str(fetch_dir),
-    ]
-    if allow_outside_artifacts:
-        fetch_cmd.append("--allow-outside-artifacts")
-    fetch_result = run_cmd_with_result(fetch_cmd)
-    if fetch_result.stdout:
-        print(fetch_result.stdout, end="")
-    if fetch_result.stderr:
-        print(fetch_result.stderr, end="", file=sys.stderr)
+    rest_raw_path = find_optional_single_artifact(fetch_dir, "*-rest-review-comments.json")
+    graphql_raw_path = find_optional_single_artifact(fetch_dir, "*-graphql-review-threads.json")
+    need_fetch = not (args.resume and rest_raw_path is not None and (args.source == "rest" or graphql_raw_path is not None))
 
-    rest_raw_path = find_single_artifact(fetch_dir, "*-rest-review-comments.json")
-    graphql_raw_path: Path | None = None
-    graphql_matches = sorted(fetch_dir.glob("*-graphql-review-threads.json"))
-    if graphql_matches:
-        if len(graphql_matches) != 1:
-            raise FileNotFoundError(
-                f"Expected exactly one GraphQL artifact under {fetch_dir}, found {len(graphql_matches)}."
-            )
-        graphql_raw_path = graphql_matches[0]
+    if need_fetch:
+        fetch_cmd = [
+            sys.executable,
+            str(fetch_script),
+            "--repo",
+            args.repo,
+            "--pr",
+            str(args.pr),
+            "--output-dir",
+            str(fetch_dir),
+        ]
+        if allow_outside_artifacts:
+            fetch_cmd.append("--allow-outside-artifacts")
+        fetch_result = run_cmd_with_result(fetch_cmd)
+        if fetch_result.stdout:
+            print(fetch_result.stdout, end="")
+        if fetch_result.stderr:
+            print(fetch_result.stderr, end="", file=sys.stderr)
 
-    if fetch_result.returncode != 0:
-        if args.source == "rest" and graphql_raw_path is None:
-            print(
-                "Continuing with REST artifact after GraphQL fetch failure because --source rest was selected.",
-                file=sys.stderr,
-            )
-        else:
-            raise subprocess.CalledProcessError(
-                fetch_result.returncode,
-                fetch_cmd,
-                output=fetch_result.stdout,
-                stderr=fetch_result.stderr,
-            )
+        rest_raw_path = find_single_artifact(fetch_dir, "*-rest-review-comments.json")
+        graphql_raw_path = find_optional_single_artifact(fetch_dir, "*-graphql-review-threads.json")
+
+        if fetch_result.returncode != 0:
+            if args.source == "rest" and graphql_raw_path is None:
+                print(
+                    "Continuing with REST artifact after GraphQL fetch failure because --source rest was selected.",
+                    file=sys.stderr,
+                )
+            else:
+                raise subprocess.CalledProcessError(
+                    fetch_result.returncode,
+                    fetch_cmd,
+                    output=fetch_result.stdout,
+                    stderr=fetch_result.stderr,
+                )
+    else:
+        print(f"Reusing existing fetch artifacts in {fetch_dir}")
+
+    if rest_raw_path is None:
+        raise FileNotFoundError(f"No REST review artifact was found under {fetch_dir}.")
 
     if args.source == "rest":
         selected_raw_path = rest_raw_path
@@ -367,17 +389,20 @@ def main() -> int:
         )
         return 0
 
-    ingest_cmd = [
-        sys.executable,
-        str(ingest_script),
-        "--input",
-        str(selected_raw_path),
-        "--output",
-        str(proposal_path),
-    ]
-    if allow_outside_artifacts:
-        ingest_cmd.append("--allow-outside-artifacts")
-    run_step(ingest_cmd)
+    if not (args.resume and proposal_path.is_file()):
+        ingest_cmd = [
+            sys.executable,
+            str(ingest_script),
+            "--input",
+            str(selected_raw_path),
+            "--output",
+            str(proposal_path),
+        ]
+        if allow_outside_artifacts:
+            ingest_cmd.append("--allow-outside-artifacts")
+        run_step(ingest_cmd)
+    else:
+        print(f"Reusing existing proposal artifact: {proposal_path}")
 
     if args.stop_after == "ingest":
         print_summary(
@@ -391,17 +416,20 @@ def main() -> int:
         )
         return 0
 
-    propose_cmd = [
-        sys.executable,
-        str(propose_script),
-        "--input",
-        str(proposal_path),
-        "--output",
-        str(candidates_path),
-    ]
-    if allow_outside_artifacts:
-        propose_cmd.append("--allow-outside-artifacts")
-    run_step(propose_cmd)
+    if not (args.resume and candidates_path.is_file()):
+        propose_cmd = [
+            sys.executable,
+            str(propose_script),
+            "--input",
+            str(proposal_path),
+            "--output",
+            str(candidates_path),
+        ]
+        if allow_outside_artifacts:
+            propose_cmd.append("--allow-outside-artifacts")
+        run_step(propose_cmd)
+    else:
+        print(f"Reusing existing candidate artifact: {candidates_path}")
 
     apply_input_path = candidates_path
     if args.stop_after == "propose":
@@ -417,26 +445,29 @@ def main() -> int:
         return 0
 
     if args.promote_all or args.promote_ids:
-        promote_cmd = [
-            sys.executable,
-            str(promote_script),
-            "--input",
-            str(candidates_path),
-            "--output",
-            str(promoted_candidates_path),
-            "--reviewer",
-            args.reviewer,
-            "--note",
-            args.note,
-        ]
-        if args.promote_all:
-            promote_cmd.append("--all")
+        if not (args.resume and promoted_candidates_path.is_file()):
+            promote_cmd = [
+                sys.executable,
+                str(promote_script),
+                "--input",
+                str(candidates_path),
+                "--output",
+                str(promoted_candidates_path),
+                "--reviewer",
+                args.reviewer,
+                "--note",
+                args.note,
+            ]
+            if args.promote_all:
+                promote_cmd.append("--all")
+            else:
+                promote_cmd.append("--ids")
+                promote_cmd.extend(args.promote_ids)
+            if allow_outside_artifacts:
+                promote_cmd.append("--allow-outside-artifacts")
+            run_step(promote_cmd)
         else:
-            promote_cmd.append("--ids")
-            promote_cmd.extend(args.promote_ids)
-        if allow_outside_artifacts:
-            promote_cmd.append("--allow-outside-artifacts")
-        run_step(promote_cmd)
+            print(f"Reusing existing promoted candidate artifact: {promoted_candidates_path}")
         apply_input_path = promoted_candidates_path
 
     if args.stop_after == "promote":

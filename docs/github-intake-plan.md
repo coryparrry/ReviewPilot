@@ -44,6 +44,8 @@ Prepared `.codex-review` run directories should count as valid review-artifact i
 
 Prepared review run directories should also be reusable as the wrapper working directory so prepare, review authoring, and intake artifacts can live in one shared run folder.
 
+That shared-run reuse should not silently weaken local output confinement: if the chosen run directory sits outside the ignored `artifacts/` tree, the caller must opt into that local write path explicitly.
+
 ## Scope
 
 ### In Scope For V1
@@ -213,6 +215,7 @@ Exit criteria:
 - allow the wrapper to run optional before/after benchmark comparison when a real review artifact is supplied
 - allow the wrapper to consume prepared `.codex-review` run directories directly instead of requiring manual extraction of `review.md`
 - allow the wrapper to stop after proposal generation so Codex can write the review into the same shared run directory before a later scoring/apply pass
+- allow the wrapper to resume from existing fetch/proposal/candidate artifacts in that same shared run directory
 - make `auto` the default mode for straightforward safe additions
 - keep `review` as an explicit no-write option
 - keep `force` available for intentionally overriding soft warnings
@@ -230,6 +233,7 @@ Exit criteria:
 - optional benchmark comparison can produce before, after, and delta artifacts without inventing a fake improvement signal
 - prepared review artifact directories can flow directly into wrapper scoring without an extra manual handoff step
 - the wrapper can reuse a prepared review run directory and stop early so the review-authoring loop does not need path juggling across different artifact roots
+- the wrapper can resume from the next missing stage instead of rerunning fetch/ingest/propose once those artifacts already exist
 
 ## Phase D. Live GitHub Input
 
@@ -246,6 +250,8 @@ The first live GitHub slice should remain read-only:
 - keep raw artifact writes inside the ignored artifacts tree by default
 - treat raw fetched review artifacts as potentially sensitive for private repos
 - keep proposal artifact writes inside the ignored artifacts tree by default as well
+- treat `--allow-outside-artifacts` as a local-output escape hatch only, not as any expansion of GitHub permissions or write behavior
+- keep repository identifiers and GraphQL usage narrowly constrained so the fetch path remains auditable and read-only by construction
 
 Exit criteria:
 

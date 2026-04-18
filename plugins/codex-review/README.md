@@ -55,9 +55,12 @@ The wrapper entrypoint for the full live intake flow now lives at:
 Safety notes for the live fetch step:
 
 - raw fetched review artifacts may contain private review content for private repos
+- GitHub access is read-only: the fetch path issues comment/thread reads only and does not perform GitHub writes
 - the default output path stays under ignored `artifacts/github-intake/`
-- the fetch script refuses to write outside that tree unless explicitly overridden
+- the fetch script refuses to write outside that tree unless explicitly overridden for local output
 - the proposal normalizer follows the same default output boundary
+- `--allow-outside-artifacts` is an unsafe local-write escape hatch only; it does not enable any GitHub write behavior
+- when `--review-run-dir` points outside the ignored artifacts tree, that same local-write override must be passed explicitly; the wrapper no longer weakens this boundary implicitly
 
 The non-destructive review-mapping script lives at:
 
@@ -121,6 +124,7 @@ python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
   --repo owner/name `
   --pr 123 `
   --review-run-dir .\.codex-review\20260418-120000 `
+  --allow-outside-artifacts `
   --stop-after propose
 ```
 
@@ -130,6 +134,20 @@ That lets the same run directory hold:
 - intake proposal and candidate artifacts
 - the eventual `review.md`
 - later benchmark and apply artifacts after a follow-up wrapper run
+
+To continue from existing artifacts in the same run directory instead of refetching and regenerating earlier stages:
+
+```powershell
+python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
+  --repo owner/name `
+  --pr 123 `
+  --review-run-dir .\.codex-review\20260418-120000 `
+  --allow-outside-artifacts `
+  --resume `
+  --score-review-artifacts .\.codex-review\20260418-120000
+```
+
+The `--resume` path reuses existing fetch, proposal, candidate, and promoted-candidate artifacts when present, then continues from the next missing stage.
 
 Apply modes:
 
