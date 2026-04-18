@@ -38,6 +38,8 @@ The first version should stay easy to validate, with raw fetch, normalization, p
 
 The repo can still expose a single wrapper command for normal use, but that wrapper should remain a thin orchestrator over the explicit underlying stages.
 
+If the wrapper reports benchmark improvement, it should do so only by scoring a supplied review artifact before and after apply, not by inferring improvement from corpus growth alone.
+
 ## Scope
 
 ### In Scope For V1
@@ -204,6 +206,7 @@ Exit criteria:
 - add `plugins/codex-review/scripts/apply_corpus_updates.py`
 - add `plugins/codex-review/scripts/promote_corpus_candidates.py`
 - add `plugins/codex-review/scripts/run_github_intake_pipeline.py` as the thin orchestration entrypoint
+- allow the wrapper to run optional before/after benchmark comparison when a real review artifact is supplied
 - make `auto` the default mode for straightforward safe additions
 - keep `review` as an explicit no-write option
 - keep `force` available for intentionally overriding soft warnings
@@ -218,6 +221,7 @@ Exit criteria:
 - review mode can preview application without mutating the corpus
 - promoted candidates can be marked auto-eligible without weakening default intake heuristics
 - the wrapper command can run fetch, ingest, propose, optional promote, and apply into one per-run artifact directory
+- optional benchmark comparison can produce before, after, and delta artifacts without inventing a fake improvement signal
 
 ## Phase D. Live GitHub Input
 

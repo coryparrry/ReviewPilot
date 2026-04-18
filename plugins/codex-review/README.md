@@ -87,6 +87,18 @@ That wrapper runs:
 - optional promote
 - apply
 
+To compare a real review output against the corpus before and after apply in the same run:
+
+```powershell
+python .\plugins\codex-review\scripts\run_github_intake_pipeline.py `
+  --repo owner/name `
+  --pr 123 `
+  --apply-mode review `
+  --score-review-file .\draft-review.md
+```
+
+That writes before, after, and delta benchmark artifacts into the same pipeline run directory.
+
 Apply modes:
 
 - `auto`

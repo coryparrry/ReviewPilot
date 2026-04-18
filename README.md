@@ -81,6 +81,8 @@ The repo should keep the skill measurable and self-improving through:
 - repeatable benchmark commands that can score a draft review against both lanes
 - GitHub-facing plugin integration so review outputs and missed findings can be fed back into the corpus cleanly through one wrapper pipeline plus explicit underlying stages
 
+The wrapper pipeline can now optionally score a supplied review artifact before and after corpus apply so benchmark deltas come from an actual review output, not just a larger corpus.
+
 ## Initial Goals
 
 - keep the review skill CodeRabbit-style and release-blocking

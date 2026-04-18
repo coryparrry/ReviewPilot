@@ -138,6 +138,12 @@ A normalized proposal record should become a corpus candidate only when:
 - the inferred category aligns to an existing corpus lane or justifies a new durable category
 - a human has checked that the wording is not overfit to one raw comment
 
+Normalization and candidate generation are separate boundaries:
+
+- normalization should preserve uncertain records instead of dropping them
+- candidate generation can still skip records that remain `uncategorized`, carry `unknown` severity, or lack usable expectations
+- skipped records should remain visible in the candidate artifact rather than silently disappearing
+
 ## Apply Modes
 
 Candidate application is a later workflow than normalization.

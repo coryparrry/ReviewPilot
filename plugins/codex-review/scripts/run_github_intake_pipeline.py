@@ -1,8 +1,15 @@
 import argparse
+import json
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+DEFAULT_CORPUS_PATH = Path(
+    "plugins/codex-review/skills/bug-hunting-code-review/references/review-corpus-cases.json"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +57,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--corpus",
         help="Optional path to the target review corpus JSON file.",
+    )
+    parser.add_argument(
+        "--score-review-file",
+        help="Optional review output file to benchmark before and after apply.",
+    )
+    parser.add_argument(
+        "--score-review-text",
+        help="Optional inline review text to benchmark before and after apply.",
     )
     parser.add_argument(
         "--output-dir",
@@ -105,6 +120,15 @@ def run_step(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True)
 
 
+def run_cmd_with_result(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, capture_output=True, text=True, check=False)
+
+
+def run_json_cmd(cmd: list[str]) -> dict:
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return json.loads(completed.stdout)
+
+
 def find_single_artifact(fetch_dir: Path, pattern: str) -> Path:
     matches = sorted(fetch_dir.glob(pattern))
     if len(matches) != 1:
@@ -121,6 +145,7 @@ def print_summary(
     candidates_path: Path,
     apply_input_path: Path,
     apply_result_path: Path,
+    benchmark_delta_path: Path | None,
 ) -> None:
     print(f"Pipeline run directory: {output_dir}")
     print(f"Selected raw input: {selected_raw}")
@@ -129,12 +154,72 @@ def print_summary(
     if apply_input_path != candidates_path:
         print(f"Apply input artifact: {apply_input_path}")
     print(f"Apply result artifact: {apply_result_path}")
+    if benchmark_delta_path is not None:
+        print(f"Benchmark delta artifact: {benchmark_delta_path}")
+
+
+def resolve_corpus_path(repo_root: Path, requested_path: str | None) -> Path:
+    if requested_path:
+        return Path(requested_path).resolve()
+    return (repo_root / DEFAULT_CORPUS_PATH).resolve()
+
+
+def run_benchmarks(
+    benchmark_script: Path,
+    primary_corpus: Path,
+    review_file: str | None,
+    review_text: str | None,
+) -> dict:
+    cmd = [
+        sys.executable,
+        str(benchmark_script),
+        "--json",
+        "--primary-corpus",
+        str(primary_corpus),
+    ]
+    if review_file:
+        cmd.extend(["--review-file", review_file])
+    elif review_text is not None:
+        cmd.extend(["--review-text", review_text])
+    else:
+        raise ValueError("Scoring requires --score-review-file or --score-review-text.")
+    return run_json_cmd(cmd)
+
+
+def build_benchmark_delta(before: dict, after: dict) -> dict:
+    def lane_delta(before_lane: dict, after_lane: dict) -> dict:
+        before_summary = before_lane["summary"]
+        after_summary = after_lane["summary"]
+        return {
+            "matched_cases_before": before_summary["matched_cases"],
+            "matched_cases_after": after_summary["matched_cases"],
+            "matched_cases_delta": after_summary["matched_cases"] - before_summary["matched_cases"],
+            "weighted_recall_before": before_summary["weighted_recall"],
+            "weighted_recall_after": after_summary["weighted_recall"],
+            "weighted_recall_delta": after_summary["weighted_recall"] - before_summary["weighted_recall"],
+            "critical_or_high_misses_before": before_summary.get("critical_or_high_misses") or [],
+            "critical_or_high_misses_after": after_summary.get("critical_or_high_misses") or [],
+        }
+
+    return {
+        "primary_github_corpus": lane_delta(before["primary_github_corpus"], after["primary_github_corpus"]),
+        "external_swebench_verified": lane_delta(
+            before["external_swebench_verified"], after["external_swebench_verified"]
+        ),
+    }
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def main() -> int:
     args = parse_args()
     if args.promote_all and args.promote_ids:
         raise ValueError("Use either --promote-all or --promote-ids, not both.")
+    if args.score_review_file and args.score_review_text is not None:
+        raise ValueError("Use either --score-review-file or --score-review-text, not both.")
 
     script_path = Path(__file__).resolve()
     repo_root = repo_root_from_script()
@@ -147,11 +232,19 @@ def main() -> int:
     propose_script = script_path.parent / "propose_corpus_updates.py"
     promote_script = script_path.parent / "promote_corpus_candidates.py"
     apply_script = script_path.parent / "apply_corpus_updates.py"
+    benchmark_script = (
+        script_path.parent.parent / "skills" / "bug-hunting-code-review" / "scripts" / "run_review_benchmarks.py"
+    )
+    corpus_path = resolve_corpus_path(repo_root, args.corpus)
 
     proposal_path = output_dir / f"{selected_prefix}-proposal.json"
     candidates_path = output_dir / f"{selected_prefix}-candidates.json"
     promoted_candidates_path = output_dir / f"{selected_prefix}-promoted-candidates.json"
     apply_result_path = output_dir / f"{selected_prefix}-apply-result.json"
+    benchmark_before_path = output_dir / f"{selected_prefix}-benchmarks-before.json"
+    benchmark_after_path = output_dir / f"{selected_prefix}-benchmarks-after.json"
+    benchmark_delta_path = output_dir / f"{selected_prefix}-benchmark-delta.json"
+    benchmark_before_corpus_snapshot = output_dir / f"{selected_prefix}-primary-corpus-before.json"
 
     fetch_cmd = [
         sys.executable,
@@ -165,11 +258,42 @@ def main() -> int:
     ]
     if args.allow_outside_artifacts:
         fetch_cmd.append("--allow-outside-artifacts")
-    run_step(fetch_cmd)
+    fetch_result = run_cmd_with_result(fetch_cmd)
+    if fetch_result.stdout:
+        print(fetch_result.stdout, end="")
+    if fetch_result.stderr:
+        print(fetch_result.stderr, end="", file=sys.stderr)
 
     rest_raw_path = find_single_artifact(fetch_dir, "*-rest-review-comments.json")
-    graphql_raw_path = find_single_artifact(fetch_dir, "*-graphql-review-threads.json")
-    selected_raw_path = rest_raw_path if args.source == "rest" else graphql_raw_path
+    graphql_raw_path: Path | None = None
+    graphql_matches = sorted(fetch_dir.glob("*-graphql-review-threads.json"))
+    if graphql_matches:
+        if len(graphql_matches) != 1:
+            raise FileNotFoundError(
+                f"Expected exactly one GraphQL artifact under {fetch_dir}, found {len(graphql_matches)}."
+            )
+        graphql_raw_path = graphql_matches[0]
+
+    if fetch_result.returncode != 0:
+        if args.source == "rest" and graphql_raw_path is None:
+            print(
+                "Continuing with REST artifact after GraphQL fetch failure because --source rest was selected.",
+                file=sys.stderr,
+            )
+        else:
+            raise subprocess.CalledProcessError(
+                fetch_result.returncode,
+                fetch_cmd,
+                output=fetch_result.stdout,
+                stderr=fetch_result.stderr,
+            )
+
+    if args.source == "rest":
+        selected_raw_path = rest_raw_path
+    else:
+        if graphql_raw_path is None:
+            raise FileNotFoundError(f"GraphQL source was requested but no GraphQL artifact was written under {fetch_dir}.")
+        selected_raw_path = graphql_raw_path
 
     ingest_cmd = [
         sys.executable,
@@ -219,6 +343,17 @@ def main() -> int:
         run_step(promote_cmd)
         apply_input_path = promoted_candidates_path
 
+    scoring_enabled = bool(args.score_review_file or args.score_review_text is not None)
+    if scoring_enabled:
+        shutil.copyfile(corpus_path, benchmark_before_corpus_snapshot)
+        before_benchmarks = run_benchmarks(
+            benchmark_script,
+            benchmark_before_corpus_snapshot,
+            args.score_review_file,
+            args.score_review_text,
+        )
+        write_json(benchmark_before_path, before_benchmarks)
+
     apply_cmd = [
         sys.executable,
         str(apply_script),
@@ -235,6 +370,19 @@ def main() -> int:
         apply_cmd.append("--allow-outside-artifacts")
     run_step(apply_cmd)
 
+    printed_benchmark_delta_path: Path | None = None
+    if scoring_enabled:
+        after_benchmarks = run_benchmarks(
+            benchmark_script,
+            corpus_path,
+            args.score_review_file,
+            args.score_review_text,
+        )
+        benchmark_delta = build_benchmark_delta(before_benchmarks, after_benchmarks)
+        write_json(benchmark_after_path, after_benchmarks)
+        write_json(benchmark_delta_path, benchmark_delta)
+        printed_benchmark_delta_path = benchmark_delta_path
+
     print_summary(
         output_dir=output_dir,
         selected_raw=selected_raw_path,
@@ -242,6 +390,7 @@ def main() -> int:
         candidates_path=candidates_path,
         apply_input_path=apply_input_path,
         apply_result_path=apply_result_path,
+        benchmark_delta_path=printed_benchmark_delta_path,
     )
     return 0
 

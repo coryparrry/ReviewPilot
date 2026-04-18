@@ -37,6 +37,7 @@
 - run the first live `ReviewPilot` PR through the wrapper pipeline command over fetch, ingest, propose, and apply
 - keep live GitHub fetch read-only while the self-improvement loop hardens
 - make `auto` the default corpus-apply mode, with `review` as the explicit no-write option
+- wire before/after benchmark comparison into the wrapper when a real review output is available
 - define the normalized schema and apply safety checks before broader automation
 
 ## Phase 4
