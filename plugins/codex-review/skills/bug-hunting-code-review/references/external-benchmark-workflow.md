@@ -55,7 +55,8 @@ The full automated pre-PR flow can call both lanes automatically with:
 
 ```powershell
 python "<skill-path>\scripts\run_pre_pr_review.py" `
-  --base origin/main
+  --base origin/main `
+  --review-file ".\draft-review.md"
 ```
 
 ## Boundaries

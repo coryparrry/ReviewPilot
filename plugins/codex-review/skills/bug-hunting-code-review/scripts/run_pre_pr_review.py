@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare, run, and score a bug-hunting pre-PR review."""
+"""Prepare and score a bug-hunting pre-PR review."""
 
 from __future__ import annotations
 
@@ -16,7 +16,15 @@ from pathlib import Path
 
 
 def run_cmd(cmd: list[str], cwd: Path) -> str:
-    completed = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=True)
+    completed = subprocess.run(
+        cmd,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
     return completed.stdout
 
 
@@ -73,7 +81,15 @@ def run_surface_scan(skill_dir: Path, repo: Path, base: str | None) -> str:
     cmd = [sys.executable, str(scan_script), "--repo", str(repo)]
     if base:
         cmd.extend(["--base", base])
-    completed = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, check=True)
+    completed = subprocess.run(
+        cmd,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
     return completed.stdout
 
 
@@ -151,6 +167,14 @@ def write_file(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def read_review_text(args: argparse.Namespace) -> str | None:
+    if args.review_file:
+        return Path(args.review_file).read_text(encoding="utf-8")
+    if args.review_text is not None:
+        return args.review_text
+    return None
+
+
 def run_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> str:
     runner = skill_dir / "scripts" / "run_review_benchmarks.py"
     completed = subprocess.run(
@@ -158,20 +182,29 @@ def run_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> str:
         cwd=repo,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
     )
     return completed.stdout
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run and score a pre-PR bug-hunting review.")
+    parser = argparse.ArgumentParser(description="Prepare and score a pre-PR bug-hunting review.")
     parser.add_argument("--repo", default=".", help="Repository path. Defaults to the current directory.")
     parser.add_argument("--base", help="Base branch for local diff mode. Defaults to origin/main.")
     parser.add_argument("--pr", help="PR number, URL, or branch to review via gh.")
+    parser.add_argument("--review-file", help="Path to an existing review artifact to score.")
+    parser.add_argument("--review-text", help="Inline review text to score.")
+    parser.add_argument(
+        "--use-openai-api",
+        action="store_true",
+        help="Optional legacy path: call the OpenAI Responses API when no review artifact is supplied.",
+    )
     parser.add_argument(
         "--model",
         default=os.environ.get("CODEX_REVIEW_MODEL", "gpt-5.1"),
-        help="OpenAI model to use. Defaults to CODEX_REVIEW_MODEL or gpt-5.1.",
+        help="OpenAI model to use with --use-openai-api. Defaults to CODEX_REVIEW_MODEL or gpt-5.1.",
     )
     parser.add_argument(
         "--output-dir",
@@ -188,6 +221,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    if args.review_file and args.review_text is not None:
+        raise SystemExit("Pass either --review-file or --review-text, not both.")
+
     skill_dir = Path(__file__).resolve().parent.parent
     repo = repo_root(Path(args.repo).resolve())
     timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -207,7 +243,15 @@ def main() -> int:
         print(f"Prepared review artifacts in {out_dir}")
         return 0
 
-    review_text = call_openai(prompt, args.model)
+    review_text = read_review_text(args)
+    if review_text is None:
+        if not args.use_openai_api:
+            print(f"Prepared review artifacts in {out_dir}")
+            print("No review artifact was supplied, so no model call was attempted.")
+            print(f"Next step: review the prompt in {out_dir / 'review-prompt.txt'} and rerun with --review-file or --review-text.")
+            return 0
+        review_text = call_openai(prompt, args.model)
+
     review_file = out_dir / "review.md"
     write_file(review_file, review_text)
     benchmark_output = run_benchmarks(skill_dir, review_file, repo)

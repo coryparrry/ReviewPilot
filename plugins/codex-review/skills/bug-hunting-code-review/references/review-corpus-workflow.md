@@ -25,7 +25,7 @@ It is not a benchmark for style. It is a benchmark for whether a review output c
 - `scripts/run_review_benchmarks.py`
   Run both the primary GitHub corpus and the external benchmark lane together.
 - `scripts/run_pre_pr_review.py`
-  Prepare diff and scan context, run the review with the OpenAI API, and score the result in one command.
+  Prepare diff and scan context, then score a supplied review artifact in one command. The direct OpenAI API path is optional legacy behavior.
 
 ## Typical Usage
 
@@ -54,7 +54,16 @@ To run the full pre-PR flow in one command:
 
 ```powershell
 python "<skill-path>\scripts\run_pre_pr_review.py" `
-  --base origin/main
+  --base origin/main `
+  --review-file ".\draft-review.md"
+```
+
+To only prepare the diff, scan, and prompt artifacts for a Codex-native review step:
+
+```powershell
+python "<skill-path>\scripts\run_pre_pr_review.py" `
+  --base origin/main `
+  --prepare-only
 ```
 
 ## Interpretation
