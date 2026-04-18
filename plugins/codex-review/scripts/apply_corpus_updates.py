@@ -135,9 +135,22 @@ def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str,
     warnings: list[str] = []
     review_notes = candidate.get("review_notes")
     if isinstance(review_notes, dict):
+        if review_notes.get("needs_human_review") is not False:
+            warnings.append("needs-human-review")
         confidence = review_notes.get("confidence")
-        if confidence == "low":
-            warnings.append("low-confidence")
+        if confidence != "high":
+            warnings.append("non-high-confidence")
+        file_path = review_notes.get("file_path")
+        if isinstance(file_path, str):
+            normalized_path = file_path.replace("\\", "/").lower()
+            if normalized_path.endswith(".test.ts") or normalized_path.endswith(".test.tsx") or "/test/" in normalized_path:
+                warnings.append("test-only-surface")
+        body = review_notes.get("body")
+        if isinstance(body, str) and "addressed in commit" in body.lower():
+            warnings.append("already-addressed-upstream")
+
+    if candidate.get("severity") != "critical":
+        warnings.append("non-critical-severity")
 
     title = candidate.get("title")
     category = candidate.get("category")

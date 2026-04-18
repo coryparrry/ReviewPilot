@@ -143,7 +143,7 @@ A normalized proposal record should become a corpus candidate only when:
 Candidate application is a later workflow than normalization.
 
 - `auto`
-  Default mode. Apply candidates that pass structural checks and have no soft warnings.
+  Default mode. Apply candidates that pass structural checks and clear a higher-confidence bar with no soft warnings.
 - `review`
   Do not mutate the corpus. Emit an apply-result artifact showing what would be applied or held.
 - `force`
@@ -154,3 +154,11 @@ Auto mode should stay idempotent:
 - exact existing matches should no-op as already present
 - conflicting IDs should block instead of overwriting
 - malformed candidates should fail closed
+
+Current soft-warning examples that hold a candidate out of `auto`:
+
+- `needs_human_review` is still set
+- confidence is not `high`
+- the review comment already says the issue was addressed in a later commit
+- the finding only touches test-only surfaces
+- severity is below `critical`
