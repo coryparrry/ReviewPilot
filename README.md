@@ -86,6 +86,12 @@ The wrapper pipeline can now optionally score a supplied review artifact before 
 
 That scoring path can now consume prepared `.codex-review` artifact directories directly, so the Codex-native review loop no longer requires manually pulling out `review.md`.
 
+The repo now also has a plugin-owned review runner:
+
+- `plugins/codex-review/scripts/run_codex_review.py`
+
+That command prepares the review artifacts, invokes Codex non-interactively in read-only mode, writes `review.md`, and benchmarks the result in the same run directory.
+
 The current safe learning shape is:
 
 - ingest real GitHub review feedback into proposal artifacts

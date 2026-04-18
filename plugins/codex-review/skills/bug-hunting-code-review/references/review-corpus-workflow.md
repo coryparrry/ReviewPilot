@@ -28,6 +28,8 @@ It is not a benchmark for style. It is a benchmark for whether a review output c
   Run the primary GitHub corpus, probationary GitHub corpus, and external benchmark lane together.
 - `scripts/run_pre_pr_review.py`
   Prepare diff and scan context, then score a supplied review artifact in one command. The direct OpenAI API path is optional legacy behavior.
+- `plugins/codex-review/scripts/run_codex_review.py`
+  Prepare the review artifacts, invoke Codex, write `review.md`, and benchmark the result in one plugin-owned command.
 
 ## Typical Usage
 

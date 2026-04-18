@@ -56,6 +56,10 @@ The wrapper entrypoint for the full live intake flow now lives at:
 
 - `plugins/codex-review/scripts/run_github_intake_pipeline.py`
 
+The plugin-owned review runner now lives at:
+
+- `plugins/codex-review/scripts/run_codex_review.py`
+
 Safety notes for the live fetch step:
 
 - raw fetched review artifacts may contain private review content for private repos
@@ -113,6 +117,22 @@ That wrapper runs:
 - optional candidate-quality gate
 - optional promote
 - apply
+
+For the actual review-authoring path, use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_codex_review.py `
+  --repo . `
+  --base origin/main
+```
+
+That command:
+
+- prepares the review prompt, diff, metadata, and surface scan
+- invokes Codex non-interactively in read-only mode
+- writes `review.md`
+- writes Codex stdout and stderr logs for inspection
+- benchmarks the resulting review against the configured lanes
 
 For MCP-native live intake, use the plugin's GitHub connector to capture one of these raw payload shapes first:
 

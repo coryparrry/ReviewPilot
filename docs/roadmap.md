@@ -48,6 +48,7 @@
 - gate GitHub-derived candidates into a probationary corpus before they can influence the primary GitHub corpus
 - use the curated SWE-bench lane as external hardening pressure so the skill can improve without relying only on your own buggy PRs
 - keep strict benchmark scoring separate from softer probationary admission evidence so learning stays safer than raw regex matching alone
+- expose one plugin-owned review runner so the review brain can actually author `review.md` and benchmark it in one command
 
 ## Phase 4
 
