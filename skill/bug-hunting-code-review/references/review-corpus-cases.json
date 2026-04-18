@@ -1,0 +1,203 @@
+[
+  {
+    "id": "feature-gates-preserve-existing",
+    "title": "Preserve untouched feature gates in helpers and tests",
+    "severity": "high",
+    "category": "fixture-masking",
+    "source": "anonymized-review-import/Add Binder governance core and API exposure by repo-owner · Pull Request 3 · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "feature.?gates?",
+        "preserv|merge|current|existing|untouched",
+        "overwrite|rewrite|full literal|full object|entire"
+      ],
+      [
+        "createEnabledFeatureGates",
+        "override|few false flags|disabled keys"
+      ]
+    ]
+  },
+  {
+    "id": "central-family-allowlist-drift",
+    "title": "Catch exact-key family or connector classifier drift",
+    "severity": "high",
+    "category": "registry-drift",
+    "source": "anonymized-review-import/Add Binder governance core and API exposure by repo-owner · Pull Request 3 · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "runtime.?famil|connector.?famil|capability.?famil",
+        "allowlist|classifier|exact-key|generic|misclass"
+      ],
+      [
+        "getRuntimeFamily|getRuntimeConnectorType|resolveRuntimeConnectorKey",
+        "generic|unsupported|drift|misclass"
+      ]
+    ]
+  },
+  {
+    "id": "approval-flag-symmetry",
+    "title": "Clear companion approval flags when state leaves approval flow",
+    "severity": "high",
+    "category": "state-symmetry",
+    "source": "anonymized-review-import/Add Binder governance core and API exposure by repo-owner · Pull Request 3 · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "approvalRequired|pending approval|supersed",
+        "clear|reset|reject",
+        "status|running|paused|completed|failed"
+      ]
+    ]
+  },
+  {
+    "id": "migration-backfill-required-field",
+    "title": "Backfill new required persisted fields during migration",
+    "severity": "critical",
+    "category": "migration-backfill",
+    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner · Pull Request 20 · repo-owneragent-platform-foundation.md",
+    "expected_groups": [
+      [
+        "migrat|legacy runs?|normalizeMigratedRun",
+        "executionPackage|required field|missing package",
+        "backfill|default snapshot|fallback"
+      ]
+    ]
+  },
+  {
+    "id": "typed-422-error-shaping",
+    "title": "Map invalid client schedule input to typed 4xx errors instead of 500",
+    "severity": "high",
+    "category": "error-shaping",
+    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner · Pull Request 20 · repo-owneragent-platform-foundation.md",
+    "expected_groups": [
+      [
+        "500|422|4xx",
+        "cron|timezone|schedule",
+        "plain Error|typed error|AutomationServiceError|error mapping"
+      ]
+    ]
+  },
+  {
+    "id": "patch-schema-role-only",
+    "title": "Catch PATCH refine logic that rejects valid role-only updates",
+    "severity": "high",
+    "category": "request-contract",
+    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner · Pull Request 20 · repo-owneragent-platform-foundation.md",
+    "expected_groups": [
+      [
+        "role",
+        "patch|refine|at least one patch field",
+        "reject|omits|role-only"
+      ]
+    ]
+  },
+  {
+    "id": "synthetic-owner-fail-open",
+    "title": "Do not synthesize fallback owner or agent state from unrelated records",
+    "severity": "critical",
+    "category": "fail-open-synthesis",
+    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner · Pull Request 20 · repo-owneragent-platform-foundation.md",
+    "expected_groups": [
+      [
+        "Missing owner|synthetic agent|ownerAgent",
+        "spread|inherit|borrow|copy",
+        "instructions|tool.?policy|skills|access|configuration"
+      ]
+    ]
+  },
+  {
+    "id": "preview-resolver-parity",
+    "title": "Keep preview or readiness resolvers aligned with the canonical runtime path",
+    "severity": "critical",
+    "category": "source-of-truth-drift",
+    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner · Pull Request 20 · repo-owneragent-platform-foundation.md",
+    "expected_groups": [
+      [
+        "preview|readiness|resolveExecutionPackagePreview",
+        "drift|parity|shared resolver|canonical|core resolver"
+      ]
+    ]
+  },
+  {
+    "id": "strict-body-sessionid-leak",
+    "title": "Strip transport-only fields like sessionId from strict request bodies",
+    "severity": "medium",
+    "category": "request-contract",
+    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner · Pull Request 20 · repo-owneragent-platform-foundation.md",
+    "expected_groups": [
+      [
+        "sessionId",
+        "strict request validation|strict schema|POST body",
+        "remove|destructure|exclude"
+      ]
+    ]
+  },
+  {
+    "id": "preserve-explicit-null",
+    "title": "Preserve explicit null state instead of falling through to a fallback",
+    "severity": "high",
+    "category": "migration-cleared-state",
+    "source": "anonymized-review-import/Pull requests · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "nullish coalescing|\\?\\?",
+        "explicit null|cleared state",
+        "fallback|runtimeSessionId|preserv"
+      ]
+    ]
+  },
+  {
+    "id": "queued-heartbeat-claim",
+    "title": "Claim queued heartbeat or wake work before releasing mutation boundaries",
+    "severity": "critical",
+    "category": "concurrency-queue-claim",
+    "source": "anonymized-review-import/Pull requests · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "heartbeat|wake cycle|processDueHeartbeats",
+        "duplicate|second poll|enqueue",
+        "claim|queued mutation|lastHeartbeatAt"
+      ]
+    ]
+  },
+  {
+    "id": "target-named-run-not-index",
+    "title": "Tests should target named seeded entities instead of seed order",
+    "severity": "medium",
+    "category": "test-realism",
+    "source": "anonymized-review-import/Pull requests · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "runs\\[0\\]|index 0|seed ordering",
+        "named run|run-home-shell-reset|target the intended run"
+      ]
+    ]
+  },
+  {
+    "id": "runtime-adapter-fallback-source",
+    "title": "Derive connector fallback from the actual runtime adapter field",
+    "severity": "high",
+    "category": "legacy-fallback-source",
+    "source": "anonymized-review-import/Pull requests · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "runtimeAdapterType",
+        "adapterType",
+        "fallback|misclass|runtime-adapter"
+      ]
+    ]
+  },
+  {
+    "id": "wrapped-health-payload-contract",
+    "title": "Assert the real wrapped response payload shape",
+    "severity": "medium",
+    "category": "response-contract",
+    "source": "anonymized-review-import/Pull requests · repo-ownerBinder.md",
+    "expected_groups": [
+      [
+        "health",
+        "available",
+        "wrapped payload|payload shape|assert"
+      ]
+    ]
+  }
+]

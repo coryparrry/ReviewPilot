@@ -1,0 +1,86 @@
+[
+  {
+    "id": "swebench-verified-nested-separability",
+    "title": "Nested composition should preserve separability invariants",
+    "severity": "high",
+    "category": "logic-invariant",
+    "source": "SWE-bench/SWE-bench_Verified: astropy__astropy-12907",
+    "expected_groups": [
+      [
+        "separability_matrix|separable",
+        "nested|compound model|nested composition",
+        "invariant|independent|incorrect matrix|right-hand matrix"
+      ]
+    ]
+  },
+  {
+    "id": "swebench-verified-required-columns-message",
+    "title": "Error paths should describe the real required-column contract",
+    "severity": "medium",
+    "category": "error-contract",
+    "source": "SWE-bench/SWE-bench_Verified: astropy__astropy-13033",
+    "expected_groups": [
+      [
+        "required columns|first columns|TimeSeries",
+        "misleading|confusing|message|exception",
+        "multi-column|more than one required column|actual found columns"
+      ]
+    ]
+  },
+  {
+    "id": "swebench-verified-sliced-context-placeholder",
+    "title": "Do not use placeholder constants when sliced context needs real carried-through state",
+    "severity": "high",
+    "category": "context-placeholder",
+    "source": "SWE-bench/SWE-bench_Verified: astropy__astropy-13579",
+    "expected_groups": [
+      [
+        "world_to_pixel|SlicedLowLevelWCS|sliced",
+        "1\\.|placeholder|constant",
+        "slice world coordinate|carried-through context|inverse transform"
+      ]
+    ]
+  },
+  {
+    "id": "swebench-verified-notimplemented-interop",
+    "title": "Interop paths should return NotImplemented instead of turning unsupported mixed types into hard errors",
+    "severity": "high",
+    "category": "interop-contract",
+    "source": "SWE-bench/SWE-bench_Verified: astropy__astropy-13977",
+    "expected_groups": [
+      [
+        "NotImplemented",
+        "ValueError|TypeError",
+        "__array_ufunc__|mixed types|interop"
+      ]
+    ]
+  },
+  {
+    "id": "swebench-verified-bounds-guard",
+    "title": "Parser or identifier helpers should guard missing args instead of indexing blindly",
+    "severity": "high",
+    "category": "parser-guard",
+    "source": "SWE-bench/SWE-bench_Verified: astropy__astropy-14309",
+    "expected_groups": [
+      [
+        "IndexError|tuple index out of range",
+        "args\\[0\\]|identify_format|is_fits",
+        "guard|no args|return false|bounds check"
+      ]
+    ]
+  },
+  {
+    "id": "swebench-verified-case-insensitive-parser",
+    "title": "User-facing parsers should not encode an undocumented case-sensitivity assumption",
+    "severity": "medium",
+    "category": "parser-semantics",
+    "source": "SWE-bench/SWE-bench_Verified: astropy__astropy-14365",
+    "expected_groups": [
+      [
+        "case insensitive|upper case|lower case",
+        "regex|parser|command",
+        "QDP|read serr|unrecognized line"
+      ]
+    ]
+  }
+]
