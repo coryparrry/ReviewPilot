@@ -17,7 +17,7 @@ This plugin is the primary container for the review system in this repo.
 
 Today, the plugin contains the maintained skill source, but the live runtime path is still the installed direct skill under:
 
-- `~\.codex\skills\bug-hunting-code-review`
+- `~/.codex/skills/bug-hunting-code-review`
 
 That direct skill runtime is currently updated with `scripts/sync_skill_to_codex.ps1`.
 

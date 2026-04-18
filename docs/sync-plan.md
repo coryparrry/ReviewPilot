@@ -7,7 +7,7 @@ There are currently two copies of the skill:
 1. Repo source copy:
    - `plugins/codex-review/skills/bug-hunting-code-review`
 2. Installed runtime copy:
-   - `~\.codex\skills\bug-hunting-code-review`
+   - `~/.codex/skills/bug-hunting-code-review`
 
 ## Rule Right Now
 

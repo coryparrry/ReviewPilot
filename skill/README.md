@@ -2,7 +2,7 @@
 
 The live installed skill currently lives at:
 
-- `~\.codex\skills\bug-hunting-code-review`
+- `~/.codex/skills/bug-hunting-code-review`
 
 This repo was created after the installed skill had already grown substantially.
 

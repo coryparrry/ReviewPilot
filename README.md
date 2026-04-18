@@ -16,7 +16,7 @@ The bundled review skill now lives inside that plugin at:
 
 The live installed skill still exists at:
 
-- `~\.codex\skills\bug-hunting-code-review`
+- `~/.codex/skills/bug-hunting-code-review`
 
 This repo is the dedicated project home for:
 
