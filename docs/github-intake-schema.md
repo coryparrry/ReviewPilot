@@ -93,7 +93,7 @@ Each normalized record must contain:
 - `generated_at`
   UTC timestamp for artifact creation.
 - `source_file`
-  Local input path used to generate the artifact.
+  Input file name used to generate the artifact. Keep this file-oriented rather than embedding full local absolute paths.
 - `source_format`
   Detected or selected input adapter. Current values:
   `custom_review_bundle`, `github_rest_review_comments`, `github_graphql_review_threads`.

@@ -108,11 +108,16 @@ def parse_args() -> argparse.Namespace:
         "--output",
         help="Path to the proposal artifact. Defaults to artifacts/github-intake/<timestamp>-proposal.json",
     )
+    parser.add_argument(
+        "--allow-outside-artifacts",
+        action="store_true",
+        help="Allow writing proposal artifacts outside the repo's ignored artifacts/github-intake tree.",
+    )
     return parser.parse_args()
 
 
 def load_input(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
 def nested_get(payload: dict[str, Any], *keys: str) -> Any:
@@ -126,7 +131,16 @@ def nested_get(payload: dict[str, Any], *keys: str) -> Any:
 
 def detect_format(payload: Any) -> str:
     if isinstance(payload, list):
-        return "github_rest_review_comments"
+        if payload and all(
+            isinstance(item, dict)
+            and ("pull_request_review_id" in item or "path" in item or "diff_hunk" in item)
+            for item in payload
+        ):
+            return "github_rest_review_comments"
+        raise ValueError(
+            "Top-level JSON arrays must look like GitHub REST review comment exports. "
+            "Pass --format explicitly only when the input shape is known."
+        )
 
     if not isinstance(payload, dict):
         raise ValueError("Unsupported input payload. Expected a JSON object or array.")
@@ -348,6 +362,25 @@ def default_output_path(repo_root: Path) -> Path:
     return repo_root / "artifacts" / "github-intake" / f"{timestamp}-proposal.json"
 
 
+def resolve_output_path(repo_root: Path, output_path: str | None, allow_outside_artifacts: bool) -> Path:
+    artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
+    if output_path is None:
+        return default_output_path(repo_root)
+
+    candidate = Path(output_path).resolve()
+    if allow_outside_artifacts:
+        return candidate
+
+    try:
+        candidate.relative_to(artifacts_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"Refusing to write proposal artifacts outside {artifacts_root}. "
+            "Use --allow-outside-artifacts only when you intentionally need that."
+        ) from exc
+    return candidate
+
+
 def write_output(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -366,12 +399,12 @@ def main() -> int:
     proposal = {
         "schema_version": "codex-review.github-intake.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "source_file": str(input_path),
+        "source_file": input_path.name,
         "source_format": format_name,
         "records": [normalize_record(context, comment) for comment in comments],
     }
 
-    output_path = Path(args.output).resolve() if args.output else default_output_path(repo_root)
+    output_path = resolve_output_path(repo_root, args.output, args.allow_outside_artifacts)
     write_output(output_path, proposal)
     print(f"Wrote proposal artifact: {output_path}")
     print(f"Format: {format_name}")

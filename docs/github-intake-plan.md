@@ -121,11 +121,12 @@ The plugin should own the intake workflow under:
 Initial planned script surface:
 
 - `ingest_github_review_feedback.py`
+- `fetch_github_review_feedback.py`
+- `propose_corpus_updates.py`
 
 Likely future additions:
 
 - `verify_sync.py`
-- `propose_corpus_updates.py`
 - `apply_corpus_updates.py`
 
 ## Proposed Normalized Schema
@@ -206,6 +207,9 @@ The first live GitHub slice should remain read-only:
 - save raw artifacts under ignored `artifacts/`
 - hand off into the existing proposal-only normalizer
 - avoid direct corpus writes or automatic proposal application
+- keep raw artifact writes inside the ignored artifacts tree by default
+- treat raw fetched review artifacts as potentially sensitive for private repos
+- keep proposal artifact writes inside the ignored artifacts tree by default as well
 
 Exit criteria:
 

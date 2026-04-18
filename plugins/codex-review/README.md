@@ -47,3 +47,14 @@ The first proposal-only intake script lives at:
 The first read-only live GitHub fetch script lives at:
 
 - `plugins/codex-review/scripts/fetch_github_review_feedback.py`
+
+Safety notes for the live fetch step:
+
+- raw fetched review artifacts may contain private review content for private repos
+- the default output path stays under ignored `artifacts/github-intake/`
+- the fetch script refuses to write outside that tree unless explicitly overridden
+- the proposal normalizer follows the same default output boundary
+
+The next non-destructive review-mapping script lives at:
+
+- `plugins/codex-review/scripts/propose_corpus_updates.py`

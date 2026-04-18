@@ -25,6 +25,20 @@ Use subagents for non-trivial work that benefits from parallelism, context isola
 
 Keep the main agent on the critical path. It should own user communication, final decisions, synthesis, and any immediate blocking step. Delegate bounded sidecar tasks with clear deliverables and stop conditions.
 
+## Subagent Context
+
+When using subagents, do not fork or pass the full thread by default.
+
+Prefer narrow, focused subagent tasks with only the minimum context needed to do the job well.
+
+Use full-thread context only if it is clearly necessary for correctness.
+
+Subagents should usually be:
+- read-only unless edits are specifically needed
+- scoped to one clear question or task
+- given a short summary of relevant context instead of the entire conversation
+
+
 Default role split:
 
 - Explore scout: read-only codebase digging and source-of-truth discovery.
