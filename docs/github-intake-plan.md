@@ -200,6 +200,13 @@ Exit criteria:
 - keep permissions minimal and workflow-specific
 - prefer explicit exported input or narrowly scoped reads over broad repo mutation access
 
+The first live GitHub slice should remain read-only:
+
+- fetch raw PR review comments and review threads
+- save raw artifacts under ignored `artifacts/`
+- hand off into the existing proposal-only normalizer
+- avoid direct corpus writes or automatic proposal application
+
 Exit criteria:
 
 - live GitHub review data can feed the same normalized proposal flow without changing the downstream schema

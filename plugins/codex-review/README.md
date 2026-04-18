@@ -43,3 +43,7 @@ The normalized proposal schema for the first GitHub intake workflow is documente
 The first proposal-only intake script lives at:
 
 - `plugins/codex-review/scripts/ingest_github_review_feedback.py`
+
+The first read-only live GitHub fetch script lives at:
+
+- `plugins/codex-review/scripts/fetch_github_review_feedback.py`

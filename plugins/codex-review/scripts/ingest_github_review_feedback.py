@@ -137,13 +137,22 @@ def detect_format(payload: Any) -> str:
     if nested_get(payload, "repository", "pullRequest", "reviewThreads", "nodes") is not None:
         return "github_graphql_review_threads"
 
+    if payload.get("source") == "github-rest-review-comments":
+        return "github_rest_review_comments"
+
+    if payload.get("source") == "github-graphql-review-threads":
+        return "github_graphql_review_threads"
+
     raw_comments = payload.get("comments")
-    if isinstance(raw_comments, list) and raw_comments:
-        first_comment = raw_comments[0]
-        if isinstance(first_comment, dict) and (
-            "pull_request_review_id" in first_comment or "path" in first_comment or "diff_hunk" in first_comment
-        ):
+    if isinstance(raw_comments, list):
+        if not raw_comments and "repo" in payload and "pr_number" in payload:
             return "github_rest_review_comments"
+        if raw_comments:
+            first_comment = raw_comments[0]
+            if isinstance(first_comment, dict) and (
+                "pull_request_review_id" in first_comment or "path" in first_comment or "diff_hunk" in first_comment
+            ):
+                return "github_rest_review_comments"
 
     if "pull_request_review_id" in payload or "pullRequestReview" in payload:
         return "github_rest_review_comments"
