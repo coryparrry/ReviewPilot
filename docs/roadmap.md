@@ -31,6 +31,12 @@
 - document how this repo should ingest future missed-review cases from linked GitHub repos
 - start moving GitHub-facing workflows behind plugin-owned interfaces instead of loose repo scripts
 
+## Next Execution Plan
+
+- implement the [GitHub Intake Plan](github-intake-plan.md) as the first plugin-owned workflow
+- keep v1 proposal-only and non-destructive
+- define the normalized schema before adding direct GitHub-backed writes
+
 ## Phase 4
 
 - optionally add CI or packaging only after the local workflow is stable

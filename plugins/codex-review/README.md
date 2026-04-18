@@ -31,3 +31,15 @@ The plugin should become the clean integration boundary for:
 - future MCP-backed or app-backed review operations
 
 The bundled skill remains the review brain inside that plugin.
+
+The current next-step implementation plan is documented at:
+
+- `docs/github-intake-plan.md`
+
+The normalized proposal schema for the first GitHub intake workflow is documented at:
+
+- `docs/github-intake-schema.md`
+
+The first proposal-only intake script lives at:
+
+- `plugins/codex-review/scripts/ingest_github_review_feedback.py`

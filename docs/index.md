@@ -34,6 +34,11 @@ That is large enough to justify its own repo and docs.
 - `scripts/`
   Project-owned automation and helper scripts, including repo-to-installed skill sync
 
+## Active Plans
+
+- [GitHub Intake Plan](github-intake-plan.md)
+  First plugin-owned workflow plan for ingesting GitHub PR review feedback into structured improvement proposals
+
 ## Near-Term Direction
 
 - keep the installed skill working where it is today

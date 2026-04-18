@@ -1,0 +1,30 @@
+{
+  "source": "fixture-sample",
+  "repo": "example/repo",
+  "pr_number": 42,
+  "reviews": [
+    {
+      "review_id": "PRR_example_1",
+      "comments": [
+        {
+          "comment_id": "PRRC_example_1",
+          "file_path": "src/runtime/policies.ts",
+          "line": 17,
+          "body": "This helper overwrites the full feature gate object. That will hide regressions because unrelated existing keys are no longer preserved."
+        },
+        {
+          "comment_id": "PRRC_example_2",
+          "file_path": "src/runtime/preview.ts",
+          "line": 88,
+          "body": "The preview readiness path now has drift from the canonical resolver. If these paths disagree, the UI can claim readiness even when the real runtime path would reject it."
+        },
+        {
+          "comment_id": "PRRC_example_3",
+          "file_path": "src/routes/health.ts",
+          "line": 12,
+          "body": "Please double-check the wrapped payload shape here. I am not sure the current test is asserting the real response contract."
+        }
+      ]
+    }
+  ]
+}

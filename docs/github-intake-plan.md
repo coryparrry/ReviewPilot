@@ -1,0 +1,235 @@
+# GitHub Intake Plan
+
+## Purpose
+
+This plan defines the first plugin-owned workflow for `codex-review`: safely ingesting GitHub PR review feedback and turning it into structured input for skill improvement.
+
+The goal is to improve the CodeRabbit-style review system from real review outcomes without letting ad hoc scripts, manual corpus edits, or loose GitHub handling become the new source of drift.
+
+## Problem
+
+The repo already has:
+
+- a strong bundled review skill
+- a review corpus built from recurring misses
+- benchmark scoring helpers
+- a plugin container that should become the long-term integration boundary
+
+What it does not yet have is a controlled workflow for taking real GitHub PR review feedback and turning that into reusable improvement input.
+
+Without a defined workflow, the likely failure modes are:
+
+- manual one-off corpus edits
+- inconsistent categorization of misses
+- overfitting to raw comment wording
+- mixing source evidence, interpretation, and final corpus entries together
+- unsafe or overly broad GitHub access patterns
+
+## Outcome
+
+The first plugin-owned GitHub workflow should:
+
+1. read review feedback from GitHub or a GitHub-derived export
+2. normalize that feedback into a stable local schema
+3. produce a proposed corpus-update artifact
+4. avoid direct corpus mutation in v1
+
+The first version should be read-first, proposal-only, and easy to validate.
+
+## Scope
+
+### In Scope For V1
+
+- plugin-owned intake workflow design
+- local normalized schema for review misses
+- one plugin-owned script that reads input and emits a proposed normalized output
+- support for GitHub-derived input files first, with direct GitHub integration as a follow-up layer
+- repo docs that define the workflow and expected review of proposed updates
+
+### Out of Scope For V1
+
+- automatic writes into `review-corpus-cases.json`
+- automatic edits to Knowledge-Hub lessons
+- auto-resolving severity or regex patterns without review
+- full GitHub app or MCP server implementation
+- plugin marketplace or runtime installation automation
+
+## Design Principles
+
+- Keep the skill as the review brain.
+- Use the plugin as the integration and workflow boundary.
+- Separate raw evidence from normalized interpretation from final curated corpus entries.
+- Prefer proposal artifacts over direct mutation until the schema and categorization are trustworthy.
+- Keep GitHub access narrow, auditable, and replaceable.
+- Optimize for repeatability, not cleverness.
+
+## Proposed Workflow
+
+### Step 1. Collect Input
+
+Accepted input should initially be one of:
+
+- exported GitHub review comments
+- manually curated JSON from a GitHub review thread
+- repo-local fixtures that represent real review feedback
+
+V1 should not require live GitHub access to be useful.
+
+### Step 2. Normalize Review Feedback
+
+The plugin-owned intake script should transform raw comments into a local normalized record shape.
+
+Each normalized record should preserve:
+
+- source metadata
+- original evidence text
+- inferred miss category
+- inferred severity
+- confidence or review-needed marker
+- candidate notes for a future corpus update
+
+### Step 3. Emit Proposal Artifact
+
+The workflow should write a proposal artifact to a local output path such as:
+
+- `artifacts/github-intake/<timestamp>-proposal.json`
+
+That artifact is the review boundary for humans and later automation.
+
+### Step 4. Curate Into Corpus
+
+Only after review should a follow-up workflow convert selected proposals into:
+
+- corpus cases
+- benchmark metadata
+- Knowledge-Hub lessons when the miss is durable enough
+
+That write path is explicitly not part of v1.
+
+## Proposed Plugin Boundary
+
+The plugin should own the intake workflow under:
+
+- `plugins/codex-review/scripts/`
+
+Initial planned script surface:
+
+- `ingest_github_review_feedback.py`
+
+Likely future additions:
+
+- `verify_sync.py`
+- `propose_corpus_updates.py`
+- `apply_corpus_updates.py`
+
+## Proposed Normalized Schema
+
+V1 should introduce a local schema file or documented JSON shape for normalized review misses.
+
+Minimum fields:
+
+- `source`
+- `repo`
+- `pr_number`
+- `comment_id`
+- `review_id`
+- `source_type`
+- `file_path`
+- `line`
+- `body`
+- `normalized_category`
+- `severity`
+- `confidence`
+- `needs_human_review`
+- `candidate_expectations`
+- `notes`
+
+Schema rules:
+
+- preserve raw evidence verbatim where possible
+- do not collapse multiple distinct findings into one record unless the source evidence clearly does so
+- keep normalized categories aligned with the review corpus categories already used in this repo
+- allow uncertain classification to stay uncertain instead of forcing a false precise category
+
+## Implementation Phases
+
+## Phase A. Docs And Schema
+
+- document the intake workflow
+- define the normalized schema
+- define proposal artifact location and naming
+- define review rules for moving proposals into the curated corpus
+
+Exit criteria:
+
+- one durable plan document exists
+- one documented normalized schema exists
+- no ambiguity remains about raw evidence vs normalized proposal vs final corpus
+
+## Phase B. Proposal-Only Intake Script
+
+- add `plugins/codex-review/scripts/ingest_github_review_feedback.py`
+- support repo-local JSON input first
+- emit normalized proposal JSON
+- add a small fixture and smoke validation path
+
+Exit criteria:
+
+- one command can take a fixture input and emit a normalized proposal artifact
+- validation proves the output shape is stable
+
+## Phase C. Corpus Mapping Review
+
+- define how normalized proposal records map to corpus cases
+- document the criteria for when a proposal becomes a new durable case
+- document when a finding should update Knowledge-Hub lessons instead of or in addition to the corpus
+
+Exit criteria:
+
+- there is a written manual review loop for turning proposals into durable improvements
+
+## Phase D. Live GitHub Input
+
+- add a direct GitHub-backed input path only after the proposal-only flow is stable
+- keep permissions minimal and workflow-specific
+- prefer explicit exported input or narrowly scoped reads over broad repo mutation access
+
+Exit criteria:
+
+- live GitHub review data can feed the same normalized proposal flow without changing the downstream schema
+
+## Validation Plan
+
+For Phase B and later, validation should include:
+
+- JSON parse validation for produced artifacts
+- fixture-based smoke test for the intake script
+- at least one test case with multiple findings from one review
+- at least one uncertain classification that stays flagged for human review
+- confirmation that no corpus files are mutated in proposal-only mode
+
+## Non-Goals
+
+- building a generic GitHub analytics product
+- replacing the current curated corpus with raw PR data
+- auto-learning directly from all comments without review
+- making GitHub integration broader than needed for review improvement
+
+## Initial Deliverables
+
+The next implementation batch should produce:
+
+1. this plan wired into repo docs
+2. a documented normalized schema
+3. a plugin-owned proposal-only intake script
+4. one or more fixtures for local validation
+5. usage docs for the proposal flow
+
+## Decision Record
+
+Why this is the next step:
+
+- it uses the plugin boundary for a workflow that should not stay as loose scripts forever
+- it directly advances the self-improving CodeRabbit-style goal
+- it avoids premature auto-write behavior
+- it gives future GitHub integration one stable schema and proposal path instead of many one-off paths
