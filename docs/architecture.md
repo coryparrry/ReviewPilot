@@ -2,7 +2,7 @@
 
 ## Core Idea
 
-This project is a Codex-native review skill with bundled tooling.
+This project is a Codex-native review plugin with a bundled review skill and supporting tooling.
 
 The skill should remain the intelligence layer:
 
@@ -11,6 +11,12 @@ The skill should remain the intelligence layer:
 - deep review rubric
 - corpus expectations
 - CodeRabbit-style release-blocking review behavior
+
+The plugin should provide the execution boundary for:
+
+- future GitHub-safe review ingestion
+- structured scoring and sync workflows
+- future MCP-backed tool surfaces
 
 Bundled scripts should support consistency:
 
@@ -39,7 +45,8 @@ Those two lanes should stay separate in scoring so the project can distinguish:
 3. Bundled deterministic helpers
 4. Benchmark lanes
 5. Evaluation and self-improvement workflow
-6. Repo-to-installed sync workflow, then optional packaging later
+6. Transition sync workflow from plugin-contained skill source to installed direct skill runtime
+7. Future plugin install/runtime wiring and integration surfaces
 
 ## Non-Goals
 

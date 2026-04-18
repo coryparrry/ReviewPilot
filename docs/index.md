@@ -1,13 +1,14 @@
 # Project Overview
 
-This repo exists to give the `bug-hunting-code-review` skill a proper project home.
+This repo exists to give the `bug-hunting-code-review` system a proper project home.
 
-The repo is the maintained source of truth for the skill and its bundled evaluation workflow.
+The repo is the maintained source of truth for the `codex-review` plugin, its bundled skill, and its evaluation workflow.
 
 ## Why This Repo Exists
 
-The skill has grown beyond a single `SKILL.md` file. It now includes:
+The review system has grown beyond a single `SKILL.md` file. It now includes:
 
+- a plugin container
 - bundled review helpers
 - benchmark lanes
 - corpus management
@@ -26,14 +27,16 @@ That is large enough to justify its own repo and docs.
 
 - `docs/`
   Project documentation and decision records
+- `plugins/codex-review/`
+  Primary plugin container, including the bundled review skill
 - `skill/`
-  Maintained source copy of the installed skill plus relationship notes
+  Transition notes about the installed direct skill runtime
 - `scripts/`
   Project-owned automation and helper scripts, including repo-to-installed skill sync
 
 ## Near-Term Direction
 
 - keep the installed skill working where it is today
-- treat `skill/bug-hunting-code-review` as the repo-backed source copy
+- treat `plugins/codex-review` as the repo-backed primary container
 - use the repo-owned sync script instead of editing two copies casually
 - keep the review workflow measurable against GitHub review misses and external datasets

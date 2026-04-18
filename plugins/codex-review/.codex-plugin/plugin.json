@@ -1,0 +1,42 @@
+{
+  "name": "codex-review",
+  "version": "0.1.0",
+  "description": "Plugin-backed CodeRabbit-style review system for Codex.",
+  "author": {
+    "name": "Local Project",
+    "email": "",
+    "url": ""
+  },
+  "homepage": "",
+  "repository": "",
+  "license": "UNLICENSED",
+  "keywords": [
+    "code-review",
+    "codex",
+    "github",
+    "coderabbit-style"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Codex Review",
+    "shortDescription": "CodeRabbit-style deep review for current changes",
+    "longDescription": "Bundle the bug-hunting review skill, benchmark workflows, and future GitHub-safe review intake into one Codex plugin.",
+    "developerName": "Local Project",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "",
+    "privacyPolicyURL": "",
+    "termsOfServiceURL": "",
+    "defaultPrompt": [
+      "Review my current changes for release-blocking bugs",
+      "Prepare a deep pre-PR review for this repo",
+      "Score this review against the corpus and benchmark lanes"
+    ],
+    "brandColor": "#C2410C",
+    "screenshots": []
+  }
+}

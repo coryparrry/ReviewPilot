@@ -1,14 +1,18 @@
-# Codex Review Skill
+# Codex Review
 
-This repo is the source project for building and documenting a deep pre-PR code review skill for Codex.
+This repo is the source project for building and documenting a plugin-backed deep pre-PR code review system for Codex.
 
 Its core function is to make Codex behave more like a strong CodeRabbit-style reviewer: release-blocking when warranted, biased toward correctness and security, and continuously improvable from real review misses plus curated benchmark lanes.
 
 ## Current Status
 
-The repo now contains a source copy of the skill at:
+The primary project container is now the repo-local plugin at:
 
-- `skill/bug-hunting-code-review`
+- `plugins/codex-review`
+
+The bundled review skill now lives inside that plugin at:
+
+- `plugins/codex-review/skills/bug-hunting-code-review`
 
 The live installed skill still exists at:
 
@@ -17,14 +21,15 @@ The live installed skill still exists at:
 This repo is the dedicated project home for:
 
 - skill design and prompt evolution
+- plugin packaging and future safe integration points
 - bundled scripts and review helpers
 - benchmark corpus management
 - documentation and workflow notes
-- the maintained source copy of the installed skill
+- the maintained source copy of the installed review system
 
 ## Core Function
 
-The skill is meant to:
+The review system is meant to:
 
 - review diffs like a serious pre-merge reviewer, not a style bot
 - prioritize correctness bugs, security issues, broken feature behavior, contract drift, stale state, and missing negative-path coverage
@@ -32,13 +37,23 @@ The skill is meant to:
 - improve over time from two feedback lanes:
   real GitHub PR review misses and curated external benchmark datasets
 
-This repo is where that improvement loop should live. The skill prompt, deterministic helpers, corpus files, and benchmark workflows should all evolve together here.
+This repo is where that improvement loop should live. The plugin container, skill prompt, deterministic helpers, corpus files, and benchmark workflows should all evolve together here.
+
+## Plugin Shape
+
+The plugin is the primary container now:
+
+- `plugins/codex-review/.codex-plugin/plugin.json`
+- `plugins/codex-review/skills/bug-hunting-code-review`
+- `plugins/codex-review/.mcp.json`
+
+The skill remains part of the plugin. The plugin boundary is where future GitHub-safe ingestion, review scoring, sync verification, and other structured workflows should live.
 
 ## Sync Workflow
 
-The repo copy is now the maintained source for day-to-day skill changes:
+The repo copy is now the maintained source for day-to-day review changes:
 
-- `skill/bug-hunting-code-review`
+- `plugins/codex-review/skills/bug-hunting-code-review`
 
 Push that source copy into the installed runtime copy with:
 
@@ -53,7 +68,9 @@ Useful options:
 - `-Destination <path>`
   Sync into a different test or runtime location
 
-The sync is intentionally one-way and non-destructive: it overwrites files from the repo copy into the installed skill, but it does not delete stale files from the destination.
+The current sync is intentionally one-way and non-destructive: it overwrites files from the plugin-contained repo copy into the installed skill runtime, but it does not delete stale files from the destination.
+
+This is a transition path. The plugin scaffold now exists in the repo, but the runtime install flow for the plugin itself is still a follow-up step.
 
 ## Improvement Loop
 
@@ -62,7 +79,7 @@ The repo should keep the skill measurable and self-improving through:
 - the bundled review corpus built from real GitHub PR review misses
 - curated external review-oriented datasets
 - repeatable benchmark commands that can score a draft review against both lanes
-- future GitHub-linked workflow integration so review outputs and missed findings can be fed back into the corpus cleanly
+- future GitHub-facing plugin integration so review outputs and missed findings can be fed back into the corpus cleanly
 
 ## Initial Goals
 
@@ -80,6 +97,6 @@ The repo should keep the skill measurable and self-improving through:
 
 ## Next Steps
 
-1. Add post-sync verification so the installed skill can be proven to match repo source.
-2. Strengthen the self-improvement loop around GitHub PR review intake and benchmark scoring.
-3. Add packaging or CI only after the local source layout is stable.
+1. Add post-sync verification so the installed runtime can be proven to match plugin-contained source.
+2. Add plugin-native GitHub intake and scoring workflows for corpus updates and safer review automation.
+3. Add plugin install/runtime documentation before broader CI or packaging work.

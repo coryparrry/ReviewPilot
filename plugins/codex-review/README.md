@@ -1,0 +1,33 @@
+# Codex Review Plugin
+
+This plugin is the primary container for the review system in this repo.
+
+## Current Contents
+
+- `.codex-plugin/plugin.json`
+  Plugin manifest and user-facing metadata
+- `skills/bug-hunting-code-review`
+  The bundled CodeRabbit-style review skill
+- `.mcp.json`
+  Placeholder MCP config for future structured integrations such as GitHub-safe review ingestion
+- `scripts/`
+  Reserved for plugin-owned helper workflows as repo scripts migrate behind plugin boundaries
+
+## Current Boundary
+
+Today, the plugin contains the maintained skill source, but the live runtime path is still the installed direct skill under:
+
+- `~\.codex\skills\bug-hunting-code-review`
+
+That direct skill runtime is currently updated with `scripts/sync_skill_to_codex.ps1`.
+
+## Intended Direction
+
+The plugin should become the clean integration boundary for:
+
+- GitHub PR review intake
+- corpus and benchmark scoring workflows
+- post-sync verification
+- future MCP-backed or app-backed review operations
+
+The bundled skill remains the review brain inside that plugin.

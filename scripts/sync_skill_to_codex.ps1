@@ -1,5 +1,5 @@
 param(
-    [string]$Source = (Join-Path $PSScriptRoot "..\skill\bug-hunting-code-review"),
+    [string]$Source = (Join-Path $PSScriptRoot "..\plugins\codex-review\skills\bug-hunting-code-review"),
     [string]$Destination = (Join-Path $HOME ".codex\skills\bug-hunting-code-review"),
     [switch]$DryRun,
     [switch]$IncludePycache
