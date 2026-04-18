@@ -11,7 +11,7 @@ CATEGORY_RULES = [
         "category": "fixture-masking",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"feature.?gate", r"full object", r"overwrite", r"fixture", r"helper"],
+        "patterns": [r"feature.?gate", r"full object", r"overwrite", r"fixture", r"helper", r"rewrites? the whole"],
     },
     {
         "category": "registry-drift",
@@ -23,7 +23,16 @@ CATEGORY_RULES = [
         "category": "state-symmetry",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"approval", r"pending", r"queue", r"summary", r"status", r"clear"],
+        "patterns": [
+            r"approvalrequired",
+            r"pending approval",
+            r"paused for review",
+            r"companion",
+            r"summary becomes incorrect",
+            r"status.*summary",
+            r"objecttype",
+            r"wrong object type",
+        ],
     },
     {
         "category": "migration-backfill",
@@ -35,13 +44,13 @@ CATEGORY_RULES = [
         "category": "error-shaping",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"500", r"4xx", r"422", r"typed error", r"plain error", r"error mapping"],
+        "patterns": [r"500", r"4xx", r"422", r"typed error", r"plain error", r"error mapping", r"malformed json"],
     },
     {
         "category": "request-contract",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"request", r"patch", r"payload", r"schema", r"validation", r"role-only"],
+        "patterns": [r"request", r"patch", r"payload", r"schema", r"validation", r"role-only", r"objecttype"],
     },
     {
         "category": "fail-open-synthesis",
@@ -59,7 +68,7 @@ CATEGORY_RULES = [
         "category": "migration-cleared-state",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"explicit null", r"cleared state", r"\?\?", r"nullish", r"fallback"],
+        "patterns": [r"explicit null", r"cleared state", r"\?\?", r"nullish", r"fallback", r"nullable", r"null"],
     },
     {
         "category": "concurrency-queue-claim",
@@ -71,7 +80,17 @@ CATEGORY_RULES = [
         "category": "test-realism",
         "severity": "medium",
         "confidence": "medium",
-        "patterns": [r"seed order", r"named run", r"index 0", r"test should target"],
+        "patterns": [
+            r"seed order",
+            r"named run",
+            r"index 0",
+            r"test should target",
+            r"hardcoded .*expiresat",
+            r"expiry drift",
+            r"flaky fail",
+            r"eventually cause flaky failures",
+            r"date\.now",
+        ],
     },
     {
         "category": "legacy-fallback-source",
@@ -85,6 +104,13 @@ CATEGORY_RULES = [
         "confidence": "medium",
         "patterns": [r"wrapped payload", r"response shape", r"payload shape", r"assert the real"],
     },
+]
+
+GENERIC_TITLE_PATTERNS = [
+    re.compile(r"^_?⚠️?\s*potential issue", re.IGNORECASE),
+    re.compile(r"^potential issue", re.IGNORECASE),
+    re.compile(r"^major$", re.IGNORECASE),
+    re.compile(r"^minor$", re.IGNORECASE),
 ]
 
 
@@ -288,7 +314,63 @@ def iter_comments(payload: Any, format_name: str) -> list[dict[str, Any]]:
     raise ValueError(f"Unsupported format: {format_name}")
 
 
-def classify_comment(body: str) -> tuple[str, str, str]:
+def normalize_markdown_text(text: str) -> str:
+    value = re.sub(r"!\[[^\]]*]\([^)]+\)", " ", text)
+    value = re.sub(r"`([^`]*)`", r"\1", value)
+    value = re.sub(r"\*\*([^*]+)\*\*", r"\1", value)
+    value = re.sub(r"_([^_]+)_", r"\1", value)
+    value = re.sub(r"<[^>]+>", " ", value)
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
+def strip_review_boilerplate(body: str) -> str:
+    trimmed = body.strip()
+    for marker in ["\n\n<details>", "\n\n<!--", "\n\nUseful? React with"]:
+        if marker in trimmed:
+            trimmed = trimmed.split(marker, 1)[0].strip()
+    return trimmed
+
+
+def extract_comment_summary(body: str) -> tuple[str, str]:
+    trimmed = strip_review_boilerplate(body)
+    paragraphs = [normalize_markdown_text(chunk) for chunk in re.split(r"\n\s*\n", trimmed) if chunk.strip()]
+    cleaned_paragraphs: list[str] = []
+
+    for paragraph in paragraphs:
+        lowered = paragraph.lower()
+        if lowered.startswith("useful? react with"):
+            continue
+        if "auto-generated comment by coderabbit" in lowered:
+            continue
+        cleaned_paragraphs.append(paragraph)
+
+    if not cleaned_paragraphs:
+        return ("", "")
+
+    title = ""
+    details: list[str] = []
+    for paragraph in cleaned_paragraphs:
+        if any(pattern.search(paragraph) for pattern in GENERIC_TITLE_PATTERNS):
+            continue
+        if not title:
+            title = paragraph.rstrip(".")
+            continue
+        details.append(paragraph)
+
+    if not title:
+        title = cleaned_paragraphs[0].rstrip(".")
+        details = cleaned_paragraphs[1:]
+
+    if details:
+        summary = " ".join(details)
+    else:
+        summary = title
+
+    return (title[:160], summary[:1000])
+
+
+def classify_comment(body: str, file_path: str | None = None) -> tuple[str, str, str]:
     lowered = body.lower()
     best_match: tuple[int, dict[str, Any] | None] = (0, None)
 
@@ -297,6 +379,8 @@ def classify_comment(body: str) -> tuple[str, str, str]:
         for pattern in rule["patterns"]:
             if re.search(pattern, lowered):
                 score += 1
+        if rule["category"] == "test-realism" and file_path and "/test/" in file_path.replace("\\", "/"):
+            score += 1
         if score > best_match[0]:
             best_match = (score, rule)
 
@@ -337,7 +421,9 @@ def build_notes(comment: dict[str, Any], category: str) -> str:
 
 def normalize_record(context: dict[str, Any], comment: dict[str, Any]) -> dict[str, Any]:
     body = str(comment.get("body", "")).strip()
-    category, severity, confidence = classify_comment(body)
+    title, summary = extract_comment_summary(body)
+    body_for_classification = "\n".join(part for part in [title, summary] if part)
+    category, severity, confidence = classify_comment(body_for_classification or body, comment.get("file_path"))
     return {
         "source": context.get("source", "unknown"),
         "repo": context.get("repo", "unknown"),
@@ -348,11 +434,13 @@ def normalize_record(context: dict[str, Any], comment: dict[str, Any]) -> dict[s
         "file_path": comment.get("file_path"),
         "line": comment.get("line"),
         "body": body,
+        "candidate_title": title,
+        "candidate_summary": summary,
         "normalized_category": category,
         "severity": severity,
         "confidence": confidence,
         "needs_human_review": True,
-        "candidate_expectations": build_expectations(body),
+        "candidate_expectations": build_expectations(summary or title or body),
         "notes": build_notes(comment, category),
     }
 
