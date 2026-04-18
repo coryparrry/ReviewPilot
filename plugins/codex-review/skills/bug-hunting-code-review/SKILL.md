@@ -286,7 +286,7 @@ Use this before writing `No findings`. It forces explicit answers for contract, 
 
 ### `scripts/review_corpus_score.py`
 
-Score a review output against the curated missed-review corpus from the Knowledge-Hub GitHub review-comment lane.
+Score a review output against the curated missed-review corpus from the review-comment archive lane.
 
 Examples:
 

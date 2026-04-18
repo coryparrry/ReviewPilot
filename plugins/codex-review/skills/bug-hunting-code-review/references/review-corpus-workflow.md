@@ -4,7 +4,7 @@ Use this workflow to regression-check the `bug-hunting-code-review` skill agains
 
 ## Purpose
 
-The corpus is a compact set of concrete review failures pulled from the Knowledge-Hub GitHub review-comment lane.
+The corpus is a compact set of concrete review failures pulled from the review-comment archive lane.
 
 It is not a benchmark for style. It is a benchmark for whether a review output catches the bug classes Codex has repeatedly missed:
 
@@ -75,6 +75,6 @@ When you add a new raw clip under the GitHub review-comment lane:
    - severity
    - source raw file
    - regex groups that represent what a good review should mention
-4. Update the Knowledge-Hub lesson if the new case reflects a recurring miss class.
+4. Update the durable lessons log if the new case reflects a recurring miss class.
 
 Do not add every nit. Add the cases that should change the review skill.

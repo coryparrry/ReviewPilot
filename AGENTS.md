@@ -19,35 +19,30 @@ Inspect before editing.
 
 Be conscious of context-window usage. When reading long documents, large generated skills, or doing review-heavy analysis across many files, prefer subagents so the main thread stays compact.
 
-- For this workstream, subagents should always use `gpt-5.4-mini`.
+## Subagent Use
 
-Use subagents for non-trivial work that benefits from parallelism, context isolation, or independent verification. Prefer them when the task has multiple independent questions, needs read-only repo exploration, would benefit from a separate review or validation pass, or would otherwise flood the main agent's context with noisy intermediate output.
+For non-trivial engineering work, use `$agent-team-orchestrator` from the local Codex skill runtime to decide when and how to delegate.
 
-Keep the main agent on the critical path. It should own user communication, final decisions, synthesis, and any immediate blocking step. Delegate bounded sidecar tasks with clear deliverables and stop conditions.
+Apply these rules:
+- Keep the main agent on the critical path. The main agent owns user communication, synthesis, final decisions, and any immediate blocking step.
+- Use subagents for bounded sidecar tasks only when delegation improves parallelism, context isolation, or independent verification.
+- Always spawn subagents with `model: "gpt-5.4-mini"`.
+- Do not fork or pass the full thread by default.
+- Prefer `fork_context: false` and pass only the minimum context needed: a short task summary plus the exact files, diffs, paths, symbols, commands, or artifacts required for the task.
+- Use full-thread context only when a shorter context would materially risk correctness.
+- Keep subagents read-only unless edits are specifically needed.
+- Do not delegate work that is too ambiguous, too broad, or too context-heavy for `gpt-5.4-mini`; keep that work on the main agent.
+- Prefer several small, well-scoped subagents over one vague general-purpose subagent.
+- Do not delegate trivial single-file work or urgent blocking work that the main agent can complete faster directly.
 
-## Subagent Context
+Use these roles:
+- `Explore scout`: read-only repo digging, dependency tracing, and source-of-truth discovery.
+- `Planner`: decomposition only.
+- `Reviewer`: correctness, architecture drift, security smell, duplicated-logic drift, and missing-test review.
+- `Validator`: focused lint, typecheck, test, build, repro, or browser verification.
+- `Handoff summariser`: compress subagent outputs into a compact parent-ready handoff.
 
-When using subagents, do not fork or pass the full thread by default.
-
-Prefer narrow, focused subagent tasks with only the minimum context needed to do the job well.
-
-Use full-thread context only if it is clearly necessary for correctness.
-
-Subagents should usually be:
-- read-only unless edits are specifically needed
-- scoped to one clear question or task
-- given a short summary of relevant context instead of the entire conversation
-
-
-Default role split:
-
-- Explore scout: read-only codebase digging and source-of-truth discovery.
-- Planner: decomposition only for large or ambiguous tasks.
-- Reviewer: correctness, architecture drift, security smell, and test-gap review.
-- Validator: focused lint, test, build, or browser verification.
-- Handoff summariser: compresses subagent output into a compact parent-ready summary.
-
-Do not use subagents for trivial single-file work, tasks that are faster to do than explain, or urgent blocking work the main agent can complete directly. Prefer several small, well-scoped subagents over one vague general-purpose delegate.
+Subagent prompts should be short, explicit, and bounded. Each subagent task should specify scope, allowed actions, deliverable, and stop condition.
 
 ## Validation
 

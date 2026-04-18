@@ -4,7 +4,7 @@
     "title": "Preserve untouched feature gates in helpers and tests",
     "severity": "high",
     "category": "fixture-masking",
-    "source": "anonymized-review-import/Add Binder governance core and API exposure by repo-owner - Pull Request 3 - Binder.md",
+    "source": "review-archive/github-review-comments/binder-governance-pr-3.md",
     "expected_groups": [
       [
         "feature.?gates?",
@@ -22,7 +22,7 @@
     "title": "Catch exact-key family or connector classifier drift",
     "severity": "high",
     "category": "registry-drift",
-    "source": "anonymized-review-import/Add Binder governance core and API exposure by repo-owner - Pull Request 3 - Binder.md",
+    "source": "review-archive/github-review-comments/binder-governance-pr-3.md",
     "expected_groups": [
       [
         "runtime.?famil|connector.?famil|capability.?famil",
@@ -39,7 +39,7 @@
     "title": "Clear companion approval flags when state leaves approval flow",
     "severity": "high",
     "category": "state-symmetry",
-    "source": "anonymized-review-import/Add Binder governance core and API exposure by repo-owner - Pull Request 3 - Binder.md",
+    "source": "review-archive/github-review-comments/binder-governance-pr-3.md",
     "expected_groups": [
       [
         "approvalRequired|pending approval|supersed",
@@ -53,7 +53,7 @@
     "title": "Backfill new required persisted fields during migration",
     "severity": "critical",
     "category": "migration-backfill",
-    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner - Pull Request 20 - agent-platform-foundation.md",
+    "source": "review-archive/github-review-comments/agent-platform-foundation-pr-20.md",
     "expected_groups": [
       [
         "migrat|legacy runs?|normalizeMigratedRun",
@@ -67,7 +67,7 @@
     "title": "Map invalid client schedule input to typed 4xx errors instead of 500",
     "severity": "high",
     "category": "error-shaping",
-    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner - Pull Request 20 - agent-platform-foundation.md",
+    "source": "review-archive/github-review-comments/agent-platform-foundation-pr-20.md",
     "expected_groups": [
       [
         "500|422|4xx",
@@ -81,7 +81,7 @@
     "title": "Catch PATCH refine logic that rejects valid role-only updates",
     "severity": "high",
     "category": "request-contract",
-    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner - Pull Request 20 - agent-platform-foundation.md",
+    "source": "review-archive/github-review-comments/agent-platform-foundation-pr-20.md",
     "expected_groups": [
       [
         "role",
@@ -95,7 +95,7 @@
     "title": "Do not synthesize fallback owner or agent state from unrelated records",
     "severity": "critical",
     "category": "fail-open-synthesis",
-    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner - Pull Request 20 - agent-platform-foundation.md",
+    "source": "review-archive/github-review-comments/agent-platform-foundation-pr-20.md",
     "expected_groups": [
       [
         "Missing owner|synthetic agent|ownerAgent",
@@ -109,7 +109,7 @@
     "title": "Keep preview or readiness resolvers aligned with the canonical runtime path",
     "severity": "critical",
     "category": "source-of-truth-drift",
-    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner - Pull Request 20 - agent-platform-foundation.md",
+    "source": "review-archive/github-review-comments/agent-platform-foundation-pr-20.md",
     "expected_groups": [
       [
         "preview|readiness|resolveExecutionPackagePreview",
@@ -122,7 +122,7 @@
     "title": "Strip transport-only fields like sessionId from strict request bodies",
     "severity": "medium",
     "category": "request-contract",
-    "source": "anonymized-review-import/Add executable agent packages and Company task operations by repo-owner - Pull Request 20 - agent-platform-foundation.md",
+    "source": "review-archive/github-review-comments/agent-platform-foundation-pr-20.md",
     "expected_groups": [
       [
         "sessionId",
@@ -136,7 +136,7 @@
     "title": "Preserve explicit null state instead of falling through to a fallback",
     "severity": "high",
     "category": "migration-cleared-state",
-    "source": "anonymized-review-import/Pull requests - Binder.md",
+    "source": "review-archive/github-review-comments/binder-review-cluster.md",
     "expected_groups": [
       [
         "nullish coalescing|\\?\\?",
@@ -150,7 +150,7 @@
     "title": "Claim queued heartbeat or wake work before releasing mutation boundaries",
     "severity": "critical",
     "category": "concurrency-queue-claim",
-    "source": "anonymized-review-import/Pull requests - Binder.md",
+    "source": "review-archive/github-review-comments/binder-review-cluster.md",
     "expected_groups": [
       [
         "heartbeat|wake cycle|processDueHeartbeats",
@@ -164,7 +164,7 @@
     "title": "Tests should target named seeded entities instead of seed order",
     "severity": "medium",
     "category": "test-realism",
-    "source": "anonymized-review-import/Pull requests - Binder.md",
+    "source": "review-archive/github-review-comments/binder-review-cluster.md",
     "expected_groups": [
       [
         "runs\\[0\\]|index 0|seed ordering",
@@ -177,7 +177,7 @@
     "title": "Derive connector fallback from the actual runtime adapter field",
     "severity": "high",
     "category": "legacy-fallback-source",
-    "source": "anonymized-review-import/Pull requests - Binder.md",
+    "source": "review-archive/github-review-comments/binder-review-cluster.md",
     "expected_groups": [
       [
         "runtimeAdapterType",
@@ -191,7 +191,7 @@
     "title": "Assert the real wrapped response payload shape",
     "severity": "medium",
     "category": "response-contract",
-    "source": "anonymized-review-import/Pull requests - Binder.md",
+    "source": "review-archive/github-review-comments/binder-review-cluster.md",
     "expected_groups": [
       [
         "health",

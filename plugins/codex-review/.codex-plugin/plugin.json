@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "description": "Plugin-backed CodeRabbit-style review system for Codex.",
   "author": {
-    "name": "Local Project",
+    "name": "ReviewPilot",
     "email": "",
-    "url": ""
+    "url": "https://github.com/repo-owner/ReviewPilot"
   },
-  "homepage": "",
-  "repository": "",
+  "homepage": "https://github.com/repo-owner/ReviewPilot",
+  "repository": "https://github.com/repo-owner/ReviewPilot.git",
   "license": "UNLICENSED",
   "keywords": [
     "code-review",
@@ -22,7 +22,7 @@
     "displayName": "Codex Review",
     "shortDescription": "CodeRabbit-style deep review for current changes",
     "longDescription": "Bundle the bug-hunting review skill, benchmark workflows, and future GitHub-safe review intake into one Codex plugin.",
-    "developerName": "Local Project",
+    "developerName": "ReviewPilot",
     "category": "Coding",
     "capabilities": [
       "Interactive",

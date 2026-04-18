@@ -48,7 +48,7 @@ The first version should stay easy to validate, with raw fetch, normalization, p
 
 ### Out of Scope For V1
 
-- automatic edits to Knowledge-Hub lessons
+- automatic edits to the durable lessons log
 - auto-resolving severity or regex patterns without review
 - full GitHub app or MCP server implementation
 - plugin marketplace or runtime installation automation
@@ -107,7 +107,7 @@ After proposal generation, a follow-up workflow can convert selected proposals i
 
 - corpus cases
 - benchmark metadata
-- Knowledge-Hub lessons when the miss is durable enough
+- durable lessons log updates when the miss is durable enough
 
 That write path should stay explicit and auditable even when `auto` is the default apply mode.
 
@@ -188,7 +188,7 @@ Exit criteria:
 
 - define how normalized proposal records map to corpus cases
 - document the criteria for when a proposal becomes a new durable case
-- document when a finding should update Knowledge-Hub lessons instead of or in addition to the corpus
+- document when a finding should update the durable lessons log instead of or in addition to the corpus
 
 Exit criteria:
 
