@@ -99,6 +99,7 @@ The current safe learning shape is:
 - gate those candidates against duplicates plus review-artifact evidence
 - auto-apply only the gate-approved candidates into the probationary lane
 - keep the primary GitHub corpus curated and harder to change
+- require repeated review-artifact evidence before a probationary case can graduate into the primary corpus
 
 The external SWE-bench lane exists to harden the review brain without depending only on your own buggy PR history. It should pressure the review prompt and benchmark workflow, not auto-write directly into the GitHub-derived corpus lanes.
 

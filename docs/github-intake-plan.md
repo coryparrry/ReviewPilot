@@ -147,6 +147,7 @@ Initial planned script surface:
 - `propose_corpus_updates.py`
 - `score_candidate_quality.py`
 - `promote_corpus_candidates.py`
+- `promote_probationary_cases.py`
 - `run_github_intake_pipeline.py`
 
 Likely future additions:
@@ -238,6 +239,7 @@ Exit criteria:
 - block malformed candidates and conflicting IDs instead of overwriting existing cases
 - require evidence-based gating before a GitHub-derived candidate can auto-apply into the probationary lane
 - require a later promotion step before probationary cases are treated as durable primary corpus entries
+- require that later promotion step to use repeated review-artifact evidence, not just a convenience flag
 
 Exit criteria:
 
@@ -251,6 +253,7 @@ Exit criteria:
 - the wrapper can reuse a prepared review run directory and stop early so the review-authoring loop does not need path juggling across different artifact roots
 - the wrapper can resume from the next missing stage instead of rerunning fetch/ingest/propose once those artifacts already exist
 - the wrapper can gate GitHub-derived candidates against duplicate checks plus review-artifact evidence before auto-applying them into the probationary lane
+- probationary cases can be promoted into the primary corpus only when repeated review artifacts support them strongly enough to count as durable knowledge
 
 ## Phase D. Live GitHub Input
 

@@ -189,3 +189,11 @@ Reviewed promotion can explicitly clear some of those apply warnings by stamping
 - `review_notes.approved_for_auto = true`
 
 The current probationary gate stamps the same fields when a candidate passes duplicate checks and review-artifact evidence strongly enough to justify probationary admission.
+
+Probationary-to-primary promotion is a separate gate:
+
+- it should evaluate cases already living in `probationary-review-cases.json`
+- it should require repeated review-artifact evidence by default
+- it should require at least one strict expected-group match by default
+- exact primary duplicates and conflicting IDs should fail closed
+- near-duplicate primary matches should stay out of `auto` unless the caller explicitly forces the promotion

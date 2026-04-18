@@ -87,6 +87,12 @@ The reviewed promotion script now lives at:
 
 That script exists to turn selected reviewed candidates into auto-eligible candidates without weakening the default intake heuristics.
 
+The probationary-to-primary promotion gate now lives at:
+
+- `plugins/codex-review/scripts/promote_probationary_cases.py`
+
+That script exists to promote cases out of the probationary lane only when repeated review artifacts support the same case strongly enough to treat it as durable primary-corpus knowledge.
+
 The corpus apply script now lives at:
 
 - `plugins/codex-review/scripts/apply_corpus_updates.py`
@@ -95,6 +101,12 @@ The current learning policy is intentionally two-lane:
 
 - gate-approved GitHub-derived cases can auto-apply into the probationary corpus
 - the primary GitHub corpus should stay harder to change and should not be treated as the raw output lane for fresh PR feedback
+
+The current durable-promotion rule is also intentionally evidence-based:
+
+- probationary cases should move into the primary corpus only after repeated review artifacts hit the same case
+- exact duplicates and conflicting IDs fail closed
+- near-duplicate primary matches stay out of `auto` and require explicit force if you really want them
 
 The wrapper now defaults `--apply-target` to `probationary` so the safer lane is the default behavior, not an extra flag the caller has to remember.
 
@@ -192,6 +204,22 @@ That path:
 - gates candidates against duplicate checks and review-artifact evidence
 - auto-applies only the gate-approved subset
 - targets the probationary lane rather than the durable primary corpus
+
+To promote a probationary case into the durable primary corpus:
+
+```powershell
+python .\plugins\codex-review\scripts\promote_probationary_cases.py `
+  --ids feature-gates-preserve-existing `
+  --review-file .\artifacts\review-a.md `
+  --review-file .\artifacts\review-b.md
+```
+
+That path:
+
+- requires repeated review-artifact evidence by default
+- requires at least one strict expected-group match by default
+- removes promoted cases from the probationary corpus
+- appends them into the primary corpus only when the promotion gate clears
 
 If the review was prepared through the bundled pre-PR helper, the wrapper can consume the prepared artifact directory directly:
 

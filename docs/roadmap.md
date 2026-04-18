@@ -49,6 +49,7 @@
 - use the curated SWE-bench lane as external hardening pressure so the skill can improve without relying only on your own buggy PRs
 - keep strict benchmark scoring separate from softer probationary admission evidence so learning stays safer than raw regex matching alone
 - expose one plugin-owned review runner so the review brain can actually author `review.md` and benchmark it in one command
+- make probationary-to-primary promotion evidence-based so the durable corpus only grows when repeated review artifacts support the same case
 
 ## Phase 4
 
