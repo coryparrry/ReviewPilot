@@ -180,7 +180,33 @@ This project is still supposed to work as a **Codex skill**, not turn into a ran
 
 ## 📦 Install / Try It
 
-This is currently a **clone-the-repo early beta**, not a polished package-manager install.
+The easiest way for normal users should be a **downloadable release zip**, not a source checkout.
+
+### Recommended install for users
+
+Download a release bundle, unzip it, then run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
+```
+
+That is the intended public install path.
+
+### npm-friendly installer path
+
+This repo is now also set up for an npm-style installer command.
+
+The goal is a future install experience like:
+
+```bash
+npx codex-review-install
+```
+
+That still installs into Codex Desktop's plugin folder under the hood, but it removes most of the manual steps for users.
+
+### Repo checkout install
+
+If you are developing the plugin or want the source repo too, you can still clone this repo and run the same installer from here.
 
 Also: there are **two different setup paths** in this repo.
 
@@ -230,6 +256,18 @@ What those two scripts do:
   Copies the maintained review skill into the direct runtime skill path under `.codex/skills/bug-hunting-code-review`
 
 If you are just exploring the repo and reading the code, you do **not** need to sync the runtime skill first.
+
+### Build a downloadable release bundle
+
+If you are maintaining the project and want a shareable install zip:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_plugin_release_bundle.ps1
+```
+
+That writes a release folder and zip under `artifacts/release-bundles/`.
+
+It also builds an npm tarball with `npm pack` into the same output folder.
 
 ### Fastest first run
 

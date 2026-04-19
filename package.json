@@ -1,0 +1,23 @@
+{
+  "name": "codex-review-install",
+  "version": "0.1.0",
+  "description": "Installer for the Codex Review plugin.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "codex-review-install": "scripts/install_plugin_to_codex.mjs"
+  },
+  "files": [
+    "plugins/codex-review/**",
+    "scripts/install_plugin_to_codex.mjs",
+    "scripts/install_plugin_to_codex.ps1",
+    "scripts/sync_skill_to_codex.ps1",
+    "README.md"
+  ],
+  "keywords": [
+    "codex",
+    "plugin",
+    "code-review",
+    "installer"
+  ]
+}

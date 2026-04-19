@@ -42,6 +42,32 @@ So the practical setup today is:
 - install the plugin bundle with `install_plugin_to_codex.ps1`
 - optionally sync the direct installed runtime skill with `sync_skill_to_codex.ps1`
 
+For public distribution, the intended path is a downloadable release bundle rather than asking users to clone this repo first.
+
+The repo is now also prepared for an npm-style installer path so the longer-term UX can become:
+
+```bash
+npx codex-review-install
+```
+
+That still lands the plugin in Codex Desktop's marketplace path under the hood, but it removes most of the manual setup from the user's point of view.
+
+The repo now includes:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_plugin_release_bundle.ps1
+```
+
+That builds a release folder plus zip under `artifacts/release-bundles/` containing:
+
+- `plugins/codex-review`
+- `scripts/install_plugin_to_codex.ps1`
+- `scripts/install_plugin_to_codex.mjs`
+- `scripts/sync_skill_to_codex.ps1`
+- `README-INSTALL.md`
+
+It also builds an npm tarball via `npm pack` into the same output folder.
+
 ## Intended Direction
 
 The plugin should become the clean integration boundary for:
