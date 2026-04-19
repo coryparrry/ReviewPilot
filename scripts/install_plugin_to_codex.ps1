@@ -33,6 +33,16 @@ function Ensure-Directory {
     Write-Step "Created directory $Path"
 }
 
+function Write-Utf8NoBom {
+    param(
+        [string]$Path,
+        [string]$Value
+    )
+
+    $encoding = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($Path, $Value, $encoding)
+}
+
 function Copy-PluginTree {
     param(
         [string]$SourceRoot,
@@ -115,7 +125,7 @@ function Update-PluginConfig {
             return
         }
 
-        Set-Content -LiteralPath $ConfigPath -Value $block -Encoding utf8
+        Write-Utf8NoBom -Path $ConfigPath -Value $block
         Write-Step "Created config file $ConfigPath with plugin enable block for $PluginRef"
         return
     }
@@ -142,7 +152,7 @@ function Update-PluginConfig {
         return
     }
 
-    Set-Content -LiteralPath $ConfigPath -Value $updated -Encoding utf8
+    Write-Utf8NoBom -Path $ConfigPath -Value $updated
     Write-Step "Enabled plugin $PluginRef in $ConfigPath"
 }
 
@@ -169,7 +179,7 @@ function Update-MarketplaceConfig {
             return
         }
 
-        Set-Content -LiteralPath $ConfigPath -Value $block -Encoding utf8
+        Write-Utf8NoBom -Path $ConfigPath -Value $block
         Write-Step "Created config file $ConfigPath with marketplace block for $MarketplaceName"
         return
     }
@@ -193,7 +203,7 @@ function Update-MarketplaceConfig {
         return
     }
 
-    Set-Content -LiteralPath $ConfigPath -Value $updated -Encoding utf8
+    Write-Utf8NoBom -Path $ConfigPath -Value $updated
     Write-Step "Registered marketplace $MarketplaceName in $ConfigPath"
 }
 
@@ -290,7 +300,7 @@ $marketplaceJson = $marketplace | ConvertTo-Json -Depth 6
 if ($DryRun) {
     Write-Step "Would write marketplace manifest $marketplaceJsonPath"
 } else {
-    Set-Content -LiteralPath $marketplaceJsonPath -Value $marketplaceJson -Encoding utf8
+    Write-Utf8NoBom -Path $marketplaceJsonPath -Value $marketplaceJson
     Write-Step "Wrote marketplace manifest $marketplaceJsonPath"
 }
 
