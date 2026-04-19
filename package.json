@@ -1,6 +1,6 @@
 {
   "name": "@reviewpilot/codex-review-install",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Installer for the Codex Review plugin.",
   "license": "UNLICENSED",
   "type": "module",
