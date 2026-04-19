@@ -138,13 +138,19 @@ def require_candidate_list(payload: dict[str, Any]) -> list[dict[str, Any]]:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
         raise ValueError("Corpus-candidate artifact must contain a top-level 'candidates' list.")
-    return [candidate for candidate in candidates if isinstance(candidate, dict)]
+    for index, candidate in enumerate(candidates):
+        if not isinstance(candidate, dict):
+            raise ValueError(f"Candidate at index {index} is not a JSON object.")
+    return candidates
 
 
 def require_corpus_list(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, list):
         raise ValueError("Corpus file must contain a JSON array.")
-    return [entry for entry in payload if isinstance(entry, dict)]
+    for index, entry in enumerate(payload):
+        if not isinstance(entry, dict):
+            raise ValueError(f"Corpus entry at index {index} is not a JSON object.")
+    return payload
 
 
 def normalize_expected_groups(expected_groups: Any) -> list[list[str]]:

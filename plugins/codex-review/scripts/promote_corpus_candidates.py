@@ -80,7 +80,10 @@ def require_candidate_list(payload: dict[str, Any]) -> list[dict[str, Any]]:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
         raise ValueError("Corpus-candidate artifact must contain a top-level 'candidates' list.")
-    return [candidate for candidate in candidates if isinstance(candidate, dict)]
+    for index, candidate in enumerate(candidates):
+        if not isinstance(candidate, dict):
+            raise ValueError(f"Candidate at index {index} is not a JSON object.")
+    return candidates
 
 
 def promote_candidate(candidate: dict[str, Any], reviewer: str, note: str) -> dict[str, Any]:

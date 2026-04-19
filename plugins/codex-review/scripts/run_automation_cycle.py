@@ -2,6 +2,7 @@ import argparse
 import json
 import subprocess
 import sys
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -253,62 +254,94 @@ def main() -> int:
 
     review_run_dir: Path | None = None
     repair_plan: Path | None = None
+    exit_code = 0
 
-    if not args.skip_review:
-        review_result = run_review(repo, run_dir, args.base, args.model)
-        summary["steps"]["review"] = review_result
-        review_run_dir = Path(review_result["review_run_dir"])
-        repair_plan = Path(review_result["repair_plan"])
+    def record_failure(step_name: str, exc: Exception) -> None:
+        failure: dict[str, object] = {
+            "failed": True,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+        if isinstance(exc, subprocess.CalledProcessError):
+            failure["returncode"] = exc.returncode
+            failure["cmd"] = exc.cmd
+            failure["stdout"] = exc.stdout
+            failure["stderr"] = exc.stderr
+        summary["steps"][step_name] = failure
+        summary["failure"] = {
+            "step": step_name,
+            **failure,
+            "traceback": traceback.format_exc(),
+        }
 
-    if not args.skip_repair_handoff and repair_plan is not None:
-        repair_plan_payload = read_json(repair_plan)
-        if not repair_plan_payload.get("findings"):
-            summary["steps"]["repair_handoff"] = {
-                "skipped": True,
-                "reason": "Repair plan did not contain any parsed findings.",
-                "repair_plan": str(repair_plan),
-            }
-        else:
-            summary["steps"]["repair_handoff"] = run_repair_handoff(
+    try:
+        if not args.skip_review:
+            review_result = run_review(repo, run_dir, args.base, args.model)
+            summary["steps"]["review"] = review_result
+            review_run_dir = Path(review_result["review_run_dir"])
+            repair_plan = Path(review_result["repair_plan"])
+
+        if not args.skip_repair_handoff and repair_plan is not None:
+            repair_plan_payload = read_json(repair_plan)
+            if not repair_plan_payload.get("findings"):
+                summary["steps"]["repair_handoff"] = {
+                    "skipped": True,
+                    "reason": "Repair plan did not contain any parsed findings.",
+                    "repair_plan": str(repair_plan),
+                }
+            else:
+                summary["steps"]["repair_handoff"] = run_repair_handoff(
+                    repo,
+                    run_dir,
+                    repair_plan,
+                    args.repair_finding_index,
+                    args.model,
+                )
+
+        if not args.skip_github_intake:
+            if not (args.github_repo and args.github_pr and args.github_raw_input and review_run_dir):
+                summary["steps"]["github_intake"] = {
+                    "skipped": True,
+                    "reason": "GitHub intake needs --github-repo, --github-pr, --github-raw-input, and a completed review run.",
+                }
+            else:
+                summary["steps"]["github_intake"] = run_github_intake(
+                    repo,
+                    run_dir,
+                    args.github_repo,
+                    args.github_pr,
+                    Path(args.github_raw_input).resolve(),
+                    args.github_raw_format,
+                    review_run_dir,
+                    args.model,
+                )
+
+        if not args.skip_hardening:
+            summary["steps"]["hf_hardening"] = run_hf_hardening(
                 repo,
                 run_dir,
-                repair_plan,
-                args.repair_finding_index,
+                args.hardening_offset,
+                args.hardening_length,
                 args.model,
             )
-
-    if not args.skip_github_intake:
-        if not (args.github_repo and args.github_pr and args.github_raw_input and review_run_dir):
-            summary["steps"]["github_intake"] = {
-                "skipped": True,
-                "reason": "GitHub intake needs --github-repo, --github-pr, --github-raw-input, and a completed review run.",
-            }
+    except Exception as exc:
+        exit_code = exc.returncode if isinstance(exc, subprocess.CalledProcessError) and exc.returncode else 1
+        if "review" not in summary["steps"]:
+            failed_step = "review"
+        elif "repair_handoff" not in summary["steps"] and not args.skip_repair_handoff:
+            failed_step = "repair_handoff"
+        elif "github_intake" not in summary["steps"] and not args.skip_github_intake:
+            failed_step = "github_intake"
         else:
-            summary["steps"]["github_intake"] = run_github_intake(
-                repo,
-                run_dir,
-                args.github_repo,
-                args.github_pr,
-                Path(args.github_raw_input).resolve(),
-                args.github_raw_format,
-                review_run_dir,
-                args.model,
-            )
+            failed_step = "hf_hardening"
+        record_failure(failed_step, exc)
+    finally:
+        write_json(run_dir / "automation-summary.json", summary)
 
-    if not args.skip_hardening:
-        summary["steps"]["hf_hardening"] = run_hf_hardening(
-            repo,
-            run_dir,
-            args.hardening_offset,
-            args.hardening_length,
-            args.model,
-        )
-
-    write_json(run_dir / "automation-summary.json", summary)
     print(f"Automation run: {run_dir}")
     print(f"Summary: {run_dir / 'automation-summary.json'}")
     print(f"Completed steps: {', '.join(summary['steps'].keys())}")
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":

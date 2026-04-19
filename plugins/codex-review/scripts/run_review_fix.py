@@ -114,7 +114,7 @@ def collect_repo_targets(repo: Path, finding: dict) -> list[Path]:
         except ValueError as exc:
             raise ValueError(f"Repair target {candidate} is outside the repo and cannot be used.") from exc
 
-        key = str(candidate).lower()
+        key = str(candidate)
         if key not in seen:
             seen.add(key)
             targets.append(candidate)
@@ -233,9 +233,10 @@ def main() -> int:
     if not repo_targets:
         raise ValueError("Refusing to apply a fix without at least one repo-local file target.")
 
-    run_codex_fix(repo, prompt, output_dir, args.model)
-    print(f"Fix result: {output_dir / 'fix-result.md'}")
-    return 0
+    raise ValueError(
+        "Refusing --apply because Codex workspace-write cannot enforce the selected file-target boundary yet. "
+        "Use the prepare-only output for a supervised fix pass until a real path-scoped execution boundary exists."
+    )
 
 
 if __name__ == "__main__":

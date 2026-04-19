@@ -20,6 +20,14 @@ function parseArgs(argv) {
     dryRun: false,
   };
 
+  function requireValue(flagName, index) {
+    const nextArg = argv[index + 1];
+    if (!nextArg || nextArg.startsWith("--")) {
+      throw new Error(`${flagName} requires a value`);
+    }
+    return nextArg;
+  }
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--dry-run") {
@@ -31,15 +39,21 @@ function parseArgs(argv) {
       continue;
     }
     if (arg === "--source") {
-      options.source = path.resolve(argv[++index]);
+      const nextArg = requireValue("--source", index);
+      index += 1;
+      options.source = path.resolve(nextArg);
       continue;
     }
     if (arg === "--codex-home") {
-      options.codexHome = path.resolve(argv[++index]);
+      const nextArg = requireValue("--codex-home", index);
+      index += 1;
+      options.codexHome = path.resolve(nextArg);
       continue;
     }
     if (arg === "--marketplace-name") {
-      options.marketplaceName = argv[++index];
+      const nextArg = requireValue("--marketplace-name", index);
+      index += 1;
+      options.marketplaceName = nextArg;
       continue;
     }
     throw new Error(`Unknown argument: ${arg}`);

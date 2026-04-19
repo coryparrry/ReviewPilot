@@ -130,25 +130,40 @@ foreach ($item in $sourceFiles) {
     $copiedFiles++
 }
 
-$marketplace = [ordered]@{
-    name = $MarketplaceName
-    interface = @{
-        displayName = "Codex Review Local"
+$pluginEntry = [ordered]@{
+    name = $pluginName
+    source = @{
+        source = "local"
+        path = "./plugins/$pluginName"
     }
-    plugins = @(
-        [ordered]@{
-            name = $pluginName
-            source = @{
-                source = "local"
-                path = "./plugins/$pluginName"
-            }
-            policy = @{
-                installation = "AVAILABLE"
-                authentication = "ON_INSTALL"
-            }
-            category = if ($pluginManifest.interface.category) { [string]$pluginManifest.interface.category } else { "Coding" }
+    policy = @{
+        installation = "AVAILABLE"
+        authentication = "ON_INSTALL"
+    }
+    category = if ($pluginManifest.interface.category) { [string]$pluginManifest.interface.category } else { "Coding" }
+}
+
+$marketplace = if (Test-Path -LiteralPath $marketplaceJsonPath -PathType Leaf) {
+    Get-Content -LiteralPath $marketplaceJsonPath -Raw | ConvertFrom-Json
+} else {
+    [pscustomobject]@{
+        name = $MarketplaceName
+        interface = @{
+            displayName = "Codex Review Local"
         }
-    )
+        plugins = @()
+    }
+}
+
+$existingPlugins = @()
+if ($marketplace.plugins) {
+    $existingPlugins = @($marketplace.plugins | Where-Object { [string]$_.name -ne $pluginName })
+}
+
+$marketplace = [ordered]@{
+    name = if ($marketplace.name) { [string]$marketplace.name } else { $MarketplaceName }
+    interface = if ($marketplace.interface) { $marketplace.interface } else { @{ displayName = "Codex Review Local" } }
+    plugins = @($existingPlugins + $pluginEntry)
 }
 
 $marketplaceJson = $marketplace | ConvertTo-Json -Depth 6

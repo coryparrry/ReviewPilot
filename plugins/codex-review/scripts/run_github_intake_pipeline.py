@@ -396,6 +396,7 @@ def main() -> int:
         raise ValueError("Use either --score-review-artifacts or --score-review-text, not both.")
     if resolved_review_file is None:
         resolved_review_file = args.score_review_file
+    effective_review_text = args.score_review_text.strip() if args.score_review_text else None
     if args.stop_after == "promote-primary" and not run_primary_promotion:
         raise ValueError("--stop-after promote-primary requires --promote-probationary-all or --promote-probationary-ids.")
     if run_primary_promotion and not (resolved_review_file or args.score_review_artifacts):
@@ -659,7 +660,7 @@ def main() -> int:
         )
         return 0
 
-    scoring_enabled = bool(resolved_review_file or args.score_review_text is not None)
+    scoring_enabled = bool(resolved_review_file or effective_review_text)
     if args.gate_candidates:
         if not scoring_enabled:
             raise ValueError(
@@ -682,7 +683,7 @@ def main() -> int:
         if resolved_review_file:
             quality_cmd.extend(["--review-file", resolved_review_file])
         else:
-            quality_cmd.extend(["--review-text", args.score_review_text])
+            quality_cmd.extend(["--review-text", effective_review_text])
         if allow_outside_artifacts:
             quality_cmd.append("--allow-outside-artifacts")
         run_step(quality_cmd)
@@ -702,7 +703,7 @@ def main() -> int:
             before_primary_corpus,
             before_probationary_corpus,
             resolved_review_file,
-            args.score_review_text,
+            effective_review_text,
         )
         write_json(benchmark_before_path, before_benchmarks)
 
@@ -736,7 +737,7 @@ def main() -> int:
             after_primary_corpus,
             after_probationary_corpus,
             resolved_review_file,
-            args.score_review_text,
+            effective_review_text,
         )
         benchmark_delta = build_benchmark_delta(before_benchmarks, after_benchmarks)
         write_json(benchmark_after_path, after_benchmarks)

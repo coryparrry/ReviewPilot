@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+from urllib.error import URLError
 from urllib.request import urlopen
 
 
@@ -68,8 +69,13 @@ def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) 
             "length": length,
         }
     )
-    with urlopen(f"{DATASET_ROWS_URL}?{query}") as response:
-        return json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(f"{DATASET_ROWS_URL}?{query}", timeout=30) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except TimeoutError as exc:
+        raise RuntimeError("Timed out fetching Hugging Face dataset rows.") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Failed to fetch Hugging Face dataset rows: {exc}") from exc
 
 
 def resolve_codex_base_command() -> list[str]:
@@ -104,7 +110,7 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def load_external_case_map(corpus_path: Path) -> dict[str, list[dict[str, Any]]]:
-    corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+    corpus = json.loads(corpus_path.read_text(encoding="utf-8-sig"))
     case_map: dict[str, list[dict[str, Any]]] = {}
     for case in corpus:
         source = case.get("source", "")

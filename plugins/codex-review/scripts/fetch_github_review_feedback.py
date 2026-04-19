@@ -139,8 +139,14 @@ def ensure_gh_auth() -> None:
 def gh_api_read_only(path: str, paginate: bool = False) -> dict[str, Any] | list[dict[str, Any]]:
     cmd = ["gh", "api", path]
     if paginate:
-        cmd.append("--paginate")
-    return json.loads(run_cmd(cmd))
+        cmd.extend(["--paginate", "--slurp"])
+    payload = json.loads(run_cmd(cmd))
+    if paginate and isinstance(payload, list) and all(isinstance(page, list) for page in payload):
+        flattened: list[dict[str, Any]] = []
+        for page in payload:
+            flattened.extend(page)
+        return flattened
+    return payload
 
 
 def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:

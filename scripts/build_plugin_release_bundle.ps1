@@ -57,6 +57,7 @@ function Copy-Tree {
 }
 
 $resolvedPluginSource = (Resolve-Path -LiteralPath $PluginSource).Path
+$repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $resolvedOutputRoot = if ([System.IO.Path]::IsPathRooted($OutputRoot)) {
     [System.IO.Path]::GetFullPath($OutputRoot)
 } else {
@@ -159,9 +160,33 @@ if (-not (Test-Path -LiteralPath $resolvedOutputRoot -PathType Container)) {
 
 Compress-Archive -Path (Join-Path $bundleRoot "*") -DestinationPath $zipPath -Force
 
-cmd /c "npm pack --pack-destination ""$resolvedOutputRoot"" >nul 2>nul"
-if ($LASTEXITCODE -ne 0) {
-    throw "npm pack failed."
+$packageJsonBackup = $null
+if ($BundleVersion) {
+    $packageJsonBackup = Join-Path $resolvedOutputRoot "package.json.bak"
+    Copy-Item -LiteralPath $packageJson -Destination $packageJsonBackup -Force
+    try {
+        $packagePayload = Get-Content -LiteralPath $packageJson -Raw | ConvertFrom-Json
+        $packagePayload.version = $pluginVersion
+        $packagePayload | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $packageJson -Encoding utf8
+    } catch {
+        if (Test-Path -LiteralPath $packageJsonBackup) {
+            Move-Item -LiteralPath $packageJsonBackup -Destination $packageJson -Force
+        }
+        throw
+    }
+}
+
+Push-Location $repoRoot
+try {
+    & npm pack --pack-destination $resolvedOutputRoot | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "npm pack failed."
+    }
+} finally {
+    Pop-Location
+    if ($packageJsonBackup -and (Test-Path -LiteralPath $packageJsonBackup)) {
+        Move-Item -LiteralPath $packageJsonBackup -Destination $packageJson -Force
+    }
 }
 
 Write-Step "Built release folder $bundleRoot"
