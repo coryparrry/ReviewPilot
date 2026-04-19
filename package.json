@@ -1,9 +1,14 @@
 {
-  "name": "codex-review-install",
+  "name": "@reviewpilot/codex-review-install",
   "version": "0.1.0",
   "description": "Installer for the Codex Review plugin.",
   "license": "UNLICENSED",
   "type": "module",
+  "homepage": "https://github.com/repo-owner/ReviewPilot",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/repo-owner/ReviewPilot.git"
+  },
   "bin": {
     "codex-review-install": "scripts/install_plugin_to_codex.mjs"
   },

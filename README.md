@@ -199,7 +199,7 @@ This repo is now also set up for an npm-style installer command.
 The goal is a future install experience like:
 
 ```bash
-npx codex-review-install
+npx @reviewpilot/codex-review-install
 ```
 
 That still installs into Codex Desktop's plugin folder under the hood, but it removes most of the manual steps for users.
@@ -268,6 +268,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_plugin_release_bundle.p
 That writes a release folder and zip under `artifacts/release-bundles/`.
 
 It also builds an npm tarball with `npm pack` into the same output folder.
+
+### Publish the npm installer
+
+When you are ready to publish the installer package:
+
+```bash
+npm login
+npm publish --access public
+```
+
+After that, users can install with:
+
+```bash
+npx @reviewpilot/codex-review-install
+```
 
 ### Fastest first run
 

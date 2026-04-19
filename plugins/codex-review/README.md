@@ -47,7 +47,7 @@ For public distribution, the intended path is a downloadable release bundle rath
 The repo is now also prepared for an npm-style installer path so the longer-term UX can become:
 
 ```bash
-npx codex-review-install
+npx @reviewpilot/codex-review-install
 ```
 
 That still lands the plugin in Codex Desktop's marketplace path under the hood, but it removes most of the manual setup from the user's point of view.
