@@ -54,7 +54,7 @@ Rough edges still exist around:
 - packaging and install ergonomics
 - automation polish
 - some pipeline correctness issues the reviewer is still surfacing inside this repo
-- open-source/legal cleanup, especially license selection
+- polish and onboarding clarity
 
 ## ✨ What It Can Do Today
 
@@ -358,49 +358,18 @@ Recommended behavior:
 - [Plugin README](plugins/codex-review/README.md)
 - [Installed Skill Relationship](skill/README.md)
 
-## 🤔 Is It Ready To Open Source?
+## 🧪 Early Beta Notes
 
-**Technically: almost.**
+This project is already useful, but it is still early.
 
-**Practically: yes, as an early beta.**
+You should expect:
 
-That means:
+- fast iteration
+- rough edges in setup
+- ongoing improvements to automation and learning quality
+- a review system that is ambitious by design, not quietly minimal
 
-- people can understand it
-- people can run it
-- people can experiment with it
-- people should expect rough edges
-
-### What is good enough now
-
-- core review path
-- repair-plan path
-- GitHub learning path
-- external benchmark hardening path
-- automation-ready orchestration path
-
-### What still needs polish
-
-- install experience
-- nicer packaging/runtime docs
-- more end-to-end automation polish around GitHub MCP capture
-- fixing the high-signal issues the review system still finds in itself
-
-### One real blocker still remains
-
-The plugin manifest currently says:
-
-- `license: "UNLICENSED"`
-
-So if you want this to be truly open source, you still need to choose a real license.
-
-I did **not** pick one for you.
-
-So the honest answer is:
-
-- ready for public GitHub as an **early beta**: yes
-- ready to claim as polished, stable, or fully production-ready: no
-- fully open source until a real license is chosen: not quite yet
+If you like sharp tools in beta, this is for you.
 
 ## 🗺️ Near-Term Roadmap
 
