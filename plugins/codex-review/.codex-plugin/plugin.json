@@ -1,7 +1,7 @@
 {
   "name": "codex-review",
   "version": "0.1.0",
-  "description": "Plugin-backed CodeRabbit-style review system for Codex.",
+  "description": "Plugin-backed deep review system for Codex.",
   "author": {
     "name": "ReviewPilot",
     "url": "https://github.com/coryparrry/ReviewPilot"
@@ -13,7 +13,7 @@
     "code-review",
     "codex",
     "github",
-    "coderabbit-style"
+    "deep-review"
   ],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",

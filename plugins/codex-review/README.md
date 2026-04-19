@@ -9,7 +9,7 @@ This plugin is the primary container for the review system in this repo.
 - `.codex-plugin/plugin.json`
   Plugin manifest and user-facing metadata
 - `skills/bug-hunting-code-review`
-  The bundled CodeRabbit-style review skill
+  The bundled deep review skill
 - `skills/autonomous-review-cycle`
   Automation-facing orchestration skill that runs the plugin in a safe end-to-end sequence
 - `.mcp.json`
