@@ -156,6 +156,39 @@ async function updatePluginConfig(configPath, pluginRef, dryRun) {
   logStep(`Enabled plugin ${pluginRef} in ${configPath}`);
 }
 
+async function updateMarketplaceConfig(configPath, marketplaceName, marketplaceRoot, dryRun) {
+  const timestamp = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const sourceValue = /^[A-Za-z]:\\/.test(marketplaceRoot) ? `\\\\?\\${marketplaceRoot}` : marketplaceRoot;
+  const header = `[marketplaces.${marketplaceName}]`;
+  const block = `${header}\nlast_updated = "${timestamp}"\nsource_type = "local"\nsource = '${sourceValue}'\n`;
+
+  if (!(await pathExists(configPath))) {
+    if (dryRun) {
+      logStep(`Would create config file ${configPath} with marketplace block for ${marketplaceName}`);
+      return;
+    }
+    await fs.writeFile(configPath, block, "utf8");
+    logStep(`Created config file ${configPath} with marketplace block for ${marketplaceName}`);
+    return;
+  }
+
+  const content = await fs.readFile(configPath, "utf8");
+  const escapedName = marketplaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const blockPattern = new RegExp(`^\\[marketplaces\\.${escapedName}\\]\\r?\\n(?:.+\\r?\\n)*?(?=^\\[|^\\[\\[|\\z)`, "ms");
+
+  const updated = blockPattern.test(content)
+    ? content.replace(blockPattern, block)
+    : `${content}${content.endsWith("\n") || content.length === 0 ? "" : "\n"}\n${block}`;
+
+  if (dryRun) {
+    logStep(`Would register marketplace ${marketplaceName} in ${configPath}`);
+    return;
+  }
+
+  await fs.writeFile(configPath, updated, "utf8");
+  logStep(`Registered marketplace ${marketplaceName} in ${configPath}`);
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const pluginManifestPath = path.join(options.source, ".codex-plugin", "plugin.json");
@@ -219,6 +252,7 @@ async function main() {
     logStep(`Wrote marketplace manifest ${marketplaceJsonPath}`);
   }
 
+  await updateMarketplaceConfig(configTomlPath, options.marketplaceName, marketplaceRoot, options.dryRun);
   await updatePluginConfig(configTomlPath, pluginRef, options.dryRun);
 
   logStep(`Completed plugin ${options.dryRun ? "dry-run" : "install"} from ${options.source} to ${pluginDestination}`);

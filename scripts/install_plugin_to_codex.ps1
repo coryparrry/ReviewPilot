@@ -146,6 +146,57 @@ function Update-PluginConfig {
     Write-Step "Enabled plugin $PluginRef in $ConfigPath"
 }
 
+function Update-MarketplaceConfig {
+    param(
+        [string]$ConfigPath,
+        [string]$MarketplaceName,
+        [string]$MarketplaceRoot,
+        [switch]$DryRunMode
+    )
+
+    $timestamp = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+    $sourceValue = if ($MarketplaceRoot -match '^[A-Za-z]:\\') {
+        "\\?\$MarketplaceRoot"
+    } else {
+        $MarketplaceRoot
+    }
+    $header = "[marketplaces.$MarketplaceName]"
+    $block = "$header`r`nlast_updated = `"$timestamp`"`r`nsource_type = `"local`"`r`nsource = '$sourceValue'`r`n"
+
+    if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
+        if ($DryRunMode) {
+            Write-Step "Would create config file $ConfigPath with marketplace block for $MarketplaceName"
+            return
+        }
+
+        Set-Content -LiteralPath $ConfigPath -Value $block -Encoding utf8
+        Write-Step "Created config file $ConfigPath with marketplace block for $MarketplaceName"
+        return
+    }
+
+    $content = Get-Content -LiteralPath $ConfigPath -Raw
+    $escapedName = [regex]::Escape($MarketplaceName)
+    $blockPattern = "(?ms)^\[marketplaces\.$escapedName\]\r?\n(?:.+\r?\n)*?(?=^\[|^\[\[|\z)"
+    $existingSourcePattern = "(?ms)^\[marketplaces\.$escapedName\]\r?\n(?:.+\r?\n)*?^source\s*=\s*`"$([regex]::Escape($sourceValue))`"\s*$"
+
+    if ($content -match $existingSourcePattern) {
+        $updated = [regex]::Replace($content, $blockPattern, $block)
+    } elseif ($content -match $blockPattern) {
+        $updated = [regex]::Replace($content, $blockPattern, $block)
+    } else {
+        $separator = if ($content.EndsWith("`n") -or $content.Length -eq 0) { "" } else { "`r`n" }
+        $updated = $content + $separator + "`r`n" + $block
+    }
+
+    if ($DryRunMode) {
+        Write-Step "Would register marketplace $MarketplaceName in $ConfigPath"
+        return
+    }
+
+    Set-Content -LiteralPath $ConfigPath -Value $updated -Encoding utf8
+    Write-Step "Registered marketplace $MarketplaceName in $ConfigPath"
+}
+
 function Should-SkipPath {
     param([string]$Path)
 
@@ -243,6 +294,7 @@ if ($DryRun) {
     Write-Step "Wrote marketplace manifest $marketplaceJsonPath"
 }
 
+Update-MarketplaceConfig -ConfigPath $configTomlPath -MarketplaceName $MarketplaceName -MarketplaceRoot $marketplaceRoot -DryRunMode:$DryRun
 Update-PluginConfig -ConfigPath $configTomlPath -PluginRef $pluginRef -DryRunMode:$DryRun
 
 $mode = if ($DryRun) { "dry-run" } else { "install" }
