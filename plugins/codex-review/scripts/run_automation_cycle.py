@@ -60,6 +60,11 @@ def parse_args() -> argparse.Namespace:
         help="Skip the Hugging Face hardening batch.",
     )
     parser.add_argument(
+        "--skip-coderabbit-calibration",
+        action="store_true",
+        help="Skip the supervised CodeRabbit calibration summary step.",
+    )
+    parser.add_argument(
         "--hardening-offset",
         type=int,
         default=0,
@@ -239,6 +244,28 @@ def run_hf_hardening(repo: Path, run_dir: Path, offset: int, length: int, model:
     }
 
 
+def run_coderabbit_calibration(repo: Path, run_dir: Path) -> dict:
+    output_dir = run_dir / "coderabbit-calibration"
+    summary_file = output_dir / "summary.json"
+    cmd = [
+        sys.executable,
+        str(repo / "plugins" / "codex-review" / "scripts" / "score_coderabbit_calibration.py"),
+        "--output",
+        str(summary_file),
+        "--allow-outside-artifacts",
+    ]
+    completed = run_cmd(cmd, repo)
+    summary = read_json(summary_file)
+    return {
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "output_dir": str(output_dir),
+        "summary_file": str(summary_file),
+        "total_comments": summary.get("total_comments", 0),
+        "verdict_counts": summary.get("verdict_counts", {}),
+    }
+
+
 def main() -> int:
     args = parse_args()
     repo = repo_root(Path(args.repo).resolve())
@@ -246,7 +273,7 @@ def main() -> int:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     summary: dict[str, object] = {
-        "schema_version": "codex-review.automation-cycle.v1",
+        "schema_version": "codex-review.automation-cycle.v2",
         "repo": str(repo),
         "run_dir": str(run_dir),
         "steps": {},
@@ -316,6 +343,9 @@ def main() -> int:
                     args.model,
                 )
 
+        if not args.skip_coderabbit_calibration:
+            summary["steps"]["coderabbit_calibration"] = run_coderabbit_calibration(repo, run_dir)
+
         if not args.skip_hardening:
             summary["steps"]["hf_hardening"] = run_hf_hardening(
                 repo,
@@ -332,6 +362,8 @@ def main() -> int:
             failed_step = "repair_handoff"
         elif "github_intake" not in summary["steps"] and not args.skip_github_intake:
             failed_step = "github_intake"
+        elif "coderabbit_calibration" not in summary["steps"] and not args.skip_coderabbit_calibration:
+            failed_step = "coderabbit_calibration"
         else:
             failed_step = "hf_hardening"
         record_failure(failed_step, exc)

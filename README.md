@@ -148,6 +148,7 @@ That path can orchestrate:
 - local review
 - repair handoff
 - optional GitHub learning intake
+- supervised CodeRabbit calibration
 - Hugging Face hardening
 
 ## 🧱 Project Shape
