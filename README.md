@@ -182,6 +182,15 @@ This project is still supposed to work as a **Codex skill**, not turn into a ran
 
 This is currently a **clone-the-repo early beta**, not a polished package-manager install.
 
+Also: there are **two different setup paths** in this repo.
+
+- **Plugin install**
+  This makes Codex see the repo as a plugin bundle.
+- **Skill sync**
+  This updates the direct installed skill runtime under `.codex/skills`.
+
+If you skip the plugin install, Codex may not discover the plugin bundle properly.
+
 ### What you need
 
 - Python 3
@@ -198,15 +207,29 @@ Optional:
 ### Basic setup
 
 1. Clone this repo.
-2. Open it in Codex.
-3. Keep the plugin-contained skill as the source of truth in this repo.
-4. If you also use the installed runtime skill, sync it with:
+2. Install the plugin into Codex's local plugin marketplace with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
+```
+
+3. Restart Codex if the plugin does not appear right away.
+4. Open the repo in Codex.
+5. Keep the plugin-contained skill as the source of truth in this repo.
+6. If you also want the direct installed skill runtime updated, sync it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\sync_skill_to_codex.ps1
 ```
 
-If you are just exploring the repo and reading the code, you do **not** need to sync first.
+What those two scripts do:
+
+- `install_plugin_to_codex.ps1`
+  Copies the plugin bundle into Codex's local marketplace path and writes a small `marketplace.json` entry so Codex can discover it.
+- `sync_skill_to_codex.ps1`
+  Copies the maintained review skill into the direct runtime skill path under `.codex/skills/bug-hunting-code-review`
+
+If you are just exploring the repo and reading the code, you do **not** need to sync the runtime skill first.
 
 ### Fastest first run
 
