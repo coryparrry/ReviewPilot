@@ -1,4 +1,6 @@
-# Codex Review 🧠🔍
+![ReviewPilot](./assets/branding/reviewpilot-graphite-banner.svg)
+
+# ReviewPilot 🧠🔍
 
 An early-beta Codex plugin + skill stack for **serious code review**.
 

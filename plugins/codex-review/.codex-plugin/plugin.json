@@ -19,9 +19,9 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Codex Review",
-    "shortDescription": "CodeRabbit-style deep review for current changes",
-    "longDescription": "Bundle the bug-hunting review skill, benchmark workflows, and future GitHub-safe review intake into one Codex plugin.",
+    "displayName": "ReviewPilot",
+    "shortDescription": "Deep code review and safe learning for current changes",
+    "longDescription": "ReviewPilot bundles the bug-hunting review skill, benchmark workflows, safe GitHub learning intake, and automation helpers into one Codex plugin.",
     "developerName": "ReviewPilot",
     "category": "Coding",
     "capabilities": [
@@ -36,7 +36,9 @@
       "Prepare a deep pre-PR review for this repo",
       "Score this review against the corpus and benchmark lanes"
     ],
-    "brandColor": "#C2410C",
+    "brandColor": "#27272A",
+    "composerIcon": "./assets/reviewpilot-composer-graphite.svg",
+    "logo": "./assets/reviewpilot-logo-graphite.svg",
     "screenshots": []
   }
 }

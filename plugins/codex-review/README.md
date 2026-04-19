@@ -1,4 +1,6 @@
-# Codex Review Plugin
+![ReviewPilot](../../assets/branding/reviewpilot-graphite-banner.svg)
+
+# ReviewPilot Plugin
 
 This plugin is the primary container for the review system in this repo.
 
