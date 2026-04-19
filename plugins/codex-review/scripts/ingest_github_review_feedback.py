@@ -35,6 +35,14 @@ CATEGORY_RULES = [
             r"status.*summary",
             r"objecttype",
             r"wrong object type",
+            r"ensurelocalidentity",
+            r"resolveauthcontext",
+            r"active memberships?",
+            r"bootstrap stops self-healing",
+            r"locked out",
+            r"reactivate",
+            r"local owner",
+            r"inactive",
         ],
     },
     {
@@ -63,9 +71,30 @@ CATEGORY_RULES = [
     },
     {
         "category": "source-of-truth-drift",
+        "severity": "medium",
+        "confidence": "medium",
+        "patterns": [
+            r"immutable",
+            r"backing store",
+            r"returns? the original",
+            r"returns? references?",
+            r"clone(?:d)? users?",
+            r"read path",
+            r"store\.users",
+        ],
+    },
+    {
+        "category": "source-of-truth-drift",
         "severity": "critical",
         "confidence": "medium",
-        "patterns": [r"canonical", r"shared resolver", r"drift", r"parity", r"source of truth", r"preview"],
+        "patterns": [
+            r"canonical",
+            r"shared resolver",
+            r"drift",
+            r"parity",
+            r"source of truth",
+            r"preview",
+        ],
     },
     {
         "category": "migration-cleared-state",
@@ -112,6 +141,7 @@ CATEGORY_RULES = [
 GENERIC_TITLE_PATTERNS = [
     re.compile(r"^_?⚠️?\s*potential issue", re.IGNORECASE),
     re.compile(r"^potential issue", re.IGNORECASE),
+    re.compile(r"^refactor suggestion", re.IGNORECASE),
     re.compile(r"^major$", re.IGNORECASE),
     re.compile(r"^minor$", re.IGNORECASE),
 ]
@@ -454,7 +484,11 @@ def extract_comment_summary(body: str) -> tuple[str, str]:
             continue
         if "potential issue" in lowered and len(paragraph) <= 80:
             continue
+        if "refactor suggestion" in lowered and len(paragraph) <= 80:
+            continue
         if any(label in lowered for label in (" major", " minor", " critical", " warning")) and "potential issue" in lowered:
+            continue
+        if any(label in lowered for label in (" major", " minor", " critical", " warning")) and "refactor suggestion" in lowered:
             continue
         cleaned_paragraphs.append(paragraph)
 
