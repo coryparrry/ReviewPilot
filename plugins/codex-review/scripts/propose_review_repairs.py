@@ -5,6 +5,12 @@ from pathlib import Path
 
 
 SECTION_HEADING_RE = re.compile(r"^\*\*(.+?)\*\*$")
+PLAIN_SECTION_HEADINGS = {
+    "findings",
+    "open questions",
+    "change summary",
+    "residual risk",
+}
 NUMBERED_ITEM_RE = re.compile(r"^\d+\.\s+", re.MULTILINE)
 SEVERITY_RE = re.compile(r"^\[(?P<severity>[^\]]+)\]\s+(?P<title>.+)$")
 LINK_RE = re.compile(r"\[(?P<label>[^\]]+)\]\((?P<target>[^)]+)\)")
@@ -32,9 +38,14 @@ def split_sections(text: str) -> dict[str, str]:
     sections[current_name] = []
 
     for line in text.splitlines():
-        match = SECTION_HEADING_RE.match(line.strip())
+        stripped = line.strip()
+        match = SECTION_HEADING_RE.match(stripped)
         if match:
             current_name = match.group(1).strip().lower()
+            sections.setdefault(current_name, [])
+            continue
+        if stripped.lower() in PLAIN_SECTION_HEADINGS:
+            current_name = stripped.lower()
             sections.setdefault(current_name, [])
             continue
         sections.setdefault(current_name, []).append(line)

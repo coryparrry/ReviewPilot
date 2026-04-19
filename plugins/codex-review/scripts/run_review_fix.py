@@ -1,11 +1,13 @@
 import argparse
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 
 SUPPORTED_SCHEMA = "codex-review.repair-plan.v1"
+LINE_SUFFIX_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+)$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -96,7 +98,11 @@ def collect_repo_targets(repo: Path, finding: dict) -> list[Path]:
         raw_target = ref.get("target", "")
         if not raw_target:
             continue
-        path_part = raw_target.split(":", 1)[0]
+        normalized_target = raw_target.strip()
+        if normalized_target.startswith("<") and normalized_target.endswith(">"):
+            normalized_target = normalized_target[1:-1]
+        line_match = LINE_SUFFIX_RE.match(normalized_target)
+        path_part = line_match.group("path") if line_match else normalized_target
         candidate = Path(path_part)
         if not candidate.is_absolute():
             candidate = (repo / candidate).resolve()

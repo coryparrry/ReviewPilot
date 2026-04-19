@@ -8,6 +8,8 @@ This plugin is the primary container for the review system in this repo.
   Plugin manifest and user-facing metadata
 - `skills/bug-hunting-code-review`
   The bundled CodeRabbit-style review skill
+- `skills/autonomous-review-cycle`
+  Automation-facing orchestration skill that runs the plugin in a safe end-to-end sequence
 - `.mcp.json`
   Plugin-owned MCP config. GitHub is now declared there as a read-only remote MCP boundary for live PR intake.
 - `scripts/`
@@ -58,6 +60,7 @@ The wrapper entrypoint for the full live intake flow now lives at:
 
 The plugin-owned review runner now lives at:
 
+- `plugins/codex-review/scripts/run_automation_cycle.py`
 - `plugins/codex-review/scripts/run_codex_review.py`
 - `plugins/codex-review/scripts/propose_review_repairs.py`
 - `plugins/codex-review/scripts/run_review_fix.py`
@@ -152,6 +155,26 @@ That command:
 - writes Codex stdout and stderr logs for inspection
 - benchmarks the resulting review against the configured lanes
 - automatically retries once in the same read-only sandbox if review generation fails mechanically or produces a missing or empty `review.md`
+
+For an automation-oriented end-to-end local cycle, use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_automation_cycle.py --repo .
+```
+
+That wrapper:
+
+- runs the local review
+- prepares the one-finding repair handoff
+- optionally runs GitHub intake if a captured raw artifact is supplied
+- runs a small Hugging Face hardening batch
+- writes `automation-summary.json` under `artifacts/automation-runs/`
+
+For Codex automations, the recommended skill entrypoint is:
+
+- `plugins/codex-review/skills/autonomous-review-cycle/SKILL.md`
+
+That keeps the plugin automation-friendly while leaving the actual review standard inside the bundled `bug-hunting-code-review` skill.
 
 To turn one repair-plan finding into a bounded fix handoff:
 

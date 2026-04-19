@@ -114,6 +114,13 @@ The repo now also has a blind Hugging Face hardening loop at:
 
 That workflow can fetch a curated slice of `SWE-bench/SWE-bench_Verified`, hide the fix patch, run Codex on the problem statements, and score the resulting review artifacts against the external benchmark lane automatically.
 
+The repo now also has an automation-facing orchestration layer:
+
+- skill: `plugins/codex-review/skills/autonomous-review-cycle/SKILL.md`
+- wrapper: `plugins/codex-review/scripts/run_automation_cycle.py`
+
+That path is meant for Codex automations. It keeps the review standard inside the review skill, but automates the plugin-owned execution steps around it: review, repair handoff, optional GitHub learning, and external hardening.
+
 ## Initial Goals
 
 - keep the review skill CodeRabbit-style and release-blocking

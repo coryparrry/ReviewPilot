@@ -53,6 +53,7 @@
 - emit a structured repair plan from each completed review run so later code-fix automation has a safe intermediate artifact
 - add a one-finding repair executor that prepares a bounded fix handoff by default and only runs an edit pass on explicit apply
 - automate the external Hugging Face hardening lane so curated SWE-bench cases can be fetched, reviewed blindly, and scored in one run
+- add a plugin-owned automation entrypoint so Codex automations can invoke the skill-centered review, learning, repair-handoff, and hardening loop end to end
 - make probationary-to-primary promotion evidence-based so the durable corpus only grows when repeated review artifacts support the same case
 - wire that durable-promotion step into the wrapper as an explicit opt-in so the whole learning loop can run from one entrypoint
 
