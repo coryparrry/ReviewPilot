@@ -16,12 +16,20 @@ It is not a benchmark for style. It is a benchmark for whether a review output c
 - legacy fallback source confusion
 - queue claim or concurrency bugs
 
+Use the CodeRabbit calibration set differently from the corpus:
+
+- it is for training comment triage and workflow tuning
+- it helps separate real implementation bugs from policy choices and noise
+- it should not auto-write directly into the durable or probationary review corpora
+
 ## Files
 
 - `references/review-corpus-cases.json`
   The structured cases and matching expectations.
 - `references/probationary-review-cases.json`
   Gate-approved GitHub-derived cases that are still in the probationary lane.
+- `references/coderabbit-comment-calibration.json`
+  A supervised calibration set of validated CodeRabbit review comments with accept, reject, and policy labels.
 - `scripts/review_corpus_score.py`
   Score a review output against those cases.
 - `scripts/run_review_benchmarks.py`

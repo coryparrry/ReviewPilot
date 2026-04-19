@@ -1,0 +1,172 @@
+[
+  {
+    "id": "reviewpilot-coderabbit-001",
+    "source": "validated-coderabbit-review-comments",
+    "file": "docs/roadmap.md",
+    "summary": "Mirror the active execution-plan rewrite into docs/exec-plans/active/current.md.",
+    "severity": "minor",
+    "verdict": "accept",
+    "reason": "The roadmap changed the active execution plan and the companion execution-plan file was missing, so the docs drift was real.",
+    "use": "doc-sync"
+  },
+  {
+    "id": "reviewpilot-coderabbit-002",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/apply_corpus_updates.py",
+    "summary": "Change normalize_title to match the promotion path tokenization.",
+    "severity": "minor",
+    "verdict": "reject",
+    "reason": "This was not a proven correctness bug in the active path. The existing normalization only fed a soft near-duplicate check and did not justify churn by itself.",
+    "use": "triage-calibration"
+  },
+  {
+    "id": "reviewpilot-coderabbit-003",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/capture_github_mcp_feedback.py",
+    "summary": "Print a shell-neutral next-step pipeline command instead of a Windows-only path.",
+    "severity": "minor",
+    "verdict": "accept",
+    "reason": "This was a real portability improvement and cheap to fix safely.",
+    "use": "portability"
+  },
+  {
+    "id": "reviewpilot-coderabbit-004",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/fetch_github_review_feedback.py",
+    "summary": "Fix gh api pagination so json.loads does not receive multiple JSON documents.",
+    "severity": "critical",
+    "verdict": "accept",
+    "reason": "The existing legacy gh fetch path could break on multi-page PR comment sets because --paginate was used without --slurp.",
+    "use": "runtime-correctness"
+  },
+  {
+    "id": "reviewpilot-coderabbit-005",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/ingest_github_review_feedback.py",
+    "summary": "Do not drop resolved or outdated MCP review threads.",
+    "severity": "major",
+    "verdict": "policy",
+    "reason": "This is a learning-policy choice rather than a clear code bug. The filter was intentional to reduce stale or noisy signals in the intake lane.",
+    "use": "learning-policy"
+  },
+  {
+    "id": "reviewpilot-coderabbit-006",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/promote_corpus_candidates.py",
+    "summary": "Fail closed on malformed candidate rows instead of silently dropping them.",
+    "severity": "major",
+    "verdict": "accept",
+    "reason": "Silently filtering malformed rows makes bad artifacts look valid and weakens the promotion boundary.",
+    "use": "input-validation"
+  },
+  {
+    "id": "reviewpilot-coderabbit-007",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/run_automation_cycle.py",
+    "summary": "Always write automation-summary.json even if one child step fails.",
+    "severity": "major",
+    "verdict": "accept",
+    "reason": "The summary was being lost at the exact time it was most needed for debugging or resume behavior.",
+    "use": "failure-reporting"
+  },
+  {
+    "id": "reviewpilot-coderabbit-008",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/run_github_intake_pipeline.py",
+    "summary": "Treat empty --score-review-text as missing input instead of scoring an empty string.",
+    "severity": "minor",
+    "verdict": "accept",
+    "reason": "Whitespace-only review text is not meaningful benchmark input and should not quietly pass the gate.",
+    "use": "input-validation"
+  },
+  {
+    "id": "reviewpilot-coderabbit-009",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/run_review_fix.py",
+    "summary": "Do not lowercase file paths during deduplication.",
+    "severity": "minor",
+    "verdict": "accept",
+    "reason": "Lowercasing paths can merge distinct targets on case-sensitive filesystems.",
+    "use": "portability"
+  },
+  {
+    "id": "reviewpilot-coderabbit-010",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/run_review_fix.py",
+    "summary": "The bounded fix executor cannot really enforce a file allowlist under workspace-write mode.",
+    "severity": "major",
+    "verdict": "accept",
+    "reason": "The code only guided the model with target files; it did not have a real execution boundary. The safe fix was to refuse apply mode until that boundary exists.",
+    "use": "safety-boundary"
+  },
+  {
+    "id": "reviewpilot-coderabbit-011",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/scripts/score_candidate_quality.py",
+    "summary": "Reject malformed candidate and corpus rows instead of silently skipping them.",
+    "severity": "major",
+    "verdict": "accept",
+    "reason": "The quality gate should fail fast on corrupt artifacts rather than scoring incomplete evidence.",
+    "use": "input-validation"
+  },
+  {
+    "id": "reviewpilot-coderabbit-012",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/skills/bug-hunting-code-review/scripts/run_hf_hardening_cycle.py",
+    "summary": "Add a timeout to the Hugging Face dataset fetch.",
+    "severity": "major",
+    "verdict": "accept",
+    "reason": "A hanging network call should not be able to stall the hardening lane indefinitely.",
+    "use": "network-hardening"
+  },
+  {
+    "id": "reviewpilot-coderabbit-013",
+    "source": "validated-coderabbit-review-comments",
+    "file": "plugins/codex-review/skills/bug-hunting-code-review/scripts/run_hf_hardening_cycle.py",
+    "summary": "Use BOM-tolerant decoding when loading the external corpus.",
+    "severity": "minor",
+    "verdict": "accept",
+    "reason": "The rest of the scoring path had already become BOM-tolerant, so this loader needed to match.",
+    "use": "windows-compatibility"
+  },
+  {
+    "id": "reviewpilot-coderabbit-014",
+    "source": "validated-coderabbit-review-comments",
+    "file": "scripts/build_plugin_release_bundle.ps1",
+    "summary": "Make the npm tarball version match the bundle version override.",
+    "severity": "minor",
+    "verdict": "accept",
+    "reason": "Producing a zip and npm tarball with mismatched versions from one release run is a real packaging defect.",
+    "use": "release-packaging"
+  },
+  {
+    "id": "reviewpilot-coderabbit-015",
+    "source": "validated-coderabbit-review-comments",
+    "file": "scripts/build_plugin_release_bundle.ps1",
+    "summary": "Run npm pack from the repo root so it packages the intended package.json.",
+    "severity": "major",
+    "verdict": "accept",
+    "reason": "The script was otherwise path-anchored, but npm pack still depended on the caller's working directory.",
+    "use": "release-packaging"
+  },
+  {
+    "id": "reviewpilot-coderabbit-016",
+    "source": "validated-coderabbit-review-comments",
+    "file": "scripts/install_plugin_to_codex.mjs",
+    "summary": "Validate argument values for --source, --codex-home, and --marketplace-name.",
+    "severity": "minor",
+    "verdict": "accept",
+    "reason": "Missing values were turning into confusing downstream path resolution errors instead of a clear CLI error.",
+    "use": "cli-validation"
+  },
+  {
+    "id": "reviewpilot-coderabbit-017",
+    "source": "validated-coderabbit-review-comments",
+    "file": "scripts/install_plugin_to_codex.ps1",
+    "summary": "Merge marketplace.json entries instead of overwriting the file with only this plugin.",
+    "severity": "major",
+    "verdict": "accept",
+    "reason": "Replacing the full manifest can silently delete other plugin entries in the same marketplace.",
+    "use": "installer-safety"
+  }
+]

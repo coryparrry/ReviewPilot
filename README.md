@@ -44,6 +44,7 @@ This repo is already useful for:
 - deep local Codex reviews
 - benchmarking review quality
 - safe probationary self-learning from GitHub review misses
+- supervised calibration from validated CodeRabbit review comments
 - external hardening with curated Hugging Face benchmark cases
 - structured repair handoffs after a review run
 
