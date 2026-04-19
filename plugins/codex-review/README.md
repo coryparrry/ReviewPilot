@@ -60,6 +60,7 @@ The plugin-owned review runner now lives at:
 
 - `plugins/codex-review/scripts/run_codex_review.py`
 - `plugins/codex-review/scripts/propose_review_repairs.py`
+- `plugins/codex-review/scripts/run_review_fix.py`
 
 Safety notes for the live fetch step:
 
@@ -151,6 +152,24 @@ That command:
 - writes Codex stdout and stderr logs for inspection
 - benchmarks the resulting review against the configured lanes
 - automatically retries once in the same read-only sandbox if review generation fails mechanically or produces a missing or empty `review.md`
+
+To turn one repair-plan finding into a bounded fix handoff:
+
+```powershell
+python .\plugins\codex-review\scripts\run_review_fix.py `
+  --repo . `
+  --repair-plan .\.codex-review\20260419-105149\repair-plan.json `
+  --finding-index 1
+```
+
+That path:
+
+- reads the structured `repair-plan.json`
+- selects exactly one finding
+- writes `selected-repair.json`, `fix-targets.txt`, and `fix-prompt.txt`
+- defaults to prepare-only
+- only attempts a Codex fix run when `--apply` is passed explicitly
+- refuses `--apply` when the selected finding has no repo-local file targets
 
 For MCP-native live intake, use the plugin's GitHub connector to capture one of these raw payload shapes first:
 
