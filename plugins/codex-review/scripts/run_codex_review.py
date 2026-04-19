@@ -93,6 +93,26 @@ def run_json_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> dict:
     return json.loads(completed.stdout)
 
 
+def run_repair_plan(script_path: Path, review_file: Path, output_dir: Path, repo: Path) -> str:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(script_path),
+            "--review-file",
+            str(review_file),
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
+    return completed.stdout
+
+
 def review_file_has_content(review_file: Path) -> bool:
     return review_file.is_file() and bool(read_text_if_present(review_file).strip())
 
@@ -143,6 +163,7 @@ def main() -> int:
     args = parse_args()
     script_path = Path(__file__).resolve()
     skill_dir = script_path.parent.parent / "skills" / "bug-hunting-code-review"
+    repair_script = script_path.parent / "propose_review_repairs.py"
     pre_pr = load_pre_pr_module(skill_dir)
 
     repo = pre_pr.repo_root(Path(args.repo).resolve())
@@ -233,6 +254,9 @@ def main() -> int:
     print(f"Codex command: {' '.join(codex_base_cmd)}")
     if success and repair_notes:
         print("Self-repair: recovered after one automatic read-only retry.")
+
+    repair_output = run_repair_plan(repair_script, review_file, run_dir, repo)
+    print(repair_output.strip())
 
     if args.no_benchmark:
         return 0

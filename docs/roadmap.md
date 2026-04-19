@@ -50,6 +50,7 @@
 - keep strict benchmark scoring separate from softer probationary admission evidence so learning stays safer than raw regex matching alone
 - expose one plugin-owned review runner so the review brain can actually author `review.md` and benchmark it in one command
 - let the review runner self-repair only obvious review-output failures with one automatic read-only retry, not broad auto-editing
+- emit a structured repair plan from each completed review run so later code-fix automation has a safe intermediate artifact
 - make probationary-to-primary promotion evidence-based so the durable corpus only grows when repeated review artifacts support the same case
 - wire that durable-promotion step into the wrapper as an explicit opt-in so the whole learning loop can run from one entrypoint
 

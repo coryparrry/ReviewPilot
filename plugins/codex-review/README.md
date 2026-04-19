@@ -59,6 +59,7 @@ The wrapper entrypoint for the full live intake flow now lives at:
 The plugin-owned review runner now lives at:
 
 - `plugins/codex-review/scripts/run_codex_review.py`
+- `plugins/codex-review/scripts/propose_review_repairs.py`
 
 Safety notes for the live fetch step:
 
@@ -146,6 +147,7 @@ That command:
 - prepares the review prompt, diff, metadata, and surface scan
 - invokes Codex non-interactively in read-only mode
 - writes `review.md`
+- writes `repair-plan.json` and `repair-plan.md` next to the review artifact
 - writes Codex stdout and stderr logs for inspection
 - benchmarks the resulting review against the configured lanes
 - automatically retries once in the same read-only sandbox if review generation fails mechanically or produces a missing or empty `review.md`
