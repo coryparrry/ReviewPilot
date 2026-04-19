@@ -43,6 +43,8 @@ That helper:
 - enables `[plugins."codex-review@<marketplace-name>"]` in `~/.codex/config.toml`
 - makes the plugin discoverable to Codex Desktop as a local plugin bundle
 
+After running it, restart Codex Desktop so the app reloads marketplace and plugin state.
+
 So the practical setup today is:
 
 - install the plugin bundle with `install_plugin_to_codex.ps1`

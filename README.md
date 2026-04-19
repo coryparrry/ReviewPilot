@@ -46,7 +46,7 @@ This repo is already useful for:
 - deep local Codex reviews
 - benchmarking review quality
 - safe probationary self-learning from GitHub review misses
-- supervised calibration from validated CodeRabbit review comments
+- supervised calibration from validated external review comments
 - external hardening with curated Hugging Face benchmark cases
 - structured repair handoffs after a review run
 
@@ -150,7 +150,7 @@ That path can orchestrate:
 - local review
 - repair handoff
 - optional GitHub learning intake
-- supervised CodeRabbit calibration
+- supervised review-comment calibration
 - Hugging Face hardening
 
 ## 🧱 Project Shape
@@ -196,17 +196,31 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
 
 That is the intended public install path.
 
+What it does:
+
+- copies the plugin into Codex's local marketplace folder
+- copies the installed plugin into Codex's plugin cache
+- registers the marketplace in `~/.codex/config.toml`
+- enables the plugin in `~/.codex/config.toml`
+
+After it finishes, restart Codex Desktop so the app reloads plugin state cleanly.
+
 ### npm-friendly installer path
 
-This repo is now also set up for an npm-style installer command.
-
-The goal is a future install experience like:
+This repo is also set up for an npm-style installer command:
 
 ```bash
 npx @reviewpilot/codex-review-install
 ```
 
-That still installs into Codex Desktop's plugin folder under the hood, but it removes most of the manual steps for users.
+That runs the same install flow under the hood:
+
+- marketplace copy
+- cache copy
+- marketplace registration
+- plugin enablement
+
+If you are installing from a GitHub checkout or release zip, use the PowerShell installer above.
 
 ### Repo checkout install
 
@@ -236,17 +250,18 @@ Optional:
 
 ### Basic setup
 
-1. Clone this repo.
-2. Install the plugin into Codex Desktop's local marketplace path with:
+1. Download the release zip or clone this repo.
+2. Run the installer:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
 ```
 
-3. Restart Codex if the plugin does not appear right away.
-4. Open the repo in Codex.
-5. Keep the plugin-contained skill as the source of truth in this repo.
-6. If you also want the direct installed skill runtime updated, sync it with:
+3. Restart Codex Desktop.
+4. Open Plugins and confirm `ReviewPilot` appears.
+5. Open the repo in Codex.
+6. Keep the plugin-contained skill as the source of truth in this repo.
+7. If you also want the direct installed skill runtime updated, sync it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\sync_skill_to_codex.ps1
