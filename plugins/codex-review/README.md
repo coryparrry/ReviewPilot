@@ -148,6 +148,7 @@ That command:
 - writes `review.md`
 - writes Codex stdout and stderr logs for inspection
 - benchmarks the resulting review against the configured lanes
+- automatically retries once in the same read-only sandbox if review generation fails mechanically or produces a missing or empty `review.md`
 
 For MCP-native live intake, use the plugin's GitHub connector to capture one of these raw payload shapes first:
 

@@ -6,6 +6,7 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Tuple
 
 
 def parse_args() -> argparse.Namespace:
@@ -50,6 +51,12 @@ def write_file(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def read_text_if_present(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def resolve_codex_base_command() -> list[str]:
     direct = shutil.which("codex")
     if direct:
@@ -86,6 +93,52 @@ def run_json_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> dict:
     return json.loads(completed.stdout)
 
 
+def review_file_has_content(review_file: Path) -> bool:
+    return review_file.is_file() and bool(read_text_if_present(review_file).strip())
+
+
+def run_codex_attempt(
+    codex_cmd: list[str],
+    repo: Path,
+    prompt: str,
+    review_file: Path,
+    run_dir: Path,
+    attempt: int,
+) -> Tuple[bool, str, subprocess.CompletedProcess[str]]:
+    if review_file.exists():
+        review_file.unlink()
+
+    completed = subprocess.run(
+        codex_cmd,
+        cwd=repo,
+        input=prompt,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+
+    stdout_log = run_dir / f"codex-attempt-{attempt}-stdout.txt"
+    stderr_log = run_dir / f"codex-attempt-{attempt}-stderr.txt"
+    write_file(stdout_log, completed.stdout)
+    write_file(stderr_log, completed.stderr)
+
+    review_ok = review_file_has_content(review_file)
+    if completed.returncode == 0 and review_ok:
+        return True, "ok", completed
+
+    if review_file.exists():
+        attempt_review = run_dir / f"review-attempt-{attempt}.md"
+        write_file(attempt_review, read_text_if_present(review_file))
+
+    if completed.returncode != 0:
+        return False, f"codex-exit-{completed.returncode}", completed
+    if not review_ok:
+        return False, "missing-or-empty-review", completed
+    return False, "unknown-review-failure", completed
+
+
 def main() -> int:
     args = parse_args()
     script_path = Path(__file__).resolve()
@@ -114,6 +167,7 @@ def main() -> int:
     review_file = run_dir / "review.md"
     stdout_log = run_dir / "codex-stdout.txt"
     stderr_log = run_dir / "codex-stderr.txt"
+    repair_summary = run_dir / "repair-summary.txt"
 
     codex_cmd = [
         *codex_base_cmd,
@@ -132,22 +186,53 @@ def main() -> int:
         codex_cmd.extend(["--model", args.model])
     codex_cmd.append("-")
 
-    completed = subprocess.run(
-        codex_cmd,
-        cwd=repo,
-        input=prompt,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=True,
-    )
-    write_file(stdout_log, completed.stdout)
-    write_file(stderr_log, completed.stderr)
+    max_attempts = 2
+    final_completed = None
+    repair_notes: list[str] = []
+    success = False
+
+    for attempt in range(1, max_attempts + 1):
+        attempt_success, reason, completed = run_codex_attempt(
+            codex_cmd=codex_cmd,
+            repo=repo,
+            prompt=prompt,
+            review_file=review_file,
+            run_dir=run_dir,
+            attempt=attempt,
+        )
+        final_completed = completed
+
+        if attempt_success:
+            if attempt > 1:
+                repair_notes.append(
+                    f"Recovered after one automatic read-only retry. First attempt failed with: {reason_before_retry}."
+                )
+            success = True
+            break
+
+        if attempt == max_attempts:
+            raise RuntimeError(
+                "Codex review generation failed after one automatic read-only retry. "
+                f"Final failure: {reason}."
+            )
+
+        reason_before_retry = reason
+        repair_notes.append(
+            "First Codex review attempt failed mechanically "
+            f"({reason}). Retrying once in the same read-only sandbox."
+        )
+
+    assert final_completed is not None
+    write_file(stdout_log, final_completed.stdout)
+    write_file(stderr_log, final_completed.stderr)
+    if repair_notes:
+        write_file(repair_summary, "\n".join(repair_notes) + "\n")
 
     print(f"Artifacts: {run_dir}")
     print(f"Review: {review_file}")
     print(f"Codex command: {' '.join(codex_base_cmd)}")
+    if success and repair_notes:
+        print("Self-repair: recovered after one automatic read-only retry.")
 
     if args.no_benchmark:
         return 0
