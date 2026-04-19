@@ -185,11 +185,11 @@ This is currently a **clone-the-repo early beta**, not a polished package-manage
 Also: there are **two different setup paths** in this repo.
 
 - **Plugin install**
-  This makes Codex see the repo as a plugin bundle.
+  This makes Codex Desktop see the repo as a plugin bundle.
 - **Skill sync**
   This updates the direct installed skill runtime under `.codex/skills`.
 
-If you skip the plugin install, Codex may not discover the plugin bundle properly.
+If you skip the plugin install, Codex Desktop may not discover the plugin bundle properly.
 
 ### What you need
 
@@ -207,7 +207,7 @@ Optional:
 ### Basic setup
 
 1. Clone this repo.
-2. Install the plugin into Codex's local plugin marketplace with:
+2. Install the plugin into Codex Desktop's home-local plugin path with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
@@ -225,7 +225,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\sync_skill_to_codex.ps1
 What those two scripts do:
 
 - `install_plugin_to_codex.ps1`
-  Copies the plugin bundle into Codex's local marketplace path and writes a small `marketplace.json` entry so Codex can discover it.
+  Copies the plugin bundle into `~/plugins/codex-review` and writes `~/.agents/plugins/marketplace.json` so Codex Desktop can discover it as a local plugin.
 - `sync_skill_to_codex.ps1`
   Copies the maintained review skill into the direct runtime skill path under `.codex/skills/bug-hunting-code-review`
 

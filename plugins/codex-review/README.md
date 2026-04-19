@@ -23,7 +23,7 @@ Today, the plugin contains the maintained skill source, but the live runtime pat
 
 That direct skill runtime is currently updated with `scripts/sync_skill_to_codex.ps1`.
 
-For Codex to discover the **plugin bundle itself**, the repo plugin should also be installed into a local Codex marketplace path.
+For Codex Desktop to discover the **plugin bundle itself**, the repo plugin should also be installed as a home-local plugin.
 
 The repo now includes a helper for that:
 
@@ -33,9 +33,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
 
 That helper:
 
-- copies `plugins/codex-review` into a local marketplace under `~/.codex/local-marketplaces/`
-- writes `.agents/plugins/marketplace.json` for that marketplace
-- makes the plugin discoverable to Codex as a local plugin bundle
+- copies `plugins/codex-review` into `~/plugins/codex-review`
+- writes `~/.agents/plugins/marketplace.json`
+- makes the plugin discoverable to Codex Desktop as a local plugin bundle
 
 So the practical setup today is:
 

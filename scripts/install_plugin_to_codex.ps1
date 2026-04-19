@@ -1,6 +1,6 @@
 param(
     [string]$Source = (Join-Path $PSScriptRoot "..\plugins\codex-review"),
-    [string]$MarketplaceRoot = (Join-Path $HOME ".codex\local-marketplaces\codex-review-local"),
+    [string]$HomeRoot = $HOME,
     [switch]$DryRun,
     [switch]$IncludePycache
 )
@@ -43,11 +43,12 @@ function Should-SkipPath {
 }
 
 $resolvedSource = (Resolve-Path -LiteralPath $Source).Path
-$resolvedMarketplaceRoot = if ([System.IO.Path]::IsPathRooted($MarketplaceRoot)) {
-    [System.IO.Path]::GetFullPath($MarketplaceRoot)
+$resolvedHomeRoot = if ([System.IO.Path]::IsPathRooted($HomeRoot)) {
+    [System.IO.Path]::GetFullPath($HomeRoot)
 } else {
-    [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $MarketplaceRoot))
+    [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $HomeRoot))
 }
+
 $pluginManifestPath = Join-Path $resolvedSource ".codex-plugin\plugin.json"
 
 if (-not (Test-Path -LiteralPath $resolvedSource -PathType Container)) {
@@ -65,12 +66,12 @@ if ([string]::IsNullOrWhiteSpace($pluginName)) {
     throw "Plugin manifest did not contain a plugin name."
 }
 
-$pluginsRoot = Join-Path $resolvedMarketplaceRoot "plugins"
+$pluginsRoot = Join-Path $resolvedHomeRoot "plugins"
 $pluginDestination = Join-Path $pluginsRoot $pluginName
-$agentsPluginsRoot = Join-Path $resolvedMarketplaceRoot ".agents\plugins"
+$agentsPluginsRoot = Join-Path $resolvedHomeRoot ".agents\plugins"
 $marketplaceJsonPath = Join-Path $agentsPluginsRoot "marketplace.json"
 
-Ensure-Directory -Path $resolvedMarketplaceRoot -DryRunMode:$DryRun
+Ensure-Directory -Path $resolvedHomeRoot -DryRunMode:$DryRun
 Ensure-Directory -Path $pluginsRoot -DryRunMode:$DryRun
 Ensure-Directory -Path $agentsPluginsRoot -DryRunMode:$DryRun
 
@@ -127,9 +128,9 @@ foreach ($item in $sourceFiles) {
 }
 
 $marketplace = [ordered]@{
-    name = "codex-review-local"
+    name = "local-plugins"
     interface = @{
-        displayName = "Codex Review Local"
+        displayName = "Local Plugins"
     }
     plugins = @(
         [ordered]@{
@@ -160,5 +161,7 @@ $mode = if ($DryRun) { "dry-run" } else { "install" }
 Write-Step "Completed plugin $mode from $resolvedSource to $pluginDestination"
 Write-Step "Directories created: $createdDirectories"
 Write-Step "Files processed: $copiedFiles"
-Write-Step "Marketplace root: $resolvedMarketplaceRoot"
-Write-Step "Restart Codex if the plugin does not appear immediately."
+Write-Step "Home-local plugin root: $resolvedHomeRoot"
+Write-Step "Plugin path: $pluginDestination"
+Write-Step "Marketplace file: $marketplaceJsonPath"
+Write-Step "Restart Codex Desktop if the plugin does not appear immediately."
