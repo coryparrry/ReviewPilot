@@ -1,6 +1,7 @@
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -85,6 +86,11 @@ query($threadId: ID!, $cursor: String) {
 """.strip()
 
 
+GH_BIN = shutil.which("gh")
+if not GH_BIN:
+    raise RuntimeError("GitHub CLI (`gh`) not found in PATH.")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -139,11 +145,11 @@ def encode_repo_path(repo: str) -> str:
 
 
 def ensure_gh_auth() -> None:
-    subprocess.run(["gh", "auth", "status"], capture_output=True, check=True)
+    subprocess.run([GH_BIN, "auth", "status"], capture_output=True, check=True)
 
 
 def gh_api_read_only(path: str, paginate: bool = False) -> dict[str, Any] | list[dict[str, Any]]:
-    cmd = ["gh", "api", path]
+    cmd = [GH_BIN, "api", path]
     if paginate:
         cmd.extend(["--paginate", "--slurp"])
     payload = json.loads(run_cmd(cmd))
@@ -157,7 +163,7 @@ def gh_api_read_only(path: str, paginate: bool = False) -> dict[str, Any] | list
 
 def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
     ensure_read_only_graphql_query(query)
-    cmd = ["gh", "api", "graphql", "-f", f"query={query}"]
+    cmd = [GH_BIN, "api", "graphql", "-f", f"query={query}"]
     for key, value in variables.items():
         if isinstance(value, int):
             cmd.extend(["-F", f"{key}={value}"])

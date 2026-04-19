@@ -282,6 +282,7 @@ def main() -> int:
     review_run_dir: Path | None = None
     repair_plan: Path | None = None
     exit_code = 0
+    current_step = "automation_cycle"
 
     def record_failure(step_name: str, exc: Exception) -> None:
         failure: dict[str, object] = {
@@ -303,12 +304,14 @@ def main() -> int:
 
     try:
         if not args.skip_review:
+            current_step = "review"
             review_result = run_review(repo, run_dir, args.base, args.model)
             summary["steps"]["review"] = review_result
             review_run_dir = Path(review_result["review_run_dir"])
             repair_plan = Path(review_result["repair_plan"])
 
         if not args.skip_repair_handoff and repair_plan is not None:
+            current_step = "repair_handoff"
             repair_plan_payload = read_json(repair_plan)
             if not repair_plan_payload.get("findings"):
                 summary["steps"]["repair_handoff"] = {
@@ -326,6 +329,7 @@ def main() -> int:
                 )
 
         if not args.skip_github_intake:
+            current_step = "github_intake"
             if not (args.github_repo and args.github_pr and args.github_raw_input and review_run_dir):
                 summary["steps"]["github_intake"] = {
                     "skipped": True,
@@ -344,9 +348,11 @@ def main() -> int:
                 )
 
         if not args.skip_coderabbit_calibration:
+            current_step = "coderabbit_calibration"
             summary["steps"]["coderabbit_calibration"] = run_coderabbit_calibration(repo, run_dir)
 
         if not args.skip_hardening:
+            current_step = "hf_hardening"
             summary["steps"]["hf_hardening"] = run_hf_hardening(
                 repo,
                 run_dir,
@@ -356,17 +362,7 @@ def main() -> int:
             )
     except Exception as exc:
         exit_code = exc.returncode if isinstance(exc, subprocess.CalledProcessError) and exc.returncode else 1
-        if "review" not in summary["steps"]:
-            failed_step = "review"
-        elif "repair_handoff" not in summary["steps"] and not args.skip_repair_handoff:
-            failed_step = "repair_handoff"
-        elif "github_intake" not in summary["steps"] and not args.skip_github_intake:
-            failed_step = "github_intake"
-        elif "coderabbit_calibration" not in summary["steps"] and not args.skip_coderabbit_calibration:
-            failed_step = "coderabbit_calibration"
-        else:
-            failed_step = "hf_hardening"
-        record_failure(failed_step, exc)
+        record_failure(current_step, exc)
     finally:
         write_json(run_dir / "automation-summary.json", summary)
 

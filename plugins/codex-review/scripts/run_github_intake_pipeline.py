@@ -399,6 +399,11 @@ def main() -> int:
     effective_review_text = args.score_review_text.strip() if args.score_review_text else None
     if args.stop_after == "promote-primary" and not run_primary_promotion:
         raise ValueError("--stop-after promote-primary requires --promote-probationary-all or --promote-probationary-ids.")
+    if run_primary_promotion and args.stop_after == "apply":
+        raise ValueError(
+            "Durable promotion was requested, but --stop-after apply was selected. "
+            "Use --stop-after promote-primary to execute the promotion stage."
+        )
     if run_primary_promotion and not (resolved_review_file or args.score_review_artifacts):
         raise ValueError(
             "Probationary-to-primary promotion requires --score-review-file or --score-review-artifacts. "
@@ -724,7 +729,7 @@ def main() -> int:
     run_step(apply_cmd)
 
     printed_promotion_result_path: Path | None = None
-    if run_primary_promotion and args.stop_after in {"apply", "promote-primary"}:
+    if run_primary_promotion and args.stop_after == "promote-primary":
         run_step(build_promote_primary_cmd())
         printed_promotion_result_path = promotion_result_path
 

@@ -263,6 +263,10 @@ def near_duplicates(candidate_entry: dict[str, Any], corpus_name: str, corpus: l
 
 
 def to_corpus_entry(candidate: dict[str, Any]) -> dict[str, Any]:
+    required = ("id", "title", "severity", "category", "source", "expected_groups")
+    missing = [key for key in required if key not in candidate]
+    if missing:
+        raise ValueError(f"Candidate missing required fields: {missing}")
     return {
         "id": candidate["id"],
         "title": candidate["title"],

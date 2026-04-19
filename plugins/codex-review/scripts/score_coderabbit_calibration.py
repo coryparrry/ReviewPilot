@@ -54,7 +54,7 @@ def resolve_output_path(repo_root: Path, requested: str | None, allow_outside_ar
     if requested is None:
         return default_output_path(repo_root)
 
-    candidate = Path(requested).resolve()
+    candidate = resolve_path(repo_root, requested)
     if allow_outside_artifacts:
         return candidate
 

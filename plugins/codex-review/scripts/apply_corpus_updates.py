@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from pathlib import Path
@@ -133,7 +134,7 @@ def corpus_fingerprint(entry: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def normalize_title(value: str) -> str:
-    return " ".join(token for token in value.lower().split() if token)
+    return " ".join(re.findall(r"[a-z0-9]+", value.lower()))
 
 
 def expectation_tokens(expected_groups: Any) -> set[str]:

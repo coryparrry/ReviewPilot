@@ -148,11 +148,15 @@ def summarize_target_case(score: dict[str, Any], expected_cases: list[dict[str, 
 def build_run_aggregate(case_results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(case_results)
     target_match_count = sum(1 for case in case_results if case.get("target_summary", {}).get("target_matches", 0) > 0)
+    total_target_cases = 0
+    matched_target_cases = 0
     missed_categories: dict[str, int] = {}
 
     for case in case_results:
         for target in case.get("target_summary", {}).get("target_results", []):
+            total_target_cases += 1
             if target.get("matched"):
+                matched_target_cases += 1
                 continue
             category = target.get("category") or "unknown"
             missed_categories[category] = missed_categories.get(category, 0) + 1
@@ -160,7 +164,9 @@ def build_run_aggregate(case_results: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "executed_cases": total,
         "cases_with_target_match": target_match_count,
-        "target_case_recall": (target_match_count / total) if total else 0.0,
+        "target_cases_total": total_target_cases,
+        "target_cases_matched": matched_target_cases,
+        "target_case_recall": (matched_target_cases / total_target_cases) if total_target_cases else 0.0,
         "missed_target_categories": missed_categories,
     }
 

@@ -343,9 +343,14 @@ def extract_repo_context(payload: Any, format_name: str) -> dict[str, Any]:
 
     if format_name == "github_mcp_pr_comments":
         assert isinstance(payload, dict)
-        repo, pr_number = parse_pr_url_context(
-            payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
-        )
+        repo = payload.get("repo")
+        pr_number = payload.get("pr_number")
+        if not repo or pr_number is None:
+            parsed_repo, parsed_pr_number = parse_pr_url_context(
+                payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
+            )
+            repo = repo or parsed_repo
+            pr_number = pr_number if pr_number is not None else parsed_pr_number
         return {
             "source": payload.get("source", "github-mcp-pr-comments"),
             "repo": repo,
@@ -354,9 +359,14 @@ def extract_repo_context(payload: Any, format_name: str) -> dict[str, Any]:
 
     if format_name == "github_mcp_review_threads":
         assert isinstance(payload, dict)
-        repo, pr_number = parse_pr_url_context(
-            payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
-        )
+        repo = payload.get("repo")
+        pr_number = payload.get("pr_number")
+        if not repo or pr_number is None:
+            parsed_repo, parsed_pr_number = parse_pr_url_context(
+                payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
+            )
+            repo = repo or parsed_repo
+            pr_number = pr_number if pr_number is not None else parsed_pr_number
         return {
             "source": payload.get("source", "github-mcp-review-threads"),
             "repo": repo,
@@ -471,14 +481,6 @@ def iter_github_mcp_review_threads(
         thread_path = thread.get("path")
         thread_line = thread.get("line") or thread.get("start_line") or thread.get("original_line")
         thread_comments = thread.get("comments", [])
-        reviewer_login = None
-        for comment in thread_comments:
-            if is_self_authored_comment(comment, ignored_patterns):
-                continue
-            author_login = extract_author_login(comment)
-            if isinstance(author_login, str) and author_login.strip():
-                reviewer_login = author_login.strip().lower()
-                break
         for comment in thread_comments:
             if is_self_authored_comment(comment, ignored_patterns):
                 comments.append(
@@ -493,11 +495,6 @@ def iter_github_mcp_review_threads(
                     }
                 )
                 continue
-            author = comment.get("author")
-            if reviewer_login and isinstance(author, dict):
-                author_login = author.get("login")
-                if isinstance(author_login, str) and author_login.strip().lower() != reviewer_login:
-                    continue
             comments.append(
                 {
                     "review_id": None,
