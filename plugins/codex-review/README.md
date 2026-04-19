@@ -38,6 +38,7 @@ That helper:
 - copies `plugins/codex-review` into `~/.codex/local-marketplaces/<marketplace-name>/plugins/codex-review`
 - also copies the installed plugin into `~/.codex/plugins/cache/<marketplace-name>/codex-review`
 - writes `.agents/plugins/marketplace.json` inside that marketplace root
+- enables `[plugins."codex-review@<marketplace-name>"]` in `~/.codex/config.toml`
 - makes the plugin discoverable to Codex Desktop as a local plugin bundle
 
 So the practical setup today is:

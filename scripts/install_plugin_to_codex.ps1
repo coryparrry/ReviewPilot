@@ -98,6 +98,54 @@ function Copy-PluginTree {
     }
 }
 
+function Update-PluginConfig {
+    param(
+        [string]$ConfigPath,
+        [string]$PluginRef,
+        [switch]$DryRunMode
+    )
+
+    $header = "[plugins.`"$PluginRef`"]"
+    $enabledLine = "enabled = true"
+    $block = "$header`r`n$enabledLine`r`n"
+
+    if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
+        if ($DryRunMode) {
+            Write-Step "Would create config file $ConfigPath with plugin enable block for $PluginRef"
+            return
+        }
+
+        Set-Content -LiteralPath $ConfigPath -Value $block -Encoding utf8
+        Write-Step "Created config file $ConfigPath with plugin enable block for $PluginRef"
+        return
+    }
+
+    $content = Get-Content -LiteralPath $ConfigPath -Raw
+    $escapedRef = [regex]::Escape($PluginRef)
+    $blockPattern = "(?ms)^\[plugins\.`"$escapedRef`"\]\r?\n(?:.+\r?\n)*?(?=^\[|^\[\[|\z)"
+    $enabledPattern = "(?ms)^\[plugins\.`"$escapedRef`"\]\r?\n(?:.+\r?\n)*?^enabled\s*=\s*true\s*$"
+
+    if ($content -match $enabledPattern) {
+        Write-Step "Plugin enable block already present in $ConfigPath"
+        return
+    }
+
+    $updated = if ($content -match $blockPattern) {
+        [regex]::Replace($content, $blockPattern, $block)
+    } else {
+        $separator = if ($content.EndsWith("`n") -or $content.Length -eq 0) { "" } else { "`r`n" }
+        $content + $separator + "`r`n" + $block
+    }
+
+    if ($DryRunMode) {
+        Write-Step "Would enable plugin $PluginRef in $ConfigPath"
+        return
+    }
+
+    Set-Content -LiteralPath $ConfigPath -Value $updated -Encoding utf8
+    Write-Step "Enabled plugin $PluginRef in $ConfigPath"
+}
+
 function Should-SkipPath {
     param([string]$Path)
 
@@ -139,6 +187,8 @@ $pluginCacheRoot = Join-Path $resolvedCodexHome "plugins\cache\$MarketplaceName"
 $pluginCacheDestination = Join-Path $pluginCacheRoot $pluginName
 $agentsPluginsRoot = Join-Path $marketplaceRoot ".agents\plugins"
 $marketplaceJsonPath = Join-Path $agentsPluginsRoot "marketplace.json"
+$configTomlPath = Join-Path $resolvedCodexHome "config.toml"
+$pluginRef = "$pluginName@$MarketplaceName"
 
 Ensure-Directory -Path $resolvedCodexHome -DryRunMode:$DryRun
 Ensure-Directory -Path $marketplaceRoot -DryRunMode:$DryRun
@@ -193,6 +243,8 @@ if ($DryRun) {
     Write-Step "Wrote marketplace manifest $marketplaceJsonPath"
 }
 
+Update-PluginConfig -ConfigPath $configTomlPath -PluginRef $pluginRef -DryRunMode:$DryRun
+
 $mode = if ($DryRun) { "dry-run" } else { "install" }
 Write-Step "Completed plugin $mode from $resolvedSource to $pluginDestination"
 Write-Step "Marketplace directories created: $($marketplaceCopy.CreatedDirectories)"
@@ -204,4 +256,5 @@ Write-Step "Marketplace root: $marketplaceRoot"
 Write-Step "Plugin path: $pluginDestination"
 Write-Step "Plugin cache path: $pluginCacheDestination"
 Write-Step "Marketplace file: $marketplaceJsonPath"
+Write-Step "Config file: $configTomlPath"
 Write-Step "Restart Codex Desktop if the plugin does not appear immediately."

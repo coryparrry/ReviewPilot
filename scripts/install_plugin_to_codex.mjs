@@ -118,6 +118,44 @@ async function copyTree(sourceRoot, destinationRoot, options) {
   }
 }
 
+async function updatePluginConfig(configPath, pluginRef, dryRun) {
+  const header = `[plugins."${pluginRef}"]`;
+  const enabledLine = "enabled = true";
+  const block = `${header}\n${enabledLine}\n`;
+
+  if (!(await pathExists(configPath))) {
+    if (dryRun) {
+      logStep(`Would create config file ${configPath} with plugin enable block for ${pluginRef}`);
+      return;
+    }
+    await fs.writeFile(configPath, block, "utf8");
+    logStep(`Created config file ${configPath} with plugin enable block for ${pluginRef}`);
+    return;
+  }
+
+  const content = await fs.readFile(configPath, "utf8");
+  const escapedRef = pluginRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const blockPattern = new RegExp(`^\\[plugins\\."${escapedRef}"\\]\\r?\\n(?:.+\\r?\\n)*?(?=^\\[|^\\[\\[|\\z)`, "ms");
+  const enabledPattern = new RegExp(`^\\[plugins\\."${escapedRef}"\\]\\r?\\n(?:.+\\r?\\n)*?^enabled\\s*=\\s*true\\s*$`, "ms");
+
+  if (enabledPattern.test(content)) {
+    logStep(`Plugin enable block already present in ${configPath}`);
+    return;
+  }
+
+  const updated = blockPattern.test(content)
+    ? content.replace(blockPattern, block)
+    : `${content}${content.endsWith("\n") || content.length === 0 ? "" : "\n"}\n${block}`;
+
+  if (dryRun) {
+    logStep(`Would enable plugin ${pluginRef} in ${configPath}`);
+    return;
+  }
+
+  await fs.writeFile(configPath, updated, "utf8");
+  logStep(`Enabled plugin ${pluginRef} in ${configPath}`);
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const pluginManifestPath = path.join(options.source, ".codex-plugin", "plugin.json");
@@ -139,6 +177,8 @@ async function main() {
   const pluginCacheDestination = path.join(pluginCacheRoot, pluginName);
   const agentsPluginsRoot = path.join(marketplaceRoot, ".agents", "plugins");
   const marketplaceJsonPath = path.join(agentsPluginsRoot, "marketplace.json");
+  const configTomlPath = path.join(options.codexHome, "config.toml");
+  const pluginRef = `${pluginName}@${options.marketplaceName}`;
 
   await ensureDirectory(options.codexHome, options.dryRun);
   await ensureDirectory(marketplaceRoot, options.dryRun);
@@ -179,12 +219,15 @@ async function main() {
     logStep(`Wrote marketplace manifest ${marketplaceJsonPath}`);
   }
 
+  await updatePluginConfig(configTomlPath, pluginRef, options.dryRun);
+
   logStep(`Completed plugin ${options.dryRun ? "dry-run" : "install"} from ${options.source} to ${pluginDestination}`);
   logStep(`Codex home: ${options.codexHome}`);
   logStep(`Marketplace root: ${marketplaceRoot}`);
   logStep(`Plugin path: ${pluginDestination}`);
   logStep(`Plugin cache path: ${pluginCacheDestination}`);
   logStep(`Marketplace file: ${marketplaceJsonPath}`);
+  logStep(`Config file: ${configTomlPath}`);
   logStep("Restart Codex Desktop if the plugin does not appear immediately.");
 }
 
