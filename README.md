@@ -108,6 +108,12 @@ The main wrapper can now run both steps:
 
 The external SWE-bench lane exists to harden the review brain without depending only on your own buggy PR history. It should pressure the review prompt and benchmark workflow, not auto-write directly into the GitHub-derived corpus lanes.
 
+The repo now also has a blind Hugging Face hardening loop at:
+
+- `plugins/codex-review/skills/bug-hunting-code-review/scripts/run_hf_hardening_cycle.py`
+
+That workflow can fetch a curated slice of `SWE-bench/SWE-bench_Verified`, hide the fix patch, run Codex on the problem statements, and score the resulting review artifacts against the external benchmark lane automatically.
+
 ## Initial Goals
 
 - keep the review skill CodeRabbit-style and release-blocking

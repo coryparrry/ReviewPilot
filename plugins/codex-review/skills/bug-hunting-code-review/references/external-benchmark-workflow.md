@@ -61,8 +61,39 @@ python "<skill-path>\scripts\run_pre_pr_review.py" `
   --review-file ".\draft-review.md"
 ```
 
+## Blind Hardening Automation
+
+To automate a small blind hardening pass from Hugging Face:
+
+```powershell
+python "<skill-path>\scripts\run_hf_hardening_cycle.py" `
+  --repo . `
+  --offset 0 `
+  --length 5
+```
+
+That workflow:
+
+1. fetches a slice of `SWE-bench/SWE-bench_Verified`
+2. keeps only rows that already map to the curated external corpus
+3. builds a blind prompt from the problem statement without the fix patch
+4. runs Codex to write a review artifact for each selected case
+5. scores each review artifact against the external SWE-bench lane
+6. writes per-case artifacts plus a run summary under `artifacts/hf-hardening/`
+
+For a dry run that only prepares prompts and metadata:
+
+```powershell
+python "<skill-path>\scripts\run_hf_hardening_cycle.py" `
+  --repo . `
+  --offset 0 `
+  --length 5 `
+  --prepare-only
+```
+
 ## Boundaries
 
 - Do not mix synthetic external scores into the primary GitHub review score by default.
 - Keep the external lane separate so regressions in real PR-review quality stay visible.
 - Prefer a small curated set of high-signal cases over bulk import.
+- The blind hardening cycle is benchmark pressure, not direct corpus-writing automation.
