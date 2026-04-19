@@ -207,7 +207,7 @@ Optional:
 ### Basic setup
 
 1. Clone this repo.
-2. Install the plugin into Codex Desktop's home-local plugin path with:
+2. Install the plugin into Codex Desktop's local marketplace path with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
@@ -225,7 +225,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\sync_skill_to_codex.ps1
 What those two scripts do:
 
 - `install_plugin_to_codex.ps1`
-  Copies the plugin bundle into `~/plugins/codex-review` and writes `~/.agents/plugins/marketplace.json` so Codex Desktop can discover it as a local plugin.
+  Copies the plugin bundle into `~/.codex/local-marketplaces/<marketplace-name>/plugins/codex-review` and writes `.agents/plugins/marketplace.json` inside that marketplace so Codex Desktop can discover it.
 - `sync_skill_to_codex.ps1`
   Copies the maintained review skill into the direct runtime skill path under `.codex/skills/bug-hunting-code-review`
 
