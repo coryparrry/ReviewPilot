@@ -1,0 +1,28 @@
+[
+  {
+    "id": "source-of-truth-drift-prevent-duplicate-advancement-from-creating-multiple-active-steps-1",
+    "title": "Prevent duplicate advancement from creating multiple active steps",
+    "severity": "critical",
+    "category": "source-of-truth-drift",
+    "source": "anonymized-private-repo:manual-mcp-review-threads.json",
+    "expected_groups": [
+      [
+        "Line\\ 31\\ activates\\ a\\ pending\\ step\\ even\\ when\\ the\\ review\\ step\\ was\\ not\\ advanced\\ in\\ this\\ call",
+        "If\\ this\\ method\\ is\\ retried,\\ run\\ state\\ can\\ drift\\ to\\ multiple\\ \"Active\"\\ steps"
+      ]
+    ]
+  },
+  {
+    "id": "state-symmetry-re-activate-the-bootstrapped-local-owner-instead-of-only-checking-existence-2",
+    "title": "Re-activate the bootstrapped local owner instead of only checking existence",
+    "severity": "high",
+    "category": "state-symmetry",
+    "source": "anonymized-private-repo:manual-mcp-review-threads.json",
+    "expected_groups": [
+      [
+        "ensureLocalIdentity\\(\\)\\ now\\ treats\\ any\\ matching\\ user\\ or\\ membership\\ as\\ good\\ enough,\\ but\\ resolveAuthContext\\(\\)\\ only\\ accepts\\ a",
+        "If\\ the\\ seeded\\ local\\ user\\ or\\ its\\ workspace\\ membership\\ is\\ present\\ but\\ inactive,\\ bootstrap\\ stops\\ self\\-healing\\ and\\ the\\ defau"
+      ]
+    ]
+  }
+]

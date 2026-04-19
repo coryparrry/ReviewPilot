@@ -21,6 +21,8 @@ Use it to add broader correctness pressure on bug classes that may not appear of
 - mixed-type interop behavior
 - missing guard rails around malformed input
 
+This lane is useful when you want the skill to keep learning and hardening without manufacturing buggy PRs in your own repos. It should influence prompts, scorer expectations, and benchmark pressure, but it should not auto-write directly into the GitHub-derived corpus lanes.
+
 ## Workflow
 
 1. Fetch candidate rows from Hugging Face:
@@ -55,7 +57,39 @@ The full automated pre-PR flow can call both lanes automatically with:
 
 ```powershell
 python "<skill-path>\scripts\run_pre_pr_review.py" `
-  --base origin/main
+  --base origin/main `
+  --review-file ".\draft-review.md"
+```
+
+## Blind Hardening Automation
+
+To automate a small blind hardening pass from Hugging Face:
+
+```powershell
+python "<skill-path>\scripts\run_hf_hardening_cycle.py" `
+  --repo . `
+  --offset 0 `
+  --length 5
+```
+
+That workflow:
+
+1. fetches a slice of `SWE-bench/SWE-bench_Verified`
+2. keeps only rows that already map to the curated external corpus
+3. builds a blind prompt from the problem statement without the fix patch
+4. runs Codex to write a review artifact for each selected case
+5. scores each review artifact against the external SWE-bench lane
+6. writes per-case artifacts plus a run summary under `artifacts/hf-hardening/`
+7. reports target-case recall so you can see whether the reviewer found the intended bug for each benchmark row
+
+For a dry run that only prepares prompts and metadata:
+
+```powershell
+python "<skill-path>\scripts\run_hf_hardening_cycle.py" `
+  --repo . `
+  --offset 0 `
+  --length 5 `
+  --prepare-only
 ```
 
 ## Boundaries
@@ -63,3 +97,4 @@ python "<skill-path>\scripts\run_pre_pr_review.py" `
 - Do not mix synthetic external scores into the primary GitHub review score by default.
 - Keep the external lane separate so regressions in real PR-review quality stay visible.
 - Prefer a small curated set of high-signal cases over bulk import.
+- The blind hardening cycle is benchmark pressure, not direct corpus-writing automation.

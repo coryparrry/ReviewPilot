@@ -33,8 +33,25 @@ The first plugin-owned GitHub workflow should:
 2. normalize that feedback into a stable local schema
 3. produce a proposed corpus-update artifact
 4. support a controlled corpus-apply step with safe defaults
+5. gate new GitHub-derived cases into a probationary lane before they are treated as durable primary corpus cases
 
 The first version should stay easy to validate, with raw fetch, normalization, proposal output, and apply behavior kept as separate explicit steps.
+
+The repo can still expose a single wrapper command for normal use, but that wrapper should remain a thin orchestrator over the explicit underlying stages.
+
+If the wrapper reports benchmark improvement, it should do so only by scoring a supplied review artifact before and after apply, not by inferring improvement from corpus growth alone.
+
+GitHub-derived learning should still be policy-gated even when `auto` is the default mode:
+
+- gate candidates first
+- auto-apply only into the probationary lane
+- require a later promotion step before a case is considered durable enough for the primary GitHub corpus
+
+Prepared `.codex-review` run directories should count as valid review-artifact inputs so the benchmark path stays plugin-native end to end.
+
+Prepared review run directories should also be reusable as the wrapper working directory so prepare, review authoring, and intake artifacts can live in one shared run folder.
+
+That shared-run reuse should not silently weaken local output confinement: if the chosen run directory sits outside the ignored `artifacts/` tree, the caller must opt into that local write path explicitly.
 
 ## Scope
 
@@ -44,13 +61,13 @@ The first version should stay easy to validate, with raw fetch, normalization, p
 - local normalized schema for review misses
 - one plugin-owned script that reads input and emits a proposed normalized output
 - support for GitHub-derived input files first, with direct GitHub integration as a follow-up layer
+- support for MCP-derived input files directly so the plugin's GitHub connector can own the live access boundary
 - repo docs that define the workflow and expected review of proposed updates
 
 ### Out of Scope For V1
 
 - automatic edits to the durable lessons log
 - auto-resolving severity or regex patterns without review
-- full GitHub app or MCP server implementation
 - plugin marketplace or runtime installation automation
 
 ## Design Principles
@@ -60,6 +77,8 @@ The first version should stay easy to validate, with raw fetch, normalization, p
 - Separate raw evidence from normalized interpretation from final curated corpus entries.
 - Prefer proposal artifacts over direct mutation until the schema and categorization are trustworthy.
 - Keep GitHub access narrow, auditable, and replaceable.
+- Separate probationary admission from durable primary-corpus promotion.
+- Use external benchmark data to pressure the review brain without auto-writing synthetic cases into the GitHub-derived corpus.
 - Optimize for repeatability, not cleverness.
 
 ## Proposed Workflow
@@ -77,6 +96,8 @@ Initial supported shapes should include:
 - repo-local custom review bundles
 - exported GitHub REST review comment JSON
 - exported GitHub GraphQL review-thread JSON
+- GitHub MCP PR comment timeline JSON
+- GitHub MCP review-thread JSON
 
 V1 should not require live GitHub access to be useful.
 
@@ -105,7 +126,8 @@ That artifact is the review boundary for humans and later automation.
 
 After proposal generation, a follow-up workflow can convert selected proposals into:
 
-- corpus cases
+- probationary corpus cases
+- later promoted primary corpus cases
 - benchmark metadata
 - durable lessons log updates when the miss is durable enough
 
@@ -119,9 +141,14 @@ The plugin should own the intake workflow under:
 
 Initial planned script surface:
 
+- `capture_github_mcp_feedback.py`
 - `ingest_github_review_feedback.py`
 - `fetch_github_review_feedback.py`
 - `propose_corpus_updates.py`
+- `score_candidate_quality.py`
+- `promote_corpus_candidates.py`
+- `promote_probationary_cases.py`
+- `run_github_intake_pipeline.py`
 
 Likely future additions:
 
@@ -178,6 +205,7 @@ Exit criteria:
 - support repo-local JSON input first
 - emit normalized proposal JSON
 - add a small fixture and smoke validation path
+- keep room for a later wrapper command without collapsing the explicit artifact boundaries
 
 Exit criteria:
 
@@ -197,17 +225,37 @@ Exit criteria:
 ## Phase E. Controlled Corpus Apply
 
 - add `plugins/codex-review/scripts/apply_corpus_updates.py`
+- add `plugins/codex-review/scripts/promote_corpus_candidates.py`
+- add `plugins/codex-review/scripts/score_candidate_quality.py`
+- add `plugins/codex-review/scripts/run_github_intake_pipeline.py` as the thin orchestration entrypoint
+- allow the wrapper to run optional before/after benchmark comparison when a real review artifact is supplied
+- allow the wrapper to consume prepared `.codex-review` run directories directly instead of requiring manual extraction of `review.md`
+- allow the wrapper to stop after proposal generation so Codex can write the review into the same shared run directory before a later scoring/apply pass
+- allow the wrapper to resume from existing fetch/proposal/candidate artifacts in that same shared run directory
 - make `auto` the default mode for straightforward safe additions
 - keep `review` as an explicit no-write option
 - keep `force` available for intentionally overriding soft warnings
 - treat exact duplicates as idempotent no-ops instead of new corpus entries
 - block malformed candidates and conflicting IDs instead of overwriting existing cases
+- require evidence-based gating before a GitHub-derived candidate can auto-apply into the probationary lane
+- require a later promotion step before probationary cases are treated as durable primary corpus entries
+- require that later promotion step to use repeated review-artifact evidence, not just a convenience flag
+- let the wrapper orchestrate that later promotion step explicitly without making it part of the default safe path
 
 Exit criteria:
 
 - one command can apply clean corpus-candidate artifacts into `review-corpus-cases.json`
 - repeat runs are idempotent for exact duplicates
 - review mode can preview application without mutating the corpus
+- promoted candidates can be marked auto-eligible without weakening default intake heuristics
+- the wrapper command can run fetch, ingest, propose, optional promote, and apply into one per-run artifact directory
+- optional benchmark comparison can produce before, after, and delta artifacts without inventing a fake improvement signal
+- prepared review artifact directories can flow directly into wrapper scoring without an extra manual handoff step
+- the wrapper can reuse a prepared review run directory and stop early so the review-authoring loop does not need path juggling across different artifact roots
+- the wrapper can resume from the next missing stage instead of rerunning fetch/ingest/propose once those artifacts already exist
+- the wrapper can gate GitHub-derived candidates against duplicate checks plus review-artifact evidence before auto-applying them into the probationary lane
+- probationary cases can be promoted into the primary corpus only when repeated review artifacts support them strongly enough to count as durable knowledge
+- the wrapper can optionally run that durable-promotion step and write a separate promotion result artifact in the same run directory
 
 ## Phase D. Live GitHub Input
 
@@ -217,13 +265,19 @@ Exit criteria:
 
 The first live GitHub slice should remain read-only:
 
-- fetch raw PR review comments and review threads
+- prefer the plugin's GitHub MCP connector as the live fetch boundary
+- add a Codex-side capture helper that turns GitHub MCP tool output into a stable raw artifact file without requiring the user to save connector output manually
+- import raw PR review comments and review threads from MCP-produced JSON snapshots
 - save raw artifacts under ignored `artifacts/`
 - hand off into the existing proposal-only normalizer
 - avoid direct corpus writes or automatic proposal application
 - keep raw artifact writes inside the ignored artifacts tree by default
 - treat raw fetched review artifacts as potentially sensitive for private repos
 - keep proposal artifact writes inside the ignored artifacts tree by default as well
+- treat `--allow-outside-artifacts` as a local-output escape hatch only, not as any expansion of GitHub permissions or write behavior
+- keep repository identifiers and GraphQL usage narrowly constrained so the fetch path remains auditable and read-only by construction
+- configure the plugin MCP boundary with read-only mode and only the `pull_requests` toolset for this workflow
+- keep the old `gh`-based fetch script as an explicit migration fallback, not the default live path
 
 Exit criteria:
 
@@ -246,6 +300,7 @@ For Phase B and later, validation should include:
 - building a generic GitHub analytics product
 - replacing the current curated corpus with raw PR data
 - auto-learning directly from all comments without review
+- auto-promoting GitHub-derived probationary cases straight into the durable primary corpus
 - making GitHub integration broader than needed for review improvement
 
 ## Initial Deliverables
@@ -257,6 +312,7 @@ The next implementation batch should produce:
 3. a plugin-owned proposal-only intake script
 4. one or more fixtures for local validation
 5. usage docs for the proposal flow
+6. a thin wrapper command for the full live pipeline once the underlying stages are stable
 
 ## Decision Record
 

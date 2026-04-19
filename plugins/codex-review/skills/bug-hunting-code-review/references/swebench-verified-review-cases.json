@@ -21,9 +21,9 @@
     "source": "SWE-bench/SWE-bench_Verified: astropy__astropy-13033",
     "expected_groups": [
       [
-        "required columns|first columns|TimeSeries",
+        "required columns|required-column contract|first columns|TimeSeries",
         "misleading|confusing|message|exception",
-        "multi-column|more than one required column|actual found columns"
+        "multi-column|more than one required column|actual found columns|missing required column|drops the missing column|full required-column contract"
       ]
     ]
   },
@@ -36,8 +36,8 @@
     "expected_groups": [
       [
         "world_to_pixel|SlicedLowLevelWCS|sliced",
-        "1\\.|placeholder|constant",
-        "slice world coordinate|carried-through context|inverse transform"
+        "1\\.|placeholder|constant|fixed constants|fixed number|origin",
+        "slice world coordinate|carried-through context|inverse transform|missing world axes|wrong world tuple|wrong full world tuple|thrown away state|hidden world axis"
       ]
     ]
   },
@@ -65,7 +65,7 @@
       [
         "IndexError|tuple index out of range",
         "args\\[0\\]|identify_format|is_fits",
-        "guard|no args|return false|bounds check"
+        "guard|no args|return false|bounds check|without first checking|empty args|not crash"
       ]
     ]
   },

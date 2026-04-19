@@ -96,7 +96,8 @@ Each normalized record must contain:
   Input file name used to generate the artifact. Keep this file-oriented rather than embedding full local absolute paths.
 - `source_format`
   Detected or selected input adapter. Current values:
-  `custom_review_bundle`, `github_rest_review_comments`, `github_graphql_review_threads`.
+  `custom_review_bundle`, `github_rest_review_comments`, `github_graphql_review_threads`,
+  `github_mcp_pr_comments`, `github_mcp_review_threads`.
 - `records`
   Normalized proposal records.
 
@@ -138,12 +139,30 @@ A normalized proposal record should become a corpus candidate only when:
 - the inferred category aligns to an existing corpus lane or justifies a new durable category
 - a human has checked that the wording is not overfit to one raw comment
 
+Normalization and candidate generation are separate boundaries:
+
+- normalization should preserve uncertain records instead of dropping them
+- candidate generation can still skip records that remain `uncategorized`, carry `unknown` severity, or lack usable expectations
+- skipped records should remain visible in the candidate artifact rather than silently disappearing
+
 ## Apply Modes
 
 Candidate application is a later workflow than normalization.
 
+Promotion can sit between candidate generation and apply:
+
+- reviewed candidates can be re-emitted with `approved_for_auto: true`
+- that keeps raw intake conservative while still allowing explicit promotion into the auto path
+
+Candidate-quality gating can also sit between candidate generation and apply:
+
+- gate-approved candidates can be re-emitted with `approved_for_auto: true`
+- that path is intended for probationary-lane admission, not direct durable-corpus promotion
+- the gate should use duplicate checks plus review-artifact evidence
+- strict benchmark scoring remains useful, but probationary admission may use softer title and expectation overlap evidence than the final durable corpus scorer
+
 - `auto`
-  Default mode. Apply candidates that pass structural checks and have no soft warnings.
+  Default mode. Apply candidates that pass structural checks and clear a higher-confidence bar with no soft warnings.
 - `review`
   Do not mutate the corpus. Emit an apply-result artifact showing what would be applied or held.
 - `force`
@@ -154,3 +173,27 @@ Auto mode should stay idempotent:
 - exact existing matches should no-op as already present
 - conflicting IDs should block instead of overwriting
 - malformed candidates should fail closed
+
+Current soft-warning examples that hold a candidate out of `auto`:
+
+- `needs_human_review` is still set
+- confidence is not `high`
+- the review comment already says the issue was addressed in a later commit
+- the finding only touches test-only surfaces
+- severity is below `critical`
+
+Reviewed promotion can explicitly clear some of those apply warnings by stamping:
+
+- `review_notes.needs_human_review = false`
+- `review_notes.confidence = "high"`
+- `review_notes.approved_for_auto = true`
+
+The current probationary gate stamps the same fields when a candidate passes duplicate checks and review-artifact evidence strongly enough to justify probationary admission.
+
+Probationary-to-primary promotion is a separate gate:
+
+- it should evaluate cases already living in `probationary-review-cases.json`
+- it should require repeated review-artifact evidence by default
+- it should require at least one strict expected-group match by default
+- exact primary duplicates and conflicting IDs should fail closed
+- near-duplicate primary matches should stay out of `auto` unless the caller explicitly forces the promotion

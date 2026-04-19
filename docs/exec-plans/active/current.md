@@ -1,42 +1,14 @@
-# Roadmap
+# Current Execution Plan
 
-## Phase 1
+## Active Batch
 
-- create dedicated repo
-- document project boundary
-- document relationship to installed skill
-- copy the installed skill into the repo under a clean source layout
+- keep the plugin-owned review and learning loop aligned with the current repo state
+- harden the helper scripts where CodeRabbit surfaced real correctness gaps
+- keep the default path safe, conservative, and measurable
 
-## Phase 2
+## Execution Path Changes
 
-- define canonical source-of-truth rules
-- add sync workflow between the repo copy and the installed runtime copy
-- add lightweight validation commands
-- scaffold the plugin container that will own the skill long-term
-
-## Current Phase 2 Status
-
-- repo copy is the maintained edit location
-- plugin scaffold now exists at `plugins/codex-review`
-- one-way repo-to-installed sync now lives at `scripts/sync_skill_to_codex.ps1`
-- destination deletes remain intentionally manual for now
-- next sync hardening should add verification before any mirror-delete mode
-
-## Phase 3
-
-- formalize benchmark workflows
-- add regression gates for critical and high misses
-- document how Codex should invoke bundled scripts during review
-- make the GitHub PR review lane a first-class input to skill improvement
-- document how this repo should ingest future missed-review cases from linked GitHub repos
-- start moving GitHub-facing workflows behind plugin-owned interfaces instead of loose repo scripts
-- make the plugin MCP boundary, not ambient `gh`, the primary live GitHub access path
-- add a Codex-side capture helper so GitHub connector output becomes a pipeline artifact without manual save steps
-
-## Next Execution Plan
-
-- implement the [GitHub Intake Plan](github-intake-plan.md) as the first plugin-owned workflow
-- run the first live `ReviewPilot` PR through the wrapper pipeline command over fetch, ingest, propose, and apply
+- implement the [GitHub Intake Plan](../../github-intake-plan.md) as the first plugin-owned workflow
 - keep live GitHub fetch read-only while the self-improvement loop hardens
 - make `auto` the default corpus-apply mode, with `review` as the explicit no-write option
 - wire before/after benchmark comparison into the wrapper when a real review output is available
@@ -57,8 +29,11 @@
 - make probationary-to-primary promotion evidence-based so the durable corpus only grows when repeated review artifacts support the same case
 - wire that durable-promotion step into the wrapper as an explicit opt-in so the whole learning loop can run from one entrypoint
 
-## Phase 4
+## Current Next Step
 
-- optionally add CI or packaging only after the local workflow is stable
-- optionally add GitHub-facing automation only after the local review and scoring loop is stable
-- add plugin install/runtime documentation once the local plugin shape is stable
+- stabilize the helper scripts and release/install path so the early-beta public workflow is consistent and safe
+
+## Blockers
+
+- no hard blocker right now
+- remaining decisions are mostly policy or product-shape questions, not broken-path issues

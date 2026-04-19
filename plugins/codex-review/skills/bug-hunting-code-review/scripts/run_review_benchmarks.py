@@ -66,6 +66,11 @@ def parse_args() -> argparse.Namespace:
         default=str(references_dir / "swebench-verified-review-cases.json"),
         help="Path to the external benchmark corpus.",
     )
+    parser.add_argument(
+        "--probationary-corpus",
+        default=str(references_dir / "probationary-review-cases.json"),
+        help="Path to the probationary GitHub review corpus.",
+    )
     return parser.parse_args()
 
 
@@ -81,10 +86,12 @@ def main() -> int:
     review_text = args.review_text
 
     primary = run_score(scorer, Path(args.primary_corpus), review_file, review_text)
+    probationary = run_score(scorer, Path(args.probationary_corpus), review_file, review_text)
     external = run_score(scorer, Path(args.external_corpus), review_file, review_text)
 
     combined = {
         "primary_github_corpus": primary,
+        "probationary_github_corpus": probationary,
         "external_swebench_verified": external,
     }
 
@@ -95,6 +102,8 @@ def main() -> int:
     print("Review benchmark summary")
     print()
     print_lane("Primary GitHub corpus", primary)
+    print()
+    print_lane("Probationary GitHub corpus", probationary)
     print()
     print_lane("External SWE-bench Verified lane", external)
     return 0

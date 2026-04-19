@@ -26,7 +26,10 @@ When improving this skill itself, regression-check it against the corpus:
 - `python "<skill-path>\scripts\review_corpus_score.py" --review-file ".\draft-review.md"`
 - For the external benchmark lane, use `--corpus "<skill-path>\references\swebench-verified-review-cases.json"`
 - To run both lanes together, use `python "<skill-path>\scripts\run_review_benchmarks.py" --review-file ".\draft-review.md"`
-- To prepare, run, and score a pre-PR review in one command, use `python "<skill-path>\scripts\run_pre_pr_review.py" --base origin/main`
+- To prepare and score a pre-PR review in one command with an existing Codex review artifact, use `python "<skill-path>\scripts\run_pre_pr_review.py" --base origin/main --review-file ".\draft-review.md"`
+- To prepare artifacts only, use `python "<skill-path>\scripts\run_pre_pr_review.py" --base origin/main --prepare-only`
+- To let the plugin prepare artifacts, invoke Codex, write `review.md`, and benchmark it in one command, use `python ".\plugins\codex-review\scripts\run_codex_review.py" --repo . --base origin/main`
+- The direct OpenAI API path is legacy-only and should be treated as optional rather than required
 
 ## Review Posture
 

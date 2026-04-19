@@ -17,6 +17,7 @@ The plugin should provide the execution boundary for:
 - future GitHub-safe review ingestion
 - structured scoring and sync workflows
 - future MCP-backed tool surfaces
+- Codex automation entrypoints that orchestrate review, learning, repair handoff, and hardening without moving review judgment out of the skill
 
 Bundled scripts should support consistency:
 

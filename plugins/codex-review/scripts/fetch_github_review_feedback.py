@@ -1,10 +1,13 @@
 import argparse
 import json
+import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 
 GRAPHQL_THREADS_QUERY = """
@@ -37,6 +40,9 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
               body
               path
               line
+              author {
+                login
+              }
               pullRequestReview {
                 id
                 databaseId
@@ -65,6 +71,9 @@ query($threadId: ID!, $cursor: String) {
           body
           path
           line
+          author {
+            login
+          }
           pullRequestReview {
             id
             databaseId
@@ -77,9 +86,17 @@ query($threadId: ID!, $cursor: String) {
 """.strip()
 
 
+GH_BIN = shutil.which("gh")
+if not GH_BIN:
+    raise RuntimeError("GitHub CLI (`gh`) not found in PATH.")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch GitHub PR review feedback into raw artifacts for proposal-only normalization."
+        description=(
+            "Legacy gh-based fetch: read GitHub PR review feedback into raw artifacts for proposal-only normalization. "
+            "Prefer MCP-produced raw input with run_github_intake_pipeline.py --raw-input for the normal live path."
+        )
     )
     parser.add_argument("--repo", required=True, help="GitHub repo in owner/name form.")
     parser.add_argument("--pr", required=True, type=int, help="Pull request number.")
@@ -100,24 +117,53 @@ def run_cmd(cmd: list[str]) -> str:
     return completed.stdout.decode("utf-8", errors="replace")
 
 
+def ensure_read_only_graphql_query(query: str) -> None:
+    normalized = query.lstrip().lower()
+    if not normalized.startswith("query"):
+        raise ValueError("GitHub GraphQL fetches must be read-only queries.")
+    if re.search(r"\bmutation\b", normalized):
+        raise ValueError("GitHub GraphQL fetches may not contain mutations.")
+
+
 def split_repo(repo: str) -> tuple[str, str]:
     if "/" not in repo:
         raise ValueError(f"Repo must be in owner/name form, got: {repo}")
     owner, name = repo.split("/", 1)
     if not owner or not name:
         raise ValueError(f"Repo must be in owner/name form, got: {repo}")
+    if owner in {".", ".."} or name in {".", ".."}:
+        raise ValueError(f"Repo path segments may not be dot-segments, got: {repo}")
     for segment in (owner, name):
         if not all(ch.isalnum() or ch in "._-" for ch in segment):
             raise ValueError(f"Repo must contain only GitHub-safe owner/name characters, got: {repo}")
     return owner, name
 
 
+def encode_repo_path(repo: str) -> str:
+    owner, name = split_repo(repo)
+    return f"{quote(owner, safe='')}/{quote(name, safe='')}"
+
+
 def ensure_gh_auth() -> None:
-    subprocess.run(["gh", "auth", "status"], capture_output=True, check=True)
+    subprocess.run([GH_BIN, "auth", "status"], capture_output=True, check=True)
+
+
+def gh_api_read_only(path: str, paginate: bool = False) -> dict[str, Any] | list[dict[str, Any]]:
+    cmd = [GH_BIN, "api", path]
+    if paginate:
+        cmd.extend(["--paginate", "--slurp"])
+    payload = json.loads(run_cmd(cmd))
+    if paginate and isinstance(payload, list) and all(isinstance(page, list) for page in payload):
+        flattened: list[dict[str, Any]] = []
+        for page in payload:
+            flattened.extend(page)
+        return flattened
+    return payload
 
 
 def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
-    cmd = ["gh", "api", "graphql", "-f", f"query={query}"]
+    ensure_read_only_graphql_query(query)
+    cmd = [GH_BIN, "api", "graphql", "-f", f"query={query}"]
     for key, value in variables.items():
         if isinstance(value, int):
             cmd.extend(["-F", f"{key}={value}"])
@@ -129,15 +175,8 @@ def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
 
 
 def fetch_rest_comments(repo: str, pr_number: int) -> dict[str, Any]:
-    output = run_cmd(
-        [
-            "gh",
-            "api",
-            f"repos/{repo}/pulls/{pr_number}/comments",
-            "--paginate",
-        ]
-    )
-    comments = json.loads(output)
+    encoded_repo = encode_repo_path(repo)
+    comments = gh_api_read_only(f"repos/{encoded_repo}/pulls/{pr_number}/comments", paginate=True)
     return {
         "source": "github-rest-review-comments",
         "repo": repo,

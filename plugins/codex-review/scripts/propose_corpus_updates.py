@@ -60,6 +60,9 @@ def slugify(text: str) -> str:
 
 
 def derive_title(record: dict[str, Any]) -> str:
+    candidate_title = str(record.get("candidate_title", "")).strip()
+    if candidate_title:
+        return candidate_title[:100]
     expectations = record.get("candidate_expectations") or []
     if expectations:
         first = str(expectations[0]).strip()
@@ -71,7 +74,7 @@ def derive_title(record: dict[str, Any]) -> str:
 def derive_expected_groups(record: dict[str, Any]) -> list[list[str]]:
     expectations = record.get("candidate_expectations") or []
     if not expectations:
-        body = str(record.get("body", "")).strip()
+        body = str(record.get("candidate_summary", "")).strip() or str(record.get("body", "")).strip()
         if not body:
             return []
         expectations = [body[:120]]
