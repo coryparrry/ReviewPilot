@@ -39,6 +39,9 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
               body
               path
               line
+              author {
+                login
+              }
               pullRequestReview {
                 id
                 databaseId
@@ -67,6 +70,9 @@ query($threadId: ID!, $cursor: String) {
           body
           path
           line
+          author {
+            login
+          }
           pullRequestReview {
             id
             databaseId
