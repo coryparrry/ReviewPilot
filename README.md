@@ -184,19 +184,17 @@ This project is still supposed to work as a **Codex skill**, not turn into a ran
 
 ## 📦 Install / Try It
 
-The easiest way for normal users should be a **downloadable release zip**, not a source checkout.
+The main install path should be the npm installer:
 
 ### Recommended install for users
 
-Download a release bundle, unzip it, then run:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
+```bash
+npx @reviewpilot/codex-review-install
 ```
 
-That is the intended public install path.
+That is the main public install path.
 
-What it does:
+What it does under the hood:
 
 - copies the plugin into Codex's local marketplace folder
 - copies the installed plugin into Codex's plugin cache
@@ -205,9 +203,17 @@ What it does:
 
 After it finishes, restart Codex Desktop so the app reloads plugin state cleanly.
 
-### npm-friendly installer path
+### Manual fallback install
 
-This repo is also set up for an npm-style installer command:
+If you are installing from a GitHub checkout or release zip, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
+```
+
+That runs the same install flow without needing npm.
+
+### npm installer path
 
 ```bash
 npx @reviewpilot/codex-review-install
@@ -219,8 +225,6 @@ That runs the same install flow under the hood:
 - cache copy
 - marketplace registration
 - plugin enablement
-
-If you are installing from a GitHub checkout or release zip, use the PowerShell installer above.
 
 ### Repo checkout install
 
@@ -250,21 +254,26 @@ Optional:
 
 ### Basic setup
 
-1. Download the release zip or clone this repo.
-2. Run the installer:
+1. Run:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
+```bash
+npx @reviewpilot/codex-review-install
 ```
 
-3. Restart Codex Desktop.
-4. Open Plugins and confirm `ReviewPilot` appears.
-5. Open the repo in Codex.
-6. Keep the plugin-contained skill as the source of truth in this repo.
-7. If you also want the direct installed skill runtime updated, sync it with:
+2. Restart Codex Desktop.
+3. Open Plugins and confirm `ReviewPilot` appears.
+4. Open this repo in Codex if you want to work on the source.
+5. Keep the plugin-contained skill as the source of truth in this repo.
+6. If you also want the direct installed skill runtime updated, sync it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\sync_skill_to_codex.ps1
+```
+
+If you prefer not to use npm, the fallback is:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
 ```
 
 What those two scripts do:
