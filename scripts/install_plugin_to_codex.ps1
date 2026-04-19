@@ -33,6 +33,71 @@ function Ensure-Directory {
     Write-Step "Created directory $Path"
 }
 
+function Copy-PluginTree {
+    param(
+        [string]$SourceRoot,
+        [string]$DestinationRoot,
+        [switch]$DryRunMode
+    )
+
+    if (-not (Test-Path -LiteralPath $DestinationRoot -PathType Container)) {
+        if ($DryRunMode) {
+            Write-Step "Would create plugin destination $DestinationRoot"
+        } else {
+            New-Item -ItemType Directory -Path $DestinationRoot -Force | Out-Null
+            Write-Step "Created plugin destination $DestinationRoot"
+        }
+    }
+
+    $sourceFiles = Get-ChildItem -LiteralPath $SourceRoot -Recurse -Force |
+        Where-Object { -not (Should-SkipPath $_.FullName) }
+    $copiedFiles = 0
+    $createdDirectories = 0
+
+    foreach ($item in $sourceFiles) {
+        $relativePath = $item.FullName.Substring($SourceRoot.Length).TrimStart('\', '/')
+        if ([string]::IsNullOrWhiteSpace($relativePath)) {
+            continue
+        }
+
+        $targetPath = Join-Path $DestinationRoot $relativePath
+
+        if ($item.PSIsContainer) {
+            if (-not (Test-Path -LiteralPath $targetPath -PathType Container)) {
+                if ($DryRunMode) {
+                    Write-Step "Would create directory $targetPath"
+                } else {
+                    New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+                }
+                $createdDirectories++
+            }
+            continue
+        }
+
+        $targetDirectory = Split-Path -Parent $targetPath
+        if (-not (Test-Path -LiteralPath $targetDirectory -PathType Container)) {
+            if ($DryRunMode) {
+                Write-Step "Would create directory $targetDirectory"
+            } else {
+                New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+            }
+            $createdDirectories++
+        }
+
+        if ($DryRunMode) {
+            Write-Step "Would copy $relativePath to $DestinationRoot"
+        } else {
+            Copy-Item -LiteralPath $item.FullName -Destination $targetPath -Force
+        }
+        $copiedFiles++
+    }
+
+    return [pscustomobject]@{
+        CreatedDirectories = $createdDirectories
+        CopiedFiles = $copiedFiles
+    }
+}
+
 function Should-SkipPath {
     param([string]$Path)
 
@@ -70,65 +135,18 @@ if ([string]::IsNullOrWhiteSpace($pluginName)) {
 $marketplaceRoot = Join-Path $resolvedCodexHome "local-marketplaces\$MarketplaceName"
 $pluginsRoot = Join-Path $marketplaceRoot "plugins"
 $pluginDestination = Join-Path $pluginsRoot $pluginName
+$pluginCacheRoot = Join-Path $resolvedCodexHome "plugins\cache\$MarketplaceName"
+$pluginCacheDestination = Join-Path $pluginCacheRoot $pluginName
 $agentsPluginsRoot = Join-Path $marketplaceRoot ".agents\plugins"
 $marketplaceJsonPath = Join-Path $agentsPluginsRoot "marketplace.json"
 
 Ensure-Directory -Path $resolvedCodexHome -DryRunMode:$DryRun
 Ensure-Directory -Path $marketplaceRoot -DryRunMode:$DryRun
 Ensure-Directory -Path $pluginsRoot -DryRunMode:$DryRun
+Ensure-Directory -Path $pluginCacheRoot -DryRunMode:$DryRun
 Ensure-Directory -Path $agentsPluginsRoot -DryRunMode:$DryRun
-
-if (-not (Test-Path -LiteralPath $pluginDestination -PathType Container)) {
-    if ($DryRun) {
-        Write-Step "Would create plugin destination $pluginDestination"
-    } else {
-        New-Item -ItemType Directory -Path $pluginDestination -Force | Out-Null
-        Write-Step "Created plugin destination $pluginDestination"
-    }
-}
-
-$sourceFiles = Get-ChildItem -LiteralPath $resolvedSource -Recurse -Force |
-    Where-Object { -not (Should-SkipPath $_.FullName) }
-$copiedFiles = 0
-$createdDirectories = 0
-
-foreach ($item in $sourceFiles) {
-    $relativePath = $item.FullName.Substring($resolvedSource.Length).TrimStart('\', '/')
-    if ([string]::IsNullOrWhiteSpace($relativePath)) {
-        continue
-    }
-
-    $targetPath = Join-Path $pluginDestination $relativePath
-
-    if ($item.PSIsContainer) {
-        if (-not (Test-Path -LiteralPath $targetPath -PathType Container)) {
-            if ($DryRun) {
-                Write-Step "Would create directory $targetPath"
-            } else {
-                New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
-            }
-            $createdDirectories++
-        }
-        continue
-    }
-
-    $targetDirectory = Split-Path -Parent $targetPath
-    if (-not (Test-Path -LiteralPath $targetDirectory -PathType Container)) {
-        if ($DryRun) {
-            Write-Step "Would create directory $targetDirectory"
-        } else {
-            New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
-        }
-        $createdDirectories++
-    }
-
-    if ($DryRun) {
-        Write-Step "Would copy $relativePath"
-    } else {
-        Copy-Item -LiteralPath $item.FullName -Destination $targetPath -Force
-    }
-    $copiedFiles++
-}
+$marketplaceCopy = Copy-PluginTree -SourceRoot $resolvedSource -DestinationRoot $pluginDestination -DryRunMode:$DryRun
+$cacheCopy = Copy-PluginTree -SourceRoot $resolvedSource -DestinationRoot $pluginCacheDestination -DryRunMode:$DryRun
 
 $pluginEntry = [ordered]@{
     name = $pluginName
@@ -177,10 +195,13 @@ if ($DryRun) {
 
 $mode = if ($DryRun) { "dry-run" } else { "install" }
 Write-Step "Completed plugin $mode from $resolvedSource to $pluginDestination"
-Write-Step "Directories created: $createdDirectories"
-Write-Step "Files processed: $copiedFiles"
+Write-Step "Marketplace directories created: $($marketplaceCopy.CreatedDirectories)"
+Write-Step "Marketplace files processed: $($marketplaceCopy.CopiedFiles)"
+Write-Step "Cache directories created: $($cacheCopy.CreatedDirectories)"
+Write-Step "Cache files processed: $($cacheCopy.CopiedFiles)"
 Write-Step "Codex home: $resolvedCodexHome"
 Write-Step "Marketplace root: $marketplaceRoot"
 Write-Step "Plugin path: $pluginDestination"
+Write-Step "Plugin cache path: $pluginCacheDestination"
 Write-Step "Marketplace file: $marketplaceJsonPath"
 Write-Step "Restart Codex Desktop if the plugin does not appear immediately."

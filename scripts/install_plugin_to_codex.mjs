@@ -135,16 +135,21 @@ async function main() {
   const marketplaceRoot = path.join(options.codexHome, "local-marketplaces", options.marketplaceName);
   const pluginsRoot = path.join(marketplaceRoot, "plugins");
   const pluginDestination = path.join(pluginsRoot, pluginName);
+  const pluginCacheRoot = path.join(options.codexHome, "plugins", "cache", options.marketplaceName);
+  const pluginCacheDestination = path.join(pluginCacheRoot, pluginName);
   const agentsPluginsRoot = path.join(marketplaceRoot, ".agents", "plugins");
   const marketplaceJsonPath = path.join(agentsPluginsRoot, "marketplace.json");
 
   await ensureDirectory(options.codexHome, options.dryRun);
   await ensureDirectory(marketplaceRoot, options.dryRun);
   await ensureDirectory(pluginsRoot, options.dryRun);
+  await ensureDirectory(pluginCacheRoot, options.dryRun);
   await ensureDirectory(agentsPluginsRoot, options.dryRun);
   await ensureDirectory(pluginDestination, options.dryRun);
+  await ensureDirectory(pluginCacheDestination, options.dryRun);
 
   await copyTree(options.source, pluginDestination, options);
+  await copyTree(options.source, pluginCacheDestination, options);
 
   const marketplace = {
     name: options.marketplaceName,
@@ -178,6 +183,7 @@ async function main() {
   logStep(`Codex home: ${options.codexHome}`);
   logStep(`Marketplace root: ${marketplaceRoot}`);
   logStep(`Plugin path: ${pluginDestination}`);
+  logStep(`Plugin cache path: ${pluginCacheDestination}`);
   logStep(`Marketplace file: ${marketplaceJsonPath}`);
   logStep("Restart Codex Desktop if the plugin does not appear immediately.");
 }
