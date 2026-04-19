@@ -115,6 +115,50 @@ def load_external_case_map(corpus_path: Path) -> dict[str, list[dict[str, Any]]]
     return case_map
 
 
+def summarize_target_case(score: dict[str, Any], expected_cases: list[dict[str, Any]]) -> dict[str, Any]:
+    results = {entry.get("case_id"): entry for entry in score.get("results", [])}
+    target_results = []
+    for case in expected_cases:
+        case_id = case.get("id")
+        if not case_id:
+            continue
+        result = results.get(case_id)
+        target_results.append(
+            {
+                "case_id": case_id,
+                "title": case.get("title", ""),
+                "category": case.get("category", ""),
+                "matched": bool(result and result.get("matched")),
+                "severity": case.get("severity", ""),
+            }
+        )
+    return {
+        "target_case_count": len(target_results),
+        "target_matches": sum(1 for item in target_results if item["matched"]),
+        "target_results": target_results,
+    }
+
+
+def build_run_aggregate(case_results: list[dict[str, Any]]) -> dict[str, Any]:
+    total = len(case_results)
+    target_match_count = sum(1 for case in case_results if case.get("target_summary", {}).get("target_matches", 0) > 0)
+    missed_categories: dict[str, int] = {}
+
+    for case in case_results:
+        for target in case.get("target_summary", {}).get("target_results", []):
+            if target.get("matched"):
+                continue
+            category = target.get("category") or "unknown"
+            missed_categories[category] = missed_categories.get(category, 0) + 1
+
+    return {
+        "executed_cases": total,
+        "cases_with_target_match": target_match_count,
+        "target_case_recall": (target_match_count / total) if total else 0.0,
+        "missed_target_categories": missed_categories,
+    }
+
+
 def build_prompt(row: dict[str, Any], include_hints: bool) -> str:
     parts = [
         "You are acting as a release-blocking bug reviewer.",
@@ -198,6 +242,7 @@ def evaluate_case(
     prepare_only: bool,
     scorer: Path,
     external_corpus: Path,
+    expected_cases: list[dict[str, Any]],
     model: str | None,
 ) -> dict[str, Any]:
     prompt = build_prompt(row, include_hints)
@@ -215,12 +260,27 @@ def evaluate_case(
     }
 
     if prepare_only:
+        result["target_summary"] = {
+            "target_case_count": len(expected_cases),
+            "target_matches": 0,
+            "target_results": [
+                {
+                    "case_id": case.get("id", ""),
+                    "title": case.get("title", ""),
+                    "category": case.get("category", ""),
+                    "matched": False,
+                    "severity": case.get("severity", ""),
+                }
+                for case in expected_cases
+            ],
+        }
         return result
 
     result["codex_command"] = run_codex_review(repo, prompt, review_file, model)
     score = run_external_score(scorer, external_corpus, review_file)
     write_json(case_dir / "external-score.json", score)
     result["score_summary"] = score.get("summary", {})
+    result["target_summary"] = summarize_target_case(score, expected_cases)
     return result
 
 
@@ -267,15 +327,24 @@ def main() -> int:
             prepare_only=args.prepare_only,
             scorer=scorer,
             external_corpus=corpus_path,
+            expected_cases=case_map.get(instance_id, []),
             model=args.model,
         )
         summary["cases"].append(case_result)
 
+    summary["aggregate"] = build_run_aggregate(summary["cases"])
     write_json(run_dir / "summary.json", summary)
     print(f"Hardening run: {run_dir}")
     print(f"Fetched rows: {len(dataset_payload.get('rows', []))}")
     print(f"Selected curated cases: {len(selected_rows)}")
     print(f"Mode: {'prepare-only' if args.prepare_only else 'executed'}")
+    if selected_rows:
+        aggregate = summary["aggregate"]
+        print(
+            "Target-case recall: "
+            f"{aggregate['cases_with_target_match']}/{aggregate['executed_cases']} "
+            f"({aggregate['target_case_recall']:.1%})"
+        )
     return 0
 
 

@@ -80,6 +80,7 @@ That workflow:
 4. runs Codex to write a review artifact for each selected case
 5. scores each review artifact against the external SWE-bench lane
 6. writes per-case artifacts plus a run summary under `artifacts/hf-hardening/`
+7. reports target-case recall so you can see whether the reviewer found the intended bug for each benchmark row
 
 For a dry run that only prepares prompts and metadata:
 
