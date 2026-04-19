@@ -255,7 +255,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\sync_skill_to_codex.ps1
 What those two scripts do:
 
 - `install_plugin_to_codex.ps1`
-  Copies the plugin bundle into `~/.codex/local-marketplaces/<marketplace-name>/plugins/codex-review`, also copies it into `~/.codex/plugins/cache/<marketplace-name>/codex-review`, writes `.agents/plugins/marketplace.json`, registers the marketplace in `~/.codex/config.toml`, and enables the plugin there so Codex Desktop can discover and load it.
+  Copies the plugin bundle into `~/.codex/local-marketplaces/<marketplace-name>/plugins/codex-review`, also copies it into `~/.codex/plugins/cache/<marketplace-name>/codex-review`, writes `.agents/plugins/marketplace.json` with auto-install policy, registers the marketplace in `~/.codex/config.toml`, and enables the plugin there so Codex Desktop can discover and load it.
 - `sync_skill_to_codex.ps1`
   Copies the maintained review skill into the direct runtime skill path under `.codex/skills/bug-hunting-code-review`
 

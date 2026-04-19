@@ -4,11 +4,10 @@
   "description": "Plugin-backed CodeRabbit-style review system for Codex.",
   "author": {
     "name": "ReviewPilot",
-    "email": "",
-    "url": ""
+    "url": "https://github.com/coryparrry/ReviewPilot"
   },
-  "homepage": "",
-  "repository": "",
+  "homepage": "https://github.com/coryparrry/ReviewPilot",
+  "repository": "https://github.com/coryparrry/ReviewPilot",
   "license": "UNLICENSED",
   "keywords": [
     "code-review",
@@ -26,11 +25,12 @@
     "category": "Coding",
     "capabilities": [
       "Interactive",
+      "Read",
       "Write"
     ],
-    "websiteURL": "",
-    "privacyPolicyURL": "",
-    "termsOfServiceURL": "",
+    "websiteURL": "https://github.com/coryparrry/ReviewPilot",
+    "privacyPolicyURL": "https://github.com/coryparrry/ReviewPilot",
+    "termsOfServiceURL": "https://github.com/coryparrry/ReviewPilot",
     "defaultPrompt": [
       "Review my current changes for release-blocking bugs",
       "Prepare a deep pre-PR review for this repo",

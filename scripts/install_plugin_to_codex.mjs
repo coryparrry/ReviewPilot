@@ -87,6 +87,31 @@ async function ensureDirectory(targetPath, dryRun) {
   logStep(`Created directory ${targetPath}`);
 }
 
+function updateTomlBlock(content, header, block) {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  const replacementLines = block.replace(/\r\n/g, "\n").replace(/\n+$/g, "").split("\n");
+  const startIndex = lines.findIndex((line) => line === header);
+
+  if (startIndex >= 0) {
+    let endIndex = startIndex + 1;
+    while (endIndex < lines.length && !lines[endIndex].startsWith("[")) {
+      endIndex += 1;
+    }
+    lines.splice(startIndex, endIndex - startIndex, ...replacementLines);
+  } else {
+    while (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+      lines.pop();
+    }
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push(...replacementLines);
+  }
+
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
 async function copyTree(sourceRoot, destinationRoot, options) {
   const entries = await fs.readdir(sourceRoot, { withFileTypes: true });
 
@@ -134,18 +159,12 @@ async function updatePluginConfig(configPath, pluginRef, dryRun) {
   }
 
   const content = await fs.readFile(configPath, "utf8");
-  const escapedRef = pluginRef.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const blockPattern = new RegExp(`^\\[plugins\\."${escapedRef}"\\]\\r?\\n(?:.+\\r?\\n)*?(?=^\\[|^\\[\\[|\\z)`, "ms");
-  const enabledPattern = new RegExp(`^\\[plugins\\."${escapedRef}"\\]\\r?\\n(?:.+\\r?\\n)*?^enabled\\s*=\\s*true\\s*$`, "ms");
+  const updated = updateTomlBlock(content, header, block);
 
-  if (enabledPattern.test(content)) {
+  if (updated === content) {
     logStep(`Plugin enable block already present in ${configPath}`);
     return;
   }
-
-  const updated = blockPattern.test(content)
-    ? content.replace(blockPattern, block)
-    : `${content}${content.endsWith("\n") || content.length === 0 ? "" : "\n"}\n${block}`;
 
   if (dryRun) {
     logStep(`Would enable plugin ${pluginRef} in ${configPath}`);
@@ -173,12 +192,7 @@ async function updateMarketplaceConfig(configPath, marketplaceName, marketplaceR
   }
 
   const content = await fs.readFile(configPath, "utf8");
-  const escapedName = marketplaceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const blockPattern = new RegExp(`^\\[marketplaces\\.${escapedName}\\]\\r?\\n(?:.+\\r?\\n)*?(?=^\\[|^\\[\\[|\\z)`, "ms");
-
-  const updated = blockPattern.test(content)
-    ? content.replace(blockPattern, block)
-    : `${content}${content.endsWith("\n") || content.length === 0 ? "" : "\n"}\n${block}`;
+  const updated = updateTomlBlock(content, header, block);
 
   if (dryRun) {
     logStep(`Would register marketplace ${marketplaceName} in ${configPath}`);
@@ -237,7 +251,7 @@ async function main() {
           path: `./plugins/${pluginName}`,
         },
         policy: {
-          installation: "AVAILABLE",
+          installation: "INSTALLED_BY_DEFAULT",
           authentication: "ON_INSTALL",
         },
         category: String(pluginManifest?.interface?.category || "Coding"),

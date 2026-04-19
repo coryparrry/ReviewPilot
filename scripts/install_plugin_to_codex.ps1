@@ -43,6 +43,55 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path, $Value, $encoding)
 }
 
+function Update-TomlBlock {
+    param(
+        [string]$Content,
+        [string]$Header,
+        [string]$Block
+    )
+
+    $normalized = $Content -replace "`r`n", "`n"
+    $lines = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in ($normalized -split "`n", 0, 'SimpleMatch')) {
+        $lines.Add($line)
+    }
+
+    $startIndex = -1
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ($lines[$index] -eq $Header) {
+            $startIndex = $index
+            break
+        }
+    }
+
+    $replacementLines = [System.Collections.Generic.List[string]]::new()
+    foreach ($line in (($Block -replace "`r`n", "`n").TrimEnd("`n") -split "`n", 0, 'SimpleMatch')) {
+        $replacementLines.Add($line)
+    }
+
+    if ($startIndex -ge 0) {
+        $endIndex = $startIndex + 1
+        while ($endIndex -lt $lines.Count -and -not $lines[$endIndex].StartsWith("[")) {
+            $endIndex++
+        }
+        $removeCount = $endIndex - $startIndex
+        $lines.RemoveRange($startIndex, $removeCount)
+        $lines.InsertRange($startIndex, $replacementLines)
+    } else {
+        while ($lines.Count -gt 0 -and [string]::IsNullOrWhiteSpace($lines[$lines.Count - 1])) {
+            $lines.RemoveAt($lines.Count - 1)
+        }
+        if ($lines.Count -gt 0) {
+            $lines.Add("")
+        }
+        foreach ($line in $replacementLines) {
+            $lines.Add($line)
+        }
+    }
+
+    return (($lines -join "`r`n").TrimEnd() + "`r`n")
+}
+
 function Copy-PluginTree {
     param(
         [string]$SourceRoot,
@@ -131,20 +180,11 @@ function Update-PluginConfig {
     }
 
     $content = Get-Content -LiteralPath $ConfigPath -Raw
-    $escapedRef = [regex]::Escape($PluginRef)
-    $blockPattern = "(?ms)^\[plugins\.`"$escapedRef`"\]\r?\n(?:.+\r?\n)*?(?=^\[|^\[\[|\z)"
-    $enabledPattern = "(?ms)^\[plugins\.`"$escapedRef`"\]\r?\n(?:.+\r?\n)*?^enabled\s*=\s*true\s*$"
+    $updated = Update-TomlBlock -Content $content -Header $header -Block $block
 
-    if ($content -match $enabledPattern) {
+    if ($updated -eq $content) {
         Write-Step "Plugin enable block already present in $ConfigPath"
         return
-    }
-
-    $updated = if ($content -match $blockPattern) {
-        [regex]::Replace($content, $blockPattern, $block)
-    } else {
-        $separator = if ($content.EndsWith("`n") -or $content.Length -eq 0) { "" } else { "`r`n" }
-        $content + $separator + "`r`n" + $block
     }
 
     if ($DryRunMode) {
@@ -185,18 +225,7 @@ function Update-MarketplaceConfig {
     }
 
     $content = Get-Content -LiteralPath $ConfigPath -Raw
-    $escapedName = [regex]::Escape($MarketplaceName)
-    $blockPattern = "(?ms)^\[marketplaces\.$escapedName\]\r?\n(?:.+\r?\n)*?(?=^\[|^\[\[|\z)"
-    $existingSourcePattern = "(?ms)^\[marketplaces\.$escapedName\]\r?\n(?:.+\r?\n)*?^source\s*=\s*`"$([regex]::Escape($sourceValue))`"\s*$"
-
-    if ($content -match $existingSourcePattern) {
-        $updated = [regex]::Replace($content, $blockPattern, $block)
-    } elseif ($content -match $blockPattern) {
-        $updated = [regex]::Replace($content, $blockPattern, $block)
-    } else {
-        $separator = if ($content.EndsWith("`n") -or $content.Length -eq 0) { "" } else { "`r`n" }
-        $updated = $content + $separator + "`r`n" + $block
-    }
+    $updated = Update-TomlBlock -Content $content -Header $header -Block $block
 
     if ($DryRunMode) {
         Write-Step "Would register marketplace $MarketplaceName in $ConfigPath"
@@ -266,7 +295,7 @@ $pluginEntry = [ordered]@{
         path = "./plugins/$pluginName"
     }
     policy = @{
-        installation = "AVAILABLE"
+        installation = "INSTALLED_BY_DEFAULT"
         authentication = "ON_INSTALL"
     }
     category = if ($pluginManifest.interface.category) { [string]$pluginManifest.interface.category } else { "Coding" }
