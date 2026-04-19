@@ -4,7 +4,7 @@
     "title": "Prevent duplicate advancement from creating multiple active steps",
     "severity": "critical",
     "category": "source-of-truth-drift",
-    "source": "repo-owner/Binder:manual-mcp-review-threads.json",
+    "source": "anonymized-private-repo:manual-mcp-review-threads.json",
     "expected_groups": [
       [
         "Line\\ 31\\ activates\\ a\\ pending\\ step\\ even\\ when\\ the\\ review\\ step\\ was\\ not\\ advanced\\ in\\ this\\ call",
@@ -17,7 +17,7 @@
     "title": "Re-activate the bootstrapped local owner instead of only checking existence",
     "severity": "high",
     "category": "state-symmetry",
-    "source": "repo-owner/Binder:manual-mcp-review-threads.json",
+    "source": "anonymized-private-repo:manual-mcp-review-threads.json",
     "expected_groups": [
       [
         "ensureLocalIdentity\\(\\)\\ now\\ treats\\ any\\ matching\\ user\\ or\\ membership\\ as\\ good\\ enough,\\ but\\ resolveAuthContext\\(\\)\\ only\\ accepts\\ a",

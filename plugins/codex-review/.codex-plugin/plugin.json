@@ -5,10 +5,10 @@
   "author": {
     "name": "ReviewPilot",
     "email": "",
-    "url": "https://github.com/repo-owner/ReviewPilot"
+    "url": ""
   },
-  "homepage": "https://github.com/repo-owner/ReviewPilot",
-  "repository": "https://github.com/repo-owner/ReviewPilot.git",
+  "homepage": "",
+  "repository": "",
   "license": "UNLICENSED",
   "keywords": [
     "code-review",
