@@ -53,12 +53,14 @@ So the practical setup today is:
 For public distribution, the intended path is the npm installer:
 
 ```bash
-npx @reviewpilot/codex-review-install
+npx --yes --package=@reviewpilot/codex-review-install -- codex-review-install
 ```
 
 That should be the main user-facing install flow.
 
 It still lands the plugin in Codex Desktop's marketplace path under the hood, but it removes most of the manual setup from the user's point of view.
+
+Use that full command on Windows. It avoids a command-resolution problem with the shorter `npx @reviewpilot/codex-review-install` form.
 
 The repo now includes:
 

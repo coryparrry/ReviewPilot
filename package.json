@@ -1,13 +1,14 @@
 {
   "name": "@reviewpilot/codex-review-install",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Installer for the Codex Review plugin.",
   "license": "UNLICENSED",
   "type": "module",
   "bin": {
-    "codex-review-install": "scripts/install_plugin_to_codex.mjs"
+    "codex-review-install": "bin/codex-review-install.cjs"
   },
   "files": [
+    "bin/codex-review-install.cjs",
     "plugins/codex-review/**",
     "scripts/install_plugin_to_codex.mjs",
     "scripts/install_plugin_to_codex.ps1",

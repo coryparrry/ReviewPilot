@@ -189,10 +189,12 @@ The main install path should be the npm installer:
 ### Recommended install for users
 
 ```bash
-npx @reviewpilot/codex-review-install
+npx --yes --package=@reviewpilot/codex-review-install -- codex-review-install
 ```
 
 That is the main public install path.
+
+Use that full command as written. It avoids a Windows `npx` command-resolution problem with the shorter `npx @reviewpilot/codex-review-install` form.
 
 What it does under the hood:
 
@@ -216,7 +218,7 @@ That runs the same install flow without needing npm.
 ### npm installer path
 
 ```bash
-npx @reviewpilot/codex-review-install
+npx --yes --package=@reviewpilot/codex-review-install -- codex-review-install
 ```
 
 That runs the same install flow under the hood:
@@ -257,7 +259,7 @@ Optional:
 1. Run:
 
 ```bash
-npx @reviewpilot/codex-review-install
+npx --yes --package=@reviewpilot/codex-review-install -- codex-review-install
 ```
 
 2. Restart Codex Desktop.
@@ -309,7 +311,7 @@ npm publish --access public
 After that, users can install with:
 
 ```bash
-npx @reviewpilot/codex-review-install
+npx --yes --package=@reviewpilot/codex-review-install -- codex-review-install
 ```
 
 ### Fastest first run
