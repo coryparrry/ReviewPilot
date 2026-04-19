@@ -18,9 +18,9 @@
       <feComposite in="SourceGraphic" in2="blurred" operator="over" />
     </filter>
   </defs>
-  <rect x="24" y="24" width="1232" height="592" rx="48" fill="url(#reviewpilot-banner-bg)" />
-  <rect x="24" y="24" width="1232" height="592" rx="48" fill="url(#reviewpilot-banner-glow)" />
-  <rect x="24" y="24" width="1232" height="592" rx="48" fill="none" stroke="#3f3f46" stroke-width="2" />
+  <rect x="0" y="0" width="1280" height="640" rx="48" fill="url(#reviewpilot-banner-bg)" />
+  <rect x="0" y="0" width="1280" height="640" rx="48" fill="url(#reviewpilot-banner-glow)" />
+  <rect x="0" y="0" width="1280" height="640" rx="48" fill="none" stroke="#3f3f46" stroke-width="2" />
   <g transform="translate(100 120)">
     <rect x="0" y="0" width="340" height="340" rx="72" fill="#1f1f23" />
     <rect x="0" y="0" width="340" height="340" rx="72" fill="none" stroke="#3f3f46" stroke-width="3" />
