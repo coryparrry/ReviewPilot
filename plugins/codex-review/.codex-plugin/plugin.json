@@ -1,6 +1,6 @@
 {
   "name": "codex-review",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Plugin-backed deep review system for Codex.",
   "author": {
     "name": "ReviewPilot",
@@ -37,8 +37,8 @@
       "Score this review against the corpus and benchmark lanes"
     ],
     "brandColor": "#27272A",
-    "composerIcon": "./assets/reviewpilot-composer-graphite.svg",
-    "logo": "./assets/reviewpilot-logo-graphite.svg",
+    "composerIcon": "./assets/composer-icon.svg",
+    "logo": "./assets/logo.svg",
     "screenshots": []
   }
 }

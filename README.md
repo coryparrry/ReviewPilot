@@ -1,4 +1,6 @@
-![ReviewPilot](./assets/branding/reviewpilot-graphite-banner.svg)
+<p align="left">
+  <img src="./plugins/codex-review/assets/reviewpilot-logo-graphite.svg" alt="ReviewPilot" width="320">
+</p>
 
 # ReviewPilot 🧠🔍
 
