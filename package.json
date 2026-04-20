@@ -2,13 +2,26 @@
   "name": "@reviewpilot/codex-review-install",
   "version": "0.1.2",
   "description": "Installer for the Codex Review plugin.",
-  "license": "UNLICENSED",
+  "homepage": "https://github.com/coryparrry/ReviewPilot",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coryparrry/ReviewPilot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/coryparrry/ReviewPilot/issues"
+  },
+  "license": "MIT",
   "type": "module",
+  "scripts": {
+    "validate:release": "python .\\scripts\\validate_public_release.py",
+    "smoke:release": "python .\\scripts\\smoke_test_release.py"
+  },
   "bin": {
     "codex-review-install": "bin/codex-review-install.cjs"
   },
   "files": [
     "bin/codex-review-install.cjs",
+    "LICENSE",
     "plugins/codex-review/**",
     "scripts/install_plugin_to_codex.mjs",
     "scripts/install_plugin_to_codex.ps1",

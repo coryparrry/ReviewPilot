@@ -39,6 +39,15 @@ That is large enough to justify its own repo and docs.
 - [GitHub Intake Plan](github-intake-plan.md)
   Plugin-owned workflow plan for ingesting GitHub PR review feedback, generating corpus candidates, and applying safe additions
 
+## Practical Guides
+
+- [GitHub MCP setup](github-mcp-setup.md)
+  How to connect the GitHub side of the plugin's learning flow
+- [Lessons workflow](lessons-workflow.md)
+  How to turn private review lessons into reviewed prompt improvements safely
+- [Public release checklist](public-release-checklist.md)
+  What to run and confirm before making the repo public
+
 ## Near-Term Direction
 
 - keep the installed skill working where it is today

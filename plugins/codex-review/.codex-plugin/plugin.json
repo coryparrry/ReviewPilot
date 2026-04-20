@@ -8,7 +8,7 @@
   },
   "homepage": "https://github.com/coryparrry/ReviewPilot",
   "repository": "https://github.com/coryparrry/ReviewPilot",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "keywords": [
     "code-review",
     "codex",
@@ -29,8 +29,8 @@
       "Write"
     ],
     "websiteURL": "https://github.com/coryparrry/ReviewPilot",
-    "privacyPolicyURL": "https://github.com/coryparrry/ReviewPilot",
-    "termsOfServiceURL": "https://github.com/coryparrry/ReviewPilot",
+    "privacyPolicyURL": "",
+    "termsOfServiceURL": "",
     "defaultPrompt": [
       "Review my current changes for release-blocking bugs",
       "Prepare a deep pre-PR review for this repo",
