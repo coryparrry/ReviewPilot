@@ -41,7 +41,7 @@ def validate_metadata() -> None:
         raise SystemExit("package.json files list must include LICENSE")
 
     expected_repo_url = "https://github.com/coryparrry/ReviewPilot"
-    expected_repo_git_url = "https://github.com/coryparrry/ReviewPilot.git"
+    expected_repo_git_url = "git+https://github.com/coryparrry/ReviewPilot.git"
 
     if package_data.get("homepage") != expected_repo_url:
         raise SystemExit("package.json homepage must point at the public GitHub repo")
