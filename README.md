@@ -32,9 +32,11 @@ It is designed to improve over time from:
 
 ## Feature Highlights 🚀
 
-- `run_codex_review.py`: one-command local review with artifacts, benchmarks, and repair-plan output
+- `run_codex_review.py`: one-command local review with explicit `changes`, `dirty`, `full`, `quick`, and `deep` review modes
 - `run_review_fix.py`: one-finding repair handoff instead of loose "go fix things" prompts
 - `run_github_intake_pipeline.py`: safer learning intake with gating and corpus controls
+- `compare_review_quality.py`: compares a review artifact against fresh GitHub review intake and explains what the plugin still missed
+- `approve_quality_learning_candidates.py`: turns comparison-approved corpus-gap misses into tightly gated probationary learning candidates
 - `run_automation_cycle.py`: end-to-end wrapper for review, lessons refresh, GitHub intake, repair handoff, calibration, and hardening
 - `refresh_lessons_reference.py`: bridges private lessons into a repo-local training snapshot without committing raw private notes
 
@@ -70,6 +72,8 @@ Run a local review:
 ```powershell
 python .\plugins\codex-review\scripts\run_codex_review.py `
   --repo . `
+  --mode changes `
+  --depth deep `
   --base origin/main
 ```
 
@@ -78,6 +82,23 @@ That gives you:
 - a review artifact
 - benchmark output
 - a repair plan
+
+Review modes:
+
+- `changes`: reviews the committed `base...HEAD` diff
+- `dirty`: reviews local uncommitted edits
+- `full`: uses a broader repo scan and treats the diff as only one clue
+- `quick`: skips the benchmark step
+- `deep`: keeps the fuller prompt package and benchmark step
+
+Quick local dirty-worktree review:
+
+```powershell
+python .\plugins\codex-review\scripts\run_codex_review.py `
+  --repo . `
+  --mode dirty `
+  --depth quick
+```
 
 Prepare a bounded repair handoff:
 
@@ -110,6 +131,17 @@ That guide explains:
 - what you still need to connect in Codex
 - how to capture GitHub MCP output
 - how to feed that output into the learning pipeline
+
+The fresh GitHub path is also the recommended quality-tuning loop. After you capture and normalize live review threads, compare them against a review artifact with:
+
+```powershell
+python .\plugins\codex-review\scripts\compare_review_quality.py `
+  --review-file .\artifacts\github-intake\pipeline\<run>\review.md `
+  --proposal .\artifacts\github-intake\pipeline\<run>\graphql-proposal.json `
+  --candidates .\artifacts\github-intake\pipeline\<run>\graphql-candidates.json
+```
+
+That writes a plain-English summary plus a machine-readable comparison artifact you can feed back into later `run_codex_review.py --quality-comparison ...` runs.
 
 ## Lessons Workflow 🧠
 

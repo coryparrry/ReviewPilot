@@ -21,28 +21,52 @@ Be conscious of context-window usage. When reading long documents, large generat
 
 ## Subagent Use
 
-For non-trivial engineering work, use `$agent-team-orchestrator` from the local Codex skill runtime to decide when and how to delegate.
+For non-trivial engineering work, use `$agent-team-orchestrator` at `C:\Users\coryp\.codex\skills\agent-team-orchestrator` to decide when and how to delegate.
 
 Apply these rules:
 - Keep the main agent on the critical path. The main agent owns user communication, synthesis, final decisions, and any immediate blocking step.
-- Use subagents for bounded sidecar tasks only when delegation improves parallelism, context isolation, or independent verification.
-- Always spawn subagents with `model: "gpt-5.4-mini"`.
+- Use subagents only for bounded sidecar tasks where delegation improves parallelism, context isolation, independent review, or focused validation.
+- Default to `model: "gpt-5.4-mini"` for subagents unless the selected support agent intentionally uses another approved model.
 - Do not fork or pass the full thread by default.
 - Prefer `fork_context: false` and pass only the minimum context needed: a short task summary plus the exact files, diffs, paths, symbols, commands, or artifacts required for the task.
 - Use full-thread context only when a shorter context would materially risk correctness.
 - Keep subagents read-only unless edits are specifically needed.
-- Do not delegate work that is too ambiguous, too broad, or too context-heavy for `gpt-5.4-mini`; keep that work on the main agent.
+- Do not delegate work that is too broad, ambiguous, or context-heavy for the selected subagent model; keep that work on the main agent.
 - Prefer several small, well-scoped subagents over one vague general-purpose subagent.
-- Do not delegate trivial single-file work or urgent blocking work that the main agent can complete faster directly.
+- Do not delegate trivial work or urgent blocking work that the main agent can complete faster directly.
+- Avoid overlapping write ownership across concurrent subagents.
+- Define the integration point before spawning a subagent: what result is needed back, how it will be used, and what happens if the result is uncertain.
+- If spawning fails, fall back locally in the same role mode, mention it once, and stop opportunistic spawn retries for that turn unless the failure reason materially changes.
 
-Use these roles:
-- `Explore scout`: read-only repo digging, dependency tracing, and source-of-truth discovery.
+Core role modes:
+- `Explore scout`: read-only repo digging, dependency tracing, source-of-truth discovery, and evidence gathering.
 - `Planner`: decomposition only.
 - `Reviewer`: correctness, architecture drift, security smell, duplicated-logic drift, and missing-test review.
 - `Validator`: focused lint, typecheck, test, build, repro, or browser verification.
 - `Handoff summariser`: compress subagent outputs into a compact parent-ready handoff.
 
-Subagent prompts should be short, explicit, and bounded. Each subagent task should specify scope, allowed actions, deliverable, and stop condition.
+Available support agents:
+- `context-manager`: builds compact context packets
+- `code-mapper`: traces real code paths and ownership boundaries
+- `knowledge-synthesizer`: merges overlapping delegate outputs
+- `docs-researcher`: verifies docs-backed API and framework behavior
+- `build-engineer`: isolates build, bundler, compiler, and CI issues
+- `test-automator`: adds focused regression coverage
+- `documentation-engineer`: updates docs to match real code and workflows
+- `ai-engineer`: handles model-backed feature and orchestration work
+- `backend-developer`: bounded backend implementation on `gpt-5.4-mini`
+- `frontend-developer`: bounded frontend implementation on `gpt-5.4-mini`
+- `fullstack-developer`: bounded end-to-end implementation, intentionally on `gpt-5.4`
+- `reviewer`: stronger independent review pass, intentionally on `gpt-5.4`
+- `debugger`: root-cause isolation for subtle bugs, intentionally on `gpt-5.4`
+
+Subagent prompts should be short, explicit, and bounded. Each subagent task should specify:
+- role
+- task
+- scope
+- relevant context
+- deliverable
+- stop condition
 
 ## Validation
 

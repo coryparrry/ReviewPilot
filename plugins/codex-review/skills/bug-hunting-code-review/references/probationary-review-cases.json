@@ -24,5 +24,19 @@
         "If\\ the\\ seeded\\ local\\ user\\ or\\ its\\ workspace\\ membership\\ is\\ present\\ but\\ inactive,\\ bootstrap\\ stops\\ self\\-healing\\ and\\ the\\ defau"
       ]
     ]
+  },
+  {
+    "id": "source-of-truth-drift-keep-listuserprofilesbyids-immutable-like-the-other-read-path-3",
+    "title": "Keep listUserProfilesByIds() immutable like the other read path",
+    "severity": "medium",
+    "category": "source-of-truth-drift",
+    "source": "coryparrry/Binder:20260420Tfresh-mcp-pr-comments.json",
+    "expected_groups": [
+      [
+        "listAllUserProfiles\\(\\)\\ returns\\ cloned\\ users,\\ but\\ this\\ method\\ currently\\ forwards\\ packages/core\\-service/src/workspace/user\\-",
+        "ts:35\\-38,\\ which\\ returns\\ the\\ original\\ store",
+        "users\\ entries"
+      ]
+    ]
   }
 ]

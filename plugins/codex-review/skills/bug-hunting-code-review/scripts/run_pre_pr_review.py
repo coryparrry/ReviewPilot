@@ -7,12 +7,22 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 import textwrap
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
+
+
+DEFAULT_CALIBRATION_PATH = (
+    Path(__file__).resolve().parent.parent / "references" / "coderabbit-comment-calibration.json"
+)
+DEFAULT_FULL_REPO_SCAN_LIMIT = 20
+DEFAULT_UNTRACKED_FILE_LIMIT = 12
+DEFAULT_UNTRACKED_BYTES = 12000
 
 
 def run_cmd(cmd: list[str], cwd: Path) -> str:
@@ -50,7 +60,47 @@ def load_default_prompt(skill_dir: Path) -> str:
     return text[start:end]
 
 
-def get_diff(repo: Path, base: str | None, pr: str | None) -> tuple[str, str]:
+def is_probably_text_file(path: Path) -> bool:
+    try:
+        sample = path.read_bytes()[:2048]
+    except OSError:
+        return False
+    return b"\x00" not in sample
+
+
+def git_untracked_files(repo: Path) -> list[Path]:
+    output = run_cmd(["git", "ls-files", "--others", "--exclude-standard"], repo)
+    return [repo / line.strip() for line in output.splitlines() if line.strip()]
+
+
+def render_untracked_files(repo: Path, limit: int = DEFAULT_UNTRACKED_FILE_LIMIT) -> tuple[str, list[str]]:
+    sections: list[str] = []
+    included: list[str] = []
+    for path in git_untracked_files(repo)[:limit]:
+        rel = path.relative_to(repo).as_posix()
+        if not path.is_file() or not is_probably_text_file(path):
+            sections.append(f"Untracked file: {rel}\n(Binary or unreadable file omitted)\n")
+            included.append(rel)
+            continue
+        try:
+            body = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            body = "[Could not read file contents]"
+        sections.append(
+            textwrap.dedent(
+                f"""\
+                Untracked file: {rel}
+                ```
+                {body[:DEFAULT_UNTRACKED_BYTES]}
+                ```
+                """
+            ).strip()
+        )
+        included.append(rel)
+    return ("\n\n".join(sections), included)
+
+
+def get_diff(repo: Path, base: str | None, pr: str | None, mode: str) -> tuple[str, str]:
     if pr:
         diff = run_cmd(["gh", "pr", "diff", pr, "--patch"], repo)
         try:
@@ -58,28 +108,69 @@ def get_diff(repo: Path, base: str | None, pr: str | None) -> tuple[str, str]:
                 ["gh", "pr", "view", pr, "--json", "number,title,baseRefName,headRefName,url"],
                 repo,
             )
-            return diff, meta
         except subprocess.CalledProcessError:
-            return diff, ""
+            meta = ""
+        payload = json.loads(meta) if meta else {}
+        payload["mode"] = "pull-request"
+        payload["review_mode"] = mode
+        return diff, json.dumps(payload, indent=2)
 
-    if base is None:
-        base = "origin/main"
-    diff = run_cmd(["git", "diff", f"{base}...HEAD"], repo)
-    metadata = json.dumps(
-        {
-            "mode": "local-branch",
-            "base": base,
-            "head": current_branch(repo),
-        },
-        indent=2,
-    )
-    return diff, metadata
+    resolved_base = base or "origin/main"
+    branch = current_branch(repo)
+    metadata: dict[str, Any] = {
+        "head": branch,
+        "review_mode": mode,
+    }
+
+    if mode == "changes":
+        diff = run_cmd(["git", "diff", f"{resolved_base}...HEAD"], repo)
+        metadata.update(
+            {
+                "mode": "local-branch",
+                "base": resolved_base,
+                "diff_basis": f"{resolved_base}...HEAD",
+            }
+        )
+        return diff, json.dumps(metadata, indent=2)
+
+    if mode == "dirty":
+        diff = run_cmd(["git", "diff", "--patch", "HEAD"], repo)
+        untracked_rendered, untracked_files = render_untracked_files(repo)
+        if untracked_rendered:
+            diff = "\n\n".join(
+                chunk for chunk in [diff.strip(), "Untracked working tree files:\n" + untracked_rendered] if chunk
+            )
+        metadata.update(
+            {
+                "mode": "dirty-worktree",
+                "base": "HEAD",
+                "diff_basis": "HEAD vs working tree",
+                "untracked_files": untracked_files,
+            }
+        )
+        return diff or "No tracked dirty diff found.\n", json.dumps(metadata, indent=2)
+
+    if mode == "full":
+        diff = run_cmd(["git", "diff", f"{resolved_base}...HEAD"], repo)
+        metadata.update(
+            {
+                "mode": "full-repo",
+                "base": resolved_base,
+                "diff_basis": f"{resolved_base}...HEAD",
+                "full_repo_scan": True,
+            }
+        )
+        if not diff.strip():
+            diff = "No committed diff found for the selected base. Use the repo surface scan and hotspot hints."
+        return diff, json.dumps(metadata, indent=2)
+
+    raise ValueError(f"Unsupported review mode: {mode}")
 
 
-def run_surface_scan(skill_dir: Path, repo: Path, base: str | None) -> str:
+def run_surface_scan(skill_dir: Path, repo: Path, base: str | None, mode: str) -> str:
     scan_script = skill_dir / "scripts" / "review_surface_scan.py"
-    cmd = [sys.executable, str(scan_script), "--repo", str(repo)]
-    if base:
+    cmd = [sys.executable, str(scan_script), "--repo", str(repo), "--mode", mode]
+    if base and mode in {"changes", "full"}:
         cmd.extend(["--base", base])
     completed = subprocess.run(
         cmd,
@@ -93,12 +184,77 @@ def run_surface_scan(skill_dir: Path, repo: Path, base: str | None) -> str:
     return completed.stdout
 
 
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def accepted_calibration_focus(calibration_path: Path) -> list[str]:
+    payload = load_json(calibration_path)
+    if not isinstance(payload, list):
+        return []
+    focus: list[str] = []
+    seen_uses: set[str] = set()
+    for entry in payload:
+        if not isinstance(entry, dict) or entry.get("verdict") != "accept":
+            continue
+        use = str(entry.get("use", "")).strip()
+        summary = str(entry.get("summary", "")).strip()
+        if not summary:
+            continue
+        if use and use not in seen_uses:
+            focus.append(f"{use}: {summary}")
+            seen_uses.add(use)
+        elif not use:
+            focus.append(summary)
+        if len(focus) == 6:
+            break
+    return focus
+
+
+def comparison_focus(quality_comparison_path: Path | None) -> list[str]:
+    if quality_comparison_path is None or not quality_comparison_path.is_file():
+        return []
+    payload = load_json(quality_comparison_path)
+    prompt_focus = payload.get("prompt_focus")
+    if not isinstance(prompt_focus, list):
+        return []
+    return [str(item).strip() for item in prompt_focus if str(item).strip()]
+
+
+def render_miss_calibration_section(skill_dir: Path, quality_comparison_path: Path | None) -> str:
+    accepted_focus = accepted_calibration_focus(DEFAULT_CALIBRATION_PATH)
+    live_focus = comparison_focus(quality_comparison_path)
+    if not accepted_focus and not live_focus:
+        return ""
+
+    lines = ["Miss calibration focus:"]
+    if live_focus:
+        lines.append("Fresh live misses to bias toward:")
+        lines.extend(f"- {item}" for item in live_focus[:6])
+    if accepted_focus:
+        lines.append("Accepted CodeRabbit comment patterns worth preserving:")
+        lines.extend(f"- {item}" for item in accepted_focus[:6])
+    return "\n".join(lines)
+
+
 def build_prompt(
     default_prompt: str,
     metadata: str,
     scan: str,
     diff: str,
+    mode: str,
+    depth: str,
+    calibration_section: str,
 ) -> str:
+    mode_guidance = {
+        "changes": "Review the committed diff as the primary surface, but trace into adjacent callers, tests, and contracts.",
+        "dirty": "Review the local dirty worktree, including untracked files included below, and assume recent edits may be incomplete.",
+        "full": "Treat the diff as only one clue. Use the repo surface scan and hotspot list to inspect broader repo behavior.",
+    }[mode]
+    depth_guidance = {
+        "quick": "Keep the review fast and high-signal. Prefer a short list of the strongest findings over broad exploration.",
+        "deep": "Spend extra review budget on cross-file tracing, negative paths, stale-state behavior, and source-of-truth drift.",
+    }[depth]
     return textwrap.dedent(
         f"""\
         {default_prompt}
@@ -108,16 +264,24 @@ def build_prompt(
         Use the scan hints, but verify them from the diff and surrounding behavior.
         If there are no findings, say so explicitly and mention residual risk or test gaps briefly.
 
+        Review mode guidance:
+        - Mode: {mode}
+        - Depth: {depth}
+        - {mode_guidance}
+        - {depth_guidance}
+
+        {calibration_section}
+
         Review context:
         {metadata}
 
         Surface scan:
         {scan}
 
-        Diff:
+        Diff or review surface:
         {diff}
         """
-    )
+    ).strip() + "\n"
 
 
 def call_openai(prompt: str, model: str) -> str:
@@ -189,13 +353,56 @@ def run_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> str:
     return completed.stdout
 
 
+def prepare_review_artifacts(
+    skill_dir: Path,
+    repo: Path,
+    *,
+    base: str | None,
+    pr: str | None,
+    mode: str,
+    depth: str,
+    quality_comparison: str | None,
+) -> dict[str, str]:
+    default_prompt = load_default_prompt(skill_dir)
+    diff, metadata = get_diff(repo, base, pr, mode)
+    scan = run_surface_scan(skill_dir, repo, base if not pr else None, mode)
+    calibration_section = render_miss_calibration_section(
+        skill_dir,
+        Path(quality_comparison).resolve() if quality_comparison else None,
+    )
+    prompt = build_prompt(default_prompt, metadata, scan, diff, mode, depth, calibration_section)
+    return {
+        "diff": diff,
+        "metadata": metadata,
+        "scan": scan,
+        "prompt": prompt,
+        "calibration_section": calibration_section,
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare and score a pre-PR bug-hunting review.")
     parser.add_argument("--repo", default=".", help="Repository path. Defaults to the current directory.")
     parser.add_argument("--base", help="Base branch for local diff mode. Defaults to origin/main.")
     parser.add_argument("--pr", help="PR number, URL, or branch to review via gh.")
+    parser.add_argument(
+        "--mode",
+        default="changes",
+        choices=["changes", "dirty", "full"],
+        help="Review surface. changes=base...HEAD, dirty=local worktree, full=broader repo scan.",
+    )
+    parser.add_argument(
+        "--depth",
+        default="deep",
+        choices=["quick", "deep"],
+        help="Prompt depth. quick uses a lighter prompt package; deep uses the fuller one.",
+    )
     parser.add_argument("--review-file", help="Path to an existing review artifact to score.")
     parser.add_argument("--review-text", help="Inline review text to score.")
+    parser.add_argument(
+        "--quality-comparison",
+        help="Optional quality-comparison JSON artifact to include as live miss calibration in the prompt.",
+    )
     parser.add_argument(
         "--use-openai-api",
         action="store_true",
@@ -229,15 +436,22 @@ def main() -> int:
     timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir = repo / args.output_dir / timestamp
 
-    default_prompt = load_default_prompt(skill_dir)
-    diff, metadata = get_diff(repo, args.base, args.pr)
-    scan = run_surface_scan(skill_dir, repo, args.base if not args.pr else None)
-    prompt = build_prompt(default_prompt, metadata, scan, diff)
+    prepared = prepare_review_artifacts(
+        skill_dir,
+        repo,
+        base=args.base,
+        pr=args.pr,
+        mode=args.mode,
+        depth=args.depth,
+        quality_comparison=args.quality_comparison,
+    )
 
-    write_file(out_dir / "diff.patch", diff)
-    write_file(out_dir / "review-metadata.json", metadata)
-    write_file(out_dir / "surface-scan.txt", scan)
-    write_file(out_dir / "review-prompt.txt", prompt)
+    write_file(out_dir / "diff.patch", prepared["diff"])
+    write_file(out_dir / "review-metadata.json", prepared["metadata"])
+    write_file(out_dir / "surface-scan.txt", prepared["scan"])
+    write_file(out_dir / "review-prompt.txt", prepared["prompt"])
+    if prepared["calibration_section"]:
+        write_file(out_dir / "miss-calibration.txt", prepared["calibration_section"] + "\n")
 
     if args.prepare_only:
         print(f"Prepared review artifacts in {out_dir}")
@@ -250,7 +464,7 @@ def main() -> int:
             print("No review artifact was supplied, so no model call was attempted.")
             print(f"Next step: review the prompt in {out_dir / 'review-prompt.txt'} and rerun with --review-file or --review-text.")
             return 0
-        review_text = call_openai(prompt, args.model)
+        review_text = call_openai(prepared["prompt"], args.model)
 
     review_file = out_dir / "review.md"
     write_file(review_file, review_text)

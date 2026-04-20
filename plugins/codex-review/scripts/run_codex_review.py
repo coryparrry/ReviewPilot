@@ -16,13 +16,33 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--repo", default=".", help="Repository path. Defaults to the current directory.")
-    parser.add_argument("--base", default="origin/main", help="Base branch for the review diff. Defaults to origin/main.")
+    parser.add_argument("--base", default="origin/main", help="Base branch for review diff mode. Defaults to origin/main.")
+    parser.add_argument(
+        "--mode",
+        default="changes",
+        choices=["changes", "dirty", "full"],
+        help="Review surface. changes=committed diff, dirty=local worktree, full=broader repo scan.",
+    )
+    parser.add_argument(
+        "--depth",
+        default="deep",
+        choices=["quick", "deep"],
+        help="Prompt depth. quick skips benchmarks by default; deep keeps the fuller review package.",
+    )
+    parser.add_argument(
+        "--quality-comparison",
+        help="Optional quality-comparison JSON artifact to include as live miss calibration in the prompt.",
+    )
     parser.add_argument(
         "--output-dir",
         default=".codex-review",
         help="Directory under the repo root for saved review artifacts.",
     )
-    parser.add_argument("--model", help="Optional Codex model override.")
+    parser.add_argument(
+        "--model",
+        default="gpt-5.4-mini",
+        help="Codex model to use. Defaults to gpt-5.4-mini for cheaper local review runs.",
+    )
     parser.add_argument(
         "--prepare-only",
         action="store_true",
@@ -170,15 +190,22 @@ def main() -> int:
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = repo / args.output_dir / timestamp
 
-    default_prompt = pre_pr.load_default_prompt(skill_dir)
-    diff, metadata = pre_pr.get_diff(repo, args.base, None)
-    scan = pre_pr.run_surface_scan(skill_dir, repo, args.base)
-    prompt = pre_pr.build_prompt(default_prompt, metadata, scan, diff)
+    prepared = pre_pr.prepare_review_artifacts(
+        skill_dir,
+        repo,
+        base=args.base,
+        pr=None,
+        mode=args.mode,
+        depth=args.depth,
+        quality_comparison=args.quality_comparison,
+    )
 
-    write_file(run_dir / "diff.patch", diff)
-    write_file(run_dir / "review-metadata.json", metadata)
-    write_file(run_dir / "surface-scan.txt", scan)
-    write_file(run_dir / "review-prompt.txt", prompt)
+    write_file(run_dir / "diff.patch", prepared["diff"])
+    write_file(run_dir / "review-metadata.json", prepared["metadata"])
+    write_file(run_dir / "surface-scan.txt", prepared["scan"])
+    write_file(run_dir / "review-prompt.txt", prepared["prompt"])
+    if prepared["calibration_section"]:
+        write_file(run_dir / "miss-calibration.txt", prepared["calibration_section"] + "\n")
 
     if args.prepare_only:
         print(f"Prepared review artifacts in {run_dir}")
@@ -216,7 +243,7 @@ def main() -> int:
         attempt_success, reason, completed = run_codex_attempt(
             codex_cmd=codex_cmd,
             repo=repo,
-            prompt=prompt,
+            prompt=prepared["prompt"],
             review_file=review_file,
             run_dir=run_dir,
             attempt=attempt,
@@ -252,13 +279,16 @@ def main() -> int:
     print(f"Artifacts: {run_dir}")
     print(f"Review: {review_file}")
     print(f"Codex command: {' '.join(codex_base_cmd)}")
+    print(f"Review mode: {args.mode}")
+    print(f"Review depth: {args.depth}")
     if success and repair_notes:
         print("Self-repair: recovered after one automatic read-only retry.")
 
     repair_output = run_repair_plan(repair_script, review_file, run_dir, repo)
     print(repair_output.strip())
 
-    if args.no_benchmark:
+    should_skip_benchmark = args.no_benchmark or args.depth == "quick"
+    if should_skip_benchmark:
         return 0
 
     benchmark_output = pre_pr.run_benchmarks(skill_dir, review_file, repo)

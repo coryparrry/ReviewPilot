@@ -123,6 +123,8 @@ The plugin-owned review runner now lives at:
 
 - `plugins/codex-review/scripts/run_automation_cycle.py`
 - `plugins/codex-review/scripts/run_codex_review.py`
+- `plugins/codex-review/scripts/compare_review_quality.py`
+- `plugins/codex-review/scripts/approve_quality_learning_candidates.py`
 - `plugins/codex-review/scripts/propose_review_repairs.py`
 - `plugins/codex-review/scripts/run_review_fix.py`
 
@@ -231,18 +233,55 @@ For the actual review-authoring path, use:
 ```powershell
 python .\plugins\codex-review\scripts\run_codex_review.py `
   --repo . `
+  --mode changes `
+  --depth deep `
   --base origin/main
 ```
 
 That command:
 
 - prepares the review prompt, diff, metadata, and surface scan
+- supports explicit review surfaces:
+  - `changes`: committed diff vs base branch
+  - `dirty`: local dirty worktree changes, including untracked text files
+  - `full`: broader repo-scan mode where the diff is only one clue
+- supports explicit review depth:
+  - `quick`: lighter prompt and no benchmark step
+  - `deep`: fuller prompt package plus benchmark step
 - invokes Codex non-interactively in read-only mode
 - writes `review.md`
 - writes `repair-plan.json` and `repair-plan.md` next to the review artifact
 - writes Codex stdout and stderr logs for inspection
-- benchmarks the resulting review against the configured lanes
+- benchmarks the resulting review against the configured lanes when depth is `deep`
 - automatically retries once in the same read-only sandbox if review generation fails mechanically or produces a missing or empty `review.md`
+
+Examples:
+
+```powershell
+python .\plugins\codex-review\scripts\run_codex_review.py `
+  --repo . `
+  --mode dirty `
+  --depth quick
+```
+
+```powershell
+python .\plugins\codex-review\scripts\run_codex_review.py `
+  --repo . `
+  --mode full `
+  --depth quick `
+  --prepare-only
+```
+
+If you have a fresh quality-comparison artifact from live GitHub intake, you can feed it back into the prompt:
+
+```powershell
+python .\plugins\codex-review\scripts\run_codex_review.py `
+  --repo . `
+  --mode changes `
+  --depth deep `
+  --base origin/main `
+  --quality-comparison .\artifacts\review-quality\<run>\quality-comparison.json
+```
 
 For an automation-oriented end-to-end local cycle, use:
 
@@ -255,8 +294,12 @@ That wrapper:
 - runs the local review
 - prepares the one-finding repair handoff
 - optionally runs GitHub intake if a captured raw artifact is supplied
+- can compare the finished review against fresh GitHub findings automatically
+- can auto-learn comparison-approved corpus-gap misses into the probationary lane
 - runs a small Hugging Face hardening batch
 - writes `automation-summary.json` under `artifacts/automation-runs/`
+
+By default the automation wrapper now passes `gpt-5.4-mini` to the model-backed steps so the cheap path is the default.
 
 The automation wrapper can also stage lessons and drive more of the GitHub intake settings directly now.
 
@@ -275,6 +318,21 @@ python .\plugins\codex-review\scripts\run_automation_cycle.py `
 ```
 
 That keeps the main workflow in one entrypoint instead of requiring separate manual steps for lessons staging or promotion flags.
+
+For review-quality tuning against fresh GitHub feedback, capture live GitHub MCP review threads, normalize them through the existing intake pipeline, then compare them directly against a review artifact:
+
+```powershell
+python .\plugins\codex-review\scripts\compare_review_quality.py `
+  --review-file .\artifacts\github-intake\pipeline\binder-pr-8-gated-live\binder-pr-8-codex-review.md `
+  --proposal .\artifacts\github-intake\pipeline\binder-pr-8-gated-live\graphql-proposal.json `
+  --candidates .\artifacts\github-intake\pipeline\binder-pr-8-gated-live\graphql-candidates.json
+```
+
+That comparison writes:
+
+- `quality-comparison.json` with caught vs missed findings
+- `quality-comparison.md` with a plain-English summary
+- `prompt_focus` hints that can be fed back into `run_codex_review.py --quality-comparison ...`
 
 For Codex automations, the recommended skill entrypoint is:
 

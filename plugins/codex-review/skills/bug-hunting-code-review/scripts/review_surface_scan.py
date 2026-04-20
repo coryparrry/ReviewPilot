@@ -20,6 +20,10 @@ from pathlib import Path
 from typing import Iterable
 
 
+FULL_REPO_SCAN_LIMIT = 20
+UNTRACKED_TEXT_LIMIT = 8000
+
+
 @dataclass(frozen=True)
 class RiskRule:
     key: str
@@ -149,14 +153,47 @@ def repo_root(path: Path) -> Path:
     return Path(out.strip())
 
 
-def changed_files(repo: Path, base: str | None, head: str | None) -> list[Path]:
-    if base:
+def git_untracked_files(repo: Path) -> list[Path]:
+    output = run_git(repo, "ls-files", "--others", "--exclude-standard")
+    return [repo / line.strip() for line in output.splitlines() if line.strip()]
+
+
+def is_probably_text_file(path: Path) -> bool:
+    try:
+        sample = path.read_bytes()[:2048]
+    except OSError:
+        return False
+    return b"\x00" not in sample
+
+
+def render_untracked_snapshot(repo: Path) -> str:
+    sections: list[str] = []
+    for path in git_untracked_files(repo)[:8]:
+        rel = path.relative_to(repo).as_posix()
+        if not path.is_file() or not is_probably_text_file(path):
+            sections.append(f"Untracked file: {rel}\n(Binary or unreadable file omitted)")
+            continue
+        try:
+            body = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            body = "[Could not read file contents]"
+        sections.append(f"Untracked file: {rel}\n{body[:UNTRACKED_TEXT_LIMIT]}")
+    return "\n\n".join(sections)
+
+
+def changed_files(repo: Path, base: str | None, head: str | None, mode: str) -> list[Path]:
+    if mode == "dirty":
+        name_out = run_git(repo, "diff", "--name-only", "HEAD")
+        untracked = run_git(repo, "ls-files", "--others", "--exclude-standard")
+        name_out = "\n".join([name_out.strip(), untracked.strip()]).strip()
+    elif base:
         spec = f"{base}...{head or 'HEAD'}"
         name_out = run_git(repo, "diff", "--name-only", spec)
     else:
         name_out = run_git(repo, "diff", "--name-only", "HEAD")
         untracked = run_git(repo, "ls-files", "--others", "--exclude-standard")
         name_out = "\n".join([name_out.strip(), untracked.strip()]).strip()
+
     files: list[Path] = []
     seen: set[str] = set()
     for line in name_out.splitlines():
@@ -168,7 +205,11 @@ def changed_files(repo: Path, base: str | None, head: str | None) -> list[Path]:
     return files
 
 
-def diff_text(repo: Path, base: str | None, head: str | None) -> str:
+def diff_text(repo: Path, base: str | None, head: str | None, mode: str) -> str:
+    if mode == "dirty":
+        tracked = run_git(repo, "diff", "-U0", "HEAD")
+        untracked = render_untracked_snapshot(repo)
+        return "\n\n".join(chunk for chunk in [tracked.strip(), untracked.strip()] if chunk)
     if base:
         spec = f"{base}...{head or 'HEAD'}"
         return run_git(repo, "diff", "-U0", spec)
@@ -274,9 +315,38 @@ def find_adjacent(repo: Path, changed: Iterable[Path]) -> list[str]:
     return sorted(suggestions)[:20]
 
 
-def build_report(repo: Path, base: str | None, head: str | None) -> dict[str, object]:
-    files = changed_files(repo, base, head)
-    patch = diff_text(repo, base, head)
+def repo_hotspots(repo: Path, limit: int = FULL_REPO_SCAN_LIMIT) -> list[dict[str, object]]:
+    hotspot_patterns = (
+        (re.compile(r"(auth|session|permission|policy|secret|token)", re.I), "auth-session"),
+        (re.compile(r"(workflow|automation|scheduler|queue|wake|review|benchmark)", re.I), "workflow-review"),
+        (re.compile(r"(migrat|store|persist|adapter|repository)", re.I), "persistence"),
+        (re.compile(r"(install|publish|release|smoke|validate)", re.I), "release-install"),
+        (re.compile(r"(test|spec)", re.I), "tests"),
+    )
+    tracked = run_git(repo, "ls-files")
+    scored: list[tuple[int, str, list[str]]] = []
+    for line in tracked.splitlines():
+        rel = line.strip()
+        if not rel:
+            continue
+        path = repo / rel
+        score = 0
+        tags: list[str] = []
+        for pattern, tag in hotspot_patterns:
+            if pattern.search(rel):
+                score += 1
+                tags.append(tag)
+        if rel.endswith((".py", ".ts", ".tsx", ".js")):
+            score += 1
+        if score:
+            scored.append((score, rel, tags))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [{"path": rel, "score": score, "tags": tags} for score, rel, tags in scored[:limit]]
+
+
+def build_report(repo: Path, base: str | None, head: str | None, mode: str) -> dict[str, object]:
+    files = changed_files(repo, base, head, mode)
+    patch = diff_text(repo, base, head, mode)
     layer_counts: dict[str, int] = defaultdict(int)
     grouped_files: dict[str, list[str]] = defaultdict(list)
     for file_path in files:
@@ -288,11 +358,13 @@ def build_report(repo: Path, base: str | None, head: str | None) -> dict[str, ob
     risk_hits = scan_risks(patch, code_like_change_present=code_like_change_present)
     report = {
         "repo_root": str(repo),
-        "diff_basis": f"{base}...{head or 'HEAD'}" if base else "working-tree-vs-HEAD",
+        "mode": mode,
+        "diff_basis": "HEAD vs working tree" if mode == "dirty" else (f"{base}...{head or 'HEAD'}" if base else "working-tree-vs-HEAD"),
         "changed_file_count": len(files),
         "layers": {key: {"count": layer_counts[key], "files": sorted(grouped_files[key])} for key in sorted(grouped_files)},
         "risk_hits": risk_hits,
         "adjacent_paths_to_inspect": find_adjacent(repo, files),
+        "repo_hotspots": repo_hotspots(repo) if mode == "full" else [],
         "required_questions": [
             "What invariant must remain true after this patch?",
             "Which companion state surfaces must stay aligned with the primary state change?",
@@ -309,6 +381,7 @@ def build_report(repo: Path, base: str | None, head: str | None) -> dict[str, ob
 
 def print_text_report(report: dict[str, object]) -> None:
     print(f"Repo root: {report['repo_root']}")
+    print(f"Mode: {report['mode']}")
     print(f"Diff basis: {report['diff_basis']}")
     print(f"Changed files: {report['changed_file_count']}")
     print()
@@ -318,6 +391,13 @@ def print_text_report(report: dict[str, object]) -> None:
         print(f"- {layer} ({payload['count']})")
         for file_name in payload["files"][:8]:
             print(f"  - {file_name}")
+    if report["repo_hotspots"]:
+        print()
+        print("Repo hotspots:")
+        for hotspot in report["repo_hotspots"]:
+            assert isinstance(hotspot, dict)
+            tags = ", ".join(str(tag) for tag in hotspot["tags"])
+            print(f"- {hotspot['path']} [{tags}]")
     print()
     print("Risk prompts:")
     risk_hits = report["risk_hits"]
@@ -348,6 +428,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--repo", default=".", help="Path inside the git repo to inspect.")
     parser.add_argument("--base", help="Optional merge-base or branch ref for PR-style reviews.")
     parser.add_argument("--head", help="Optional head ref when --base is used. Defaults to HEAD.")
+    parser.add_argument(
+        "--mode",
+        default="changes",
+        choices=["changes", "dirty", "full"],
+        help="Review surface mode. changes=base...HEAD, dirty=working tree, full=broader repo scan.",
+    )
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
     return parser.parse_args()
 
@@ -355,7 +441,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     repo = repo_root(Path(args.repo).resolve())
-    report = build_report(repo, args.base, args.head)
+    report = build_report(repo, args.base, args.head, args.mode)
     if args.json:
         print(json.dumps(report, indent=2))
     else:
