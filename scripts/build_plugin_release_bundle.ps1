@@ -104,11 +104,13 @@ $installScript = Join-Path $PSScriptRoot "install_plugin_to_codex.ps1"
 $installNodeScript = Join-Path $PSScriptRoot "install_plugin_to_codex.mjs"
 $syncScript = Join-Path $PSScriptRoot "sync_skill_to_codex.ps1"
 $packageJson = Join-Path $PSScriptRoot "..\package.json"
+$licenseFile = Join-Path $PSScriptRoot "..\LICENSE"
 
 Copy-Item -LiteralPath $installScript -Destination (Join-Path $stagingScriptsRoot "install_plugin_to_codex.ps1") -Force
 Copy-Item -LiteralPath $installNodeScript -Destination (Join-Path $stagingScriptsRoot "install_plugin_to_codex.mjs") -Force
 Copy-Item -LiteralPath $syncScript -Destination (Join-Path $stagingScriptsRoot "sync_skill_to_codex.ps1") -Force
 Copy-Item -LiteralPath $packageJson -Destination (Join-Path $bundleRoot "package.json") -Force
+Copy-Item -LiteralPath $licenseFile -Destination (Join-Path $bundleRoot "LICENSE") -Force
 
 $installGuide = @"
 # Codex Review Plugin
@@ -145,6 +147,8 @@ node ./scripts/install_plugin_to_codex.mjs
   Optional helper for the direct runtime skill copy.
 - `package.json`
   npm package metadata for producing an installer tarball.
+- `LICENSE`
+  The MIT license text for the public release bundle.
 
 ## Notes
 

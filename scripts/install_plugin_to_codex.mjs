@@ -87,6 +87,22 @@ async function ensureDirectory(targetPath, dryRun) {
   logStep(`Created directory ${targetPath}`);
 }
 
+async function clearDirectoryContents(targetPath, dryRun) {
+  if (!(await pathExists(targetPath))) {
+    return;
+  }
+
+  const entries = await fs.readdir(targetPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(targetPath, entry.name);
+    if (dryRun) {
+      logStep(`Would remove stale path ${entryPath}`);
+      continue;
+    }
+    await fs.rm(entryPath, { recursive: true, force: true });
+  }
+}
+
 function updateTomlBlock(content, header, block) {
   const normalized = content.replace(/\r\n/g, "\n");
   const lines = normalized.split("\n");
@@ -213,15 +229,20 @@ async function main() {
 
   const pluginManifest = JSON.parse(await fs.readFile(pluginManifestPath, "utf8"));
   const pluginName = String(pluginManifest.name || "").trim();
+  const pluginVersion = String(pluginManifest.version || "").trim();
   if (!pluginName) {
     throw new Error("Plugin manifest did not contain a plugin name.");
+  }
+  if (!pluginVersion) {
+    throw new Error("Plugin manifest did not contain a plugin version.");
   }
 
   const marketplaceRoot = path.join(options.codexHome, "local-marketplaces", options.marketplaceName);
   const pluginsRoot = path.join(marketplaceRoot, "plugins");
   const pluginDestination = path.join(pluginsRoot, pluginName);
   const pluginCacheRoot = path.join(options.codexHome, "plugins", "cache", options.marketplaceName);
-  const pluginCacheDestination = path.join(pluginCacheRoot, pluginName);
+  const pluginCachePluginRoot = path.join(pluginCacheRoot, pluginName);
+  const pluginCacheDestination = path.join(pluginCachePluginRoot, pluginVersion);
   const agentsPluginsRoot = path.join(marketplaceRoot, ".agents", "plugins");
   const marketplaceJsonPath = path.join(agentsPluginsRoot, "marketplace.json");
   const configTomlPath = path.join(options.codexHome, "config.toml");
@@ -231,7 +252,9 @@ async function main() {
   await ensureDirectory(marketplaceRoot, options.dryRun);
   await ensureDirectory(pluginsRoot, options.dryRun);
   await ensureDirectory(pluginCacheRoot, options.dryRun);
+  await ensureDirectory(pluginCachePluginRoot, options.dryRun);
   await ensureDirectory(agentsPluginsRoot, options.dryRun);
+  await clearDirectoryContents(pluginCachePluginRoot, options.dryRun);
   await ensureDirectory(pluginDestination, options.dryRun);
   await ensureDirectory(pluginCacheDestination, options.dryRun);
 
@@ -251,7 +274,7 @@ async function main() {
           path: `./plugins/${pluginName}`,
         },
         policy: {
-          installation: "INSTALLED_BY_DEFAULT",
+          installation: "AVAILABLE",
           authentication: "ON_INSTALL",
         },
         category: String(pluginManifest?.interface?.category || "Coding"),
@@ -263,6 +286,20 @@ async function main() {
     logStep(`Would write marketplace manifest ${marketplaceJsonPath}`);
   } else {
     await fs.writeFile(marketplaceJsonPath, `${JSON.stringify(marketplace, null, 2)}\n`, "utf8");
+    const writtenMarketplace = JSON.parse(await fs.readFile(marketplaceJsonPath, "utf8"));
+    const writtenPlugin = Array.isArray(writtenMarketplace.plugins)
+      ? writtenMarketplace.plugins.find((plugin) => String(plugin?.name || "") === pluginName)
+      : null;
+    if (!writtenPlugin) {
+      throw new Error(`Marketplace manifest verification failed: plugin entry for ${pluginName} was not written.`);
+    }
+    if (String(writtenPlugin?.policy?.installation || "") !== "AVAILABLE") {
+      writtenPlugin.policy = {
+        ...(writtenPlugin.policy || {}),
+        installation: "AVAILABLE",
+      };
+      await fs.writeFile(marketplaceJsonPath, `${JSON.stringify(writtenMarketplace, null, 2)}\n`, "utf8");
+    }
     logStep(`Wrote marketplace manifest ${marketplaceJsonPath}`);
   }
 

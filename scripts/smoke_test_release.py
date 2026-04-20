@@ -37,7 +37,12 @@ def require_text(path: Path, expected: str) -> None:
 def verify_install_tree(codex_home: Path, marketplace_name: str) -> None:
     marketplace_root = codex_home / "local-marketplaces" / marketplace_name
     plugin_root = marketplace_root / "plugins" / PLUGIN_NAME
-    cache_root = codex_home / "plugins" / "cache" / marketplace_name / PLUGIN_NAME
+    plugin_manifest = json.loads((plugin_root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    plugin_version = plugin_manifest.get("version")
+    if not plugin_version:
+        raise SystemExit(f"Installed plugin manifest did not include a version at {plugin_root}")
+    cache_plugin_root = codex_home / "plugins" / "cache" / marketplace_name / PLUGIN_NAME
+    cache_root = cache_plugin_root / plugin_version
     marketplace_manifest = marketplace_root / ".agents" / "plugins" / "marketplace.json"
     config_toml = codex_home / "config.toml"
 
@@ -52,10 +57,22 @@ def verify_install_tree(codex_home: Path, marketplace_name: str) -> None:
     require_file(marketplace_manifest)
     require_file(config_toml)
 
+    legacy_cache_manifest = cache_plugin_root / ".codex-plugin" / "plugin.json"
+    if legacy_cache_manifest.exists():
+        raise SystemExit(
+            f"Legacy flat cache layout is still present for {PLUGIN_NAME}: {legacy_cache_manifest.parent.parent}"
+        )
+
     manifest = json.loads(marketplace_manifest.read_text(encoding="utf-8"))
     plugin_names = [plugin.get("name") for plugin in manifest.get("plugins", [])]
     if PLUGIN_NAME not in plugin_names:
         raise SystemExit(f"Marketplace manifest did not include {PLUGIN_NAME}")
+    plugin_entries = [plugin for plugin in manifest.get("plugins", []) if plugin.get("name") == PLUGIN_NAME]
+    installation_policy = plugin_entries[0].get("policy", {}).get("installation") if plugin_entries else None
+    if installation_policy != "AVAILABLE":
+        raise SystemExit(
+            f"Marketplace manifest must keep installation policy AVAILABLE for {PLUGIN_NAME}, found {installation_policy!r}"
+        )
 
     require_text(config_toml, f'[marketplaces.{marketplace_name}]')
     require_text(config_toml, f'[plugins."{PLUGIN_NAME}@{marketplace_name}"]')
@@ -126,12 +143,14 @@ def run_release_bundle_smoke(temp_root: Path) -> None:
 
     bundle_root = bundle_root_dirs[0]
     require_file(bundle_root / "README-INSTALL.md")
+    require_file(bundle_root / "LICENSE")
     require_file(bundle_root / "plugins" / PLUGIN_NAME / ".mcp.json")
 
     with zipfile.ZipFile(zip_files[0]) as archive:
         archive_names = set(archive.namelist())
         expected_members = {
             "README-INSTALL.md",
+            "LICENSE",
             f"plugins/{PLUGIN_NAME}/.mcp.json",
             f"plugins/{PLUGIN_NAME}/.codex-plugin/plugin.json",
             "scripts/install_plugin_to_codex.ps1",

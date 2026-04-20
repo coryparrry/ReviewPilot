@@ -237,10 +237,10 @@ def run_github_intake(
         "--output-dir",
         str(output_dir),
     ]
-    for probationary_id in promote_probationary_ids:
-        cmd.extend(["--promote-probationary-ids", probationary_id])
-    if model:
-        cmd.extend(["--model", model])
+    if promote_probationary_ids:
+        cmd.extend(["--stop-after", "promote-primary"])
+        cmd.append("--promote-probationary-ids")
+        cmd.extend(promote_probationary_ids)
     completed = run_cmd(cmd, repo)
     return {
         "stdout": completed.stdout,
