@@ -36,6 +36,7 @@ It is designed to improve over time from:
 - `run_review_fix.py`: one-finding repair handoff instead of loose "go fix things" prompts
 - `run_github_intake_pipeline.py`: safer learning intake with gating and corpus controls
 - `compare_review_quality.py`: compares a review artifact against fresh GitHub review intake and explains what the plugin still missed
+- `run_public_pr_quality_cycle.py`: fetches a public PR's review comments and compares them against a local review artifact without writing to the corpus lanes
 - `approve_quality_learning_candidates.py`: turns comparison-approved corpus-gap misses into tightly gated probationary learning candidates
 - `run_automation_cycle.py`: end-to-end wrapper for review, lessons refresh, GitHub intake, repair handoff, calibration, and hardening
 - `refresh_lessons_reference.py`: bridges private lessons into a repo-local training snapshot without committing raw private notes
@@ -142,6 +143,17 @@ python .\plugins\codex-review\scripts\compare_review_quality.py `
 ```
 
 That writes a plain-English summary plus a machine-readable comparison artifact you can feed back into later `run_codex_review.py --quality-comparison ...` runs.
+
+For public-repo calibration work, you can also use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_public_pr_quality_cycle.py `
+  --repo owner/name `
+  --pr 123 `
+  --review-artifacts .\.codex-review
+```
+
+That path is comparison-only by default. It fetches public PR review feedback, normalizes it through the existing pipeline, and compares it against your local review artifact without writing directly into the learning corpus.
 
 ## Lessons Workflow 🧠
 

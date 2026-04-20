@@ -386,7 +386,7 @@ def main() -> int:
         "recommended_probationary_candidates": [
             item["candidate_id"]
             for item in findings
-            if item["gap_classification"] in {"corpus-gap", "corpus-and-calibration-gap"} and item["candidate_id"]
+            if item["gap_classification"] == "corpus-gap" and item["candidate_id"]
         ],
         "recommended_calibration_additions": [
             {

@@ -94,9 +94,9 @@ def main() -> int:
     }
 
     approved_candidates: list[dict[str, Any]] = []
-    for candidate in candidates:
+    for index, candidate in enumerate(candidates, start=1):
         if not isinstance(candidate, dict):
-            continue
+            raise ValueError(f"Candidate artifact row {index} is not an object.")
         candidate_id = str(candidate.get("id") or "")
         if candidate_id not in approved_ids:
             continue

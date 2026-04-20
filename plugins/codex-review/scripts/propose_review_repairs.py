@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 SECTION_HEADING_RE = re.compile(r"^\*\*(.+?)\*\*$")
+MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 PLAIN_SECTION_HEADINGS = {
     "findings",
     "open questions",
@@ -42,6 +43,11 @@ def split_sections(text: str) -> dict[str, str]:
         match = SECTION_HEADING_RE.match(stripped)
         if match:
             current_name = match.group(1).strip().lower()
+            sections.setdefault(current_name, [])
+            continue
+        markdown_match = MARKDOWN_HEADING_RE.match(stripped)
+        if markdown_match:
+            current_name = markdown_match.group(1).strip().rstrip(":").lower()
             sections.setdefault(current_name, [])
             continue
         if stripped.lower() in PLAIN_SECTION_HEADINGS:

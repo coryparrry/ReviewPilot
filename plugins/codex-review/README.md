@@ -124,6 +124,7 @@ The plugin-owned review runner now lives at:
 - `plugins/codex-review/scripts/run_automation_cycle.py`
 - `plugins/codex-review/scripts/run_codex_review.py`
 - `plugins/codex-review/scripts/compare_review_quality.py`
+- `plugins/codex-review/scripts/run_public_pr_quality_cycle.py`
 - `plugins/codex-review/scripts/approve_quality_learning_candidates.py`
 - `plugins/codex-review/scripts/propose_review_repairs.py`
 - `plugins/codex-review/scripts/run_review_fix.py`
@@ -333,6 +334,24 @@ That comparison writes:
 - `quality-comparison.json` with caught vs missed findings
 - `quality-comparison.md` with a plain-English summary
 - `prompt_focus` hints that can be fed back into `run_codex_review.py --quality-comparison ...`
+
+For public-repo calibration, use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_public_pr_quality_cycle.py `
+  --repo owner/name `
+  --pr 123 `
+  --review-artifacts .\.codex-review
+```
+
+That wrapper:
+
+- fetches public PR review feedback through the legacy read-only `gh` path
+- runs the existing normalize -> propose flow without writing to the corpus lanes
+- compares the public PR feedback against your local review artifact when one is supplied
+- writes a compact summary plus comparison artifacts under `artifacts/public-pr-quality/`
+
+Use only public repos for this path unless you have explicit permission to use a private repo's review content for calibration.
 
 For Codex automations, the recommended skill entrypoint is:
 
