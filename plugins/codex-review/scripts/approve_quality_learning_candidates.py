@@ -105,6 +105,22 @@ def main() -> int:
             continue
         if finding.get("gap_classification") != "corpus-gap":
             continue
+        if finding.get("represented_in_corpus") is not False:
+            continue
+        if finding.get("represented_in_calibration") is not False:
+            continue
+
+        review_match = finding.get("review_match") or {}
+        if review_match.get("matched") is not False:
+            continue
+        expectation_overlap = float(review_match.get("expectation_overlap") or 0.0)
+        title_overlap = float(review_match.get("title_overlap") or 0.0)
+        if expectation_overlap >= 0.35 or title_overlap >= 0.35:
+            continue
+
+        severity = str(candidate.get("severity") or "").lower()
+        if severity not in {"critical", "high", "medium"}:
+            continue
 
         updated = dict(candidate)
         review_notes = dict(candidate.get("review_notes") or {})

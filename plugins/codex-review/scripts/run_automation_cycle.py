@@ -175,6 +175,37 @@ def default_run_dir(repo: Path) -> Path:
     return repo / "artifacts" / "automation-runs" / timestamp
 
 
+def find_latest_quality_comparison(repo: Path) -> Path | None:
+    quality_root = repo / "artifacts" / "review-quality"
+    if not quality_root.is_dir():
+        return None
+
+    latest_file: Path | None = None
+    latest_mtime = -1.0
+    for candidate in quality_root.glob("*/quality-comparison.json"):
+        try:
+            mtime = candidate.stat().st_mtime
+        except OSError:
+            continue
+        if mtime > latest_mtime:
+            latest_file = candidate
+            latest_mtime = mtime
+    return latest_file
+
+
+def resolve_review_quality_comparison(repo: Path, configured_path: str | None) -> dict:
+    if configured_path:
+        resolved = Path(configured_path).resolve()
+        if not resolved.is_file():
+            raise FileNotFoundError(f"Configured quality comparison file not found: {resolved}")
+        return {"path": str(resolved), "source": "argument"}
+
+    latest = find_latest_quality_comparison(repo)
+    if latest is None:
+        return {"path": None, "source": "none"}
+    return {"path": str(latest.resolve()), "source": "latest_artifact"}
+
+
 def run_review(repo: Path, run_dir: Path, base: str, model: str | None, quality_comparison: str | None) -> dict:
     review_root = run_dir / "review"
     cmd = [
@@ -517,7 +548,9 @@ def main() -> int:
 
         if not args.skip_review:
             current_step = "review"
-            review_result = run_review(repo, run_dir, args.base, args.model, args.review_quality_comparison)
+            review_quality = resolve_review_quality_comparison(repo, args.review_quality_comparison)
+            review_result = run_review(repo, run_dir, args.base, args.model, review_quality["path"])
+            review_result["quality_comparison"] = review_quality
             summary["steps"]["review"] = review_result
             review_run_dir = Path(review_result["review_run_dir"])
             repair_plan = Path(review_result["repair_plan"])
