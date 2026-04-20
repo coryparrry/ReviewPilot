@@ -5,9 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-DEFAULT_OUTPUT = (
-    Path(__file__).resolve().parent.parent / "references" / "knowledge-hub-codex-lessons.md"
-)
+DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "references" / "local-lessons-snapshot.md"
 
 ENTRY_RE = re.compile(r"^### (\d{4}-\d{2}-\d{2})\s*$", re.MULTILINE)
 FIELD_RE = re.compile(
@@ -28,8 +26,8 @@ class LessonEntry:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a repo-local snapshot of Codex Lessons so maintainers can refresh "
-            "review prompts from a private Knowledge-Hub log without copying the full hub into the repo."
+            "Build a repo-local lessons snapshot so maintainers can refresh "
+            "review prompts from a local notes file without copying the full source into the repo."
         )
     )
     parser.add_argument("--source", required=True, help="Path to the source codex-lessons.md file.")
@@ -74,9 +72,9 @@ def parse_entries(text: str) -> list[LessonEntry]:
 def render_output(entries: list[LessonEntry], source: Path) -> str:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     lines = [
-        "# Knowledge-Hub Codex Lessons Snapshot",
+        "# Local Lessons Snapshot",
         "",
-        "This file is generated from a private Codex lessons log.",
+        "This file is generated from a local lessons log.",
         "",
         "Use it as review-training input when refreshing the bundled review prompts.",
         "Do not treat it as the durable public source of truth for the skill.",

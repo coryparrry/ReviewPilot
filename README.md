@@ -19,7 +19,7 @@ It is designed to improve over time from:
 
 - real GitHub PR review misses
 - curated external benchmark lanes like SWE-bench
-- reviewed lessons from a private Knowledge-Hub log
+- reviewed lessons from an optional local lessons log
 
 ## Why It Stands Out ✨
 
@@ -39,7 +39,7 @@ It is designed to improve over time from:
 - `run_public_pr_quality_cycle.py`: fetches a public PR's review comments and compares them against a local review artifact without writing to the corpus lanes
 - `approve_quality_learning_candidates.py`: turns comparison-approved corpus-gap misses into tightly gated probationary learning candidates
 - `run_automation_cycle.py`: end-to-end wrapper for review, lessons refresh, GitHub intake, repair handoff, calibration, and hardening
-- `refresh_lessons_reference.py`: bridges private lessons into a repo-local training snapshot without committing raw private notes
+- `refresh_lessons_reference.py`: stages local lessons into a repo-local training snapshot without committing raw notes
 
 ## Docs At A Glance 📚
 
@@ -186,7 +186,7 @@ python .\plugins\codex-review\scripts\run_public_pr_quality_cycle.py `
 
 ## Lessons Workflow 🧠
 
-If you keep review lessons in a private Knowledge-Hub, turn them into repo-local training input with:
+If you keep review lessons in an optional local lessons file, turn them into repo-local training input with:
 
 ```powershell
 python .\plugins\codex-review\skills\bug-hunting-code-review\scripts\refresh_lessons_reference.py `

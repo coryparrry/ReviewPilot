@@ -44,7 +44,7 @@ That is large enough to justify its own repo and docs.
 - [GitHub MCP setup](github-mcp-setup.md)
   How to connect the GitHub side of the plugin's learning flow
 - [Lessons workflow](lessons-workflow.md)
-  How to turn private review lessons into reviewed prompt improvements safely
+  How to turn local review lessons into reviewed prompt improvements safely
 - [Public release checklist](public-release-checklist.md)
   What to run and confirm before making the repo public
 

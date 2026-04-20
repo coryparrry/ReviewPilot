@@ -137,7 +137,7 @@ Each review run now also produces:
 
 Those artifacts are meant to back Codex inline review cards, not just the plain `review.md` artifact.
 
-For local skill improvement from a private Knowledge-Hub lessons log, use:
+For local skill improvement from an optional local lessons log, use:
 
 ```powershell
 python .\plugins\codex-review\skills\bug-hunting-code-review\scripts\refresh_lessons_reference.py `
@@ -146,7 +146,7 @@ python .\plugins\codex-review\skills\bug-hunting-code-review\scripts\refresh_les
 
 That produces a repo-local snapshot at:
 
-- `plugins/codex-review/skills/bug-hunting-code-review/references/knowledge-hub-codex-lessons.md`
+- `plugins/codex-review/skills/bug-hunting-code-review/references/local-lessons-snapshot.md`
 
 Use that generated snapshot as input when curating:
 
@@ -214,7 +214,7 @@ The current durable-promotion rule is also intentionally evidence-based:
 
 The wrapper now defaults `--apply-target` to `probationary` so the safer lane is the default behavior, not an extra flag the caller has to remember.
 
-The external SWE-bench lane is the hardening lane for broader review pressure. It helps the review brain improve without depending only on your own buggy PRs, but it should not auto-write directly into the GitHub-derived corpus lanes.
+The external SWE-bench lane is the hardening lane for broader review pressure. It helps the review brain improve without depending only on one team's historical PR misses, but it should not auto-write directly into the GitHub-derived corpus lanes.
 
 Recommended entrypoint for normal use:
 

@@ -415,7 +415,7 @@ def run_github_auto_learn(
 
 
 def refresh_lessons_snapshot(repo: Path, run_dir: Path, source: Path, limit: int) -> dict:
-    output_path = run_dir / "lessons" / "knowledge-hub-codex-lessons.md"
+    output_path = run_dir / "lessons" / "local-lessons-snapshot.md"
     cmd = [
         sys.executable,
         str(
