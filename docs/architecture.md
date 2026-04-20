@@ -29,15 +29,18 @@ Bundled scripts should support consistency:
 
 ## Improvement Model
 
-The project should improve the skill from two durable sources:
+The project should improve the skill from three durable inputs:
 
 1. Real GitHub PR review misses and follow-up review comments
 2. Curated external benchmark datasets that are review-shaped enough to pressure real bug finding
+3. Optional local Knowledge-Hub Codex lessons that are reviewed and distilled into repo-local prompts deliberately, not auto-ingested raw
 
 Those two lanes should stay separate in scoring so the project can distinguish:
 
 - how well the skill catches the user's real recurring review misses
 - how well the skill generalizes to broader bug-finding cases
+
+The optional Knowledge-Hub lane is a maintainer input, not a public benchmark lane. It exists to refresh the reviewer's bug-hunting prompts from repeated real-world mistakes without copying a private hub directly into the durable public corpus.
 
 ## Intended Layers
 

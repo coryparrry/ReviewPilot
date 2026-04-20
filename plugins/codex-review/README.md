@@ -107,6 +107,10 @@ The Codex-side MCP capture helper lives at:
 
 - `plugins/codex-review/scripts/capture_github_mcp_feedback.py`
 
+If you are setting this up for the first time, read:
+
+- `docs/github-mcp-setup.md`
+
 The legacy `gh`-based live GitHub fetch script lives at:
 
 - `plugins/codex-review/scripts/fetch_github_review_feedback.py`
@@ -121,6 +125,33 @@ The plugin-owned review runner now lives at:
 - `plugins/codex-review/scripts/run_codex_review.py`
 - `plugins/codex-review/scripts/propose_review_repairs.py`
 - `plugins/codex-review/scripts/run_review_fix.py`
+
+For local skill improvement from a private Knowledge-Hub lessons log, use:
+
+```powershell
+python .\plugins\codex-review\skills\bug-hunting-code-review\scripts\refresh_lessons_reference.py `
+  --source C:\path\to\codex-lessons.md
+```
+
+That produces a repo-local snapshot at:
+
+- `plugins/codex-review/skills/bug-hunting-code-review/references/knowledge-hub-codex-lessons.md`
+
+Use that generated snapshot as input when curating:
+
+- `plugins/codex-review/skills/bug-hunting-code-review/references/bug-patterns-from-lessons.md`
+
+Suggested lesson-entry shape for the source file:
+
+```md
+### YYYY-MM-DD
+- Context:
+- Mistake or correction:
+- What changed:
+- Prevention for next time:
+```
+
+Keep the source lessons file focused on repeated review mistakes, durable bug patterns, and corrections that should change future review behavior.
 
 Safety notes for the live fetch step:
 
@@ -227,6 +258,24 @@ That wrapper:
 - runs a small Hugging Face hardening batch
 - writes `automation-summary.json` under `artifacts/automation-runs/`
 
+The automation wrapper can also stage lessons and drive more of the GitHub intake settings directly now.
+
+Example:
+
+```powershell
+python .\plugins\codex-review\scripts\run_automation_cycle.py `
+  --repo . `
+  --lessons-source C:\path\to\codex-lessons.md `
+  --github-repo owner/name `
+  --github-pr 123 `
+  --github-raw-input .\artifacts\github-intake\mcp\pr-123-comments.json `
+  --github-apply-mode auto `
+  --github-apply-target probationary `
+  --github-promote-probationary-id feature-gates-preserve-existing
+```
+
+That keeps the main workflow in one entrypoint instead of requiring separate manual steps for lessons staging or promotion flags.
+
 For Codex automations, the recommended skill entrypoint is:
 
 - `plugins/codex-review/skills/autonomous-review-cycle/SKILL.md`
@@ -255,6 +304,10 @@ For MCP-native live intake, use the plugin's GitHub connector to capture one of 
 
 - PR comments timeline output compatible with `github_mcp_pr_comments`
 - review-thread output compatible with `github_mcp_review_threads`
+
+The user-facing GitHub connection steps are documented in:
+
+- `docs/github-mcp-setup.md`
 
 The intended Codex-side flow is:
 

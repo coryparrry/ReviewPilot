@@ -18,6 +18,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base", default="origin/main", help="Base branch for the local review diff.")
     parser.add_argument("--output-dir", help="Optional automation run directory.")
     parser.add_argument("--model", help="Optional Codex model override passed through where supported.")
+    parser.add_argument(
+        "--lessons-source",
+        help=(
+            "Optional path to a lessons markdown file. When set, the automation cycle refreshes "
+            "the repo-local lessons snapshot before the review runs."
+        ),
+    )
+    parser.add_argument(
+        "--lessons-limit",
+        type=int,
+        default=40,
+        help="Maximum number of most-recent lessons to stage when --lessons-source is used.",
+    )
 
     parser.add_argument("--skip-review", action="store_true", help="Skip the local review run.")
     parser.add_argument(
@@ -35,6 +48,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--github-repo", help="GitHub repo in owner/name form for intake.")
     parser.add_argument("--github-pr", type=int, help="PR number for intake.")
     parser.add_argument("--github-raw-input", help="Captured GitHub raw artifact for the intake pipeline.")
+    parser.add_argument(
+        "--github-apply-mode",
+        default="auto",
+        choices=["auto", "review", "force"],
+        help="Apply mode passed into the GitHub intake pipeline. Defaults to auto.",
+    )
+    parser.add_argument(
+        "--github-apply-target",
+        default="probationary",
+        choices=["probationary", "primary"],
+        help="Corpus lane for GitHub intake apply. Defaults to probationary.",
+    )
+    parser.add_argument(
+        "--github-promote-probationary-id",
+        action="append",
+        default=[],
+        help=(
+            "Optional probationary case id to promote during the same automation run. "
+            "Repeat the flag to promote more than one case."
+        ),
+    )
     parser.add_argument(
         "--github-raw-format",
         default="auto",
@@ -177,6 +211,9 @@ def run_github_intake(
     raw_format: str,
     review_run_dir: Path,
     model: str | None,
+    apply_mode: str,
+    apply_target: str,
+    promote_probationary_ids: list[str],
 ) -> dict:
     output_dir = run_dir / "github-intake"
     cmd = [
@@ -194,19 +231,51 @@ def run_github_intake(
         str(review_run_dir),
         "--gate-candidates",
         "--apply-target",
-        "probationary",
+        apply_target,
         "--apply-mode",
-        "auto",
+        apply_mode,
         "--output-dir",
         str(output_dir),
     ]
-    if model:
-        cmd.extend(["--model", model])
+    if promote_probationary_ids:
+        cmd.extend(["--stop-after", "promote-primary"])
+        cmd.append("--promote-probationary-ids")
+        cmd.extend(promote_probationary_ids)
     completed = run_cmd(cmd, repo)
     return {
         "stdout": completed.stdout,
         "stderr": completed.stderr,
         "output_dir": str(output_dir),
+    }
+
+
+def refresh_lessons_snapshot(repo: Path, run_dir: Path, source: Path, limit: int) -> dict:
+    output_path = run_dir / "lessons" / "knowledge-hub-codex-lessons.md"
+    cmd = [
+        sys.executable,
+        str(
+            repo
+            / "plugins"
+            / "codex-review"
+            / "skills"
+            / "bug-hunting-code-review"
+            / "scripts"
+            / "refresh_lessons_reference.py"
+        ),
+        "--source",
+        str(source),
+        "--output",
+        str(output_path),
+        "--limit",
+        str(limit),
+    ]
+    completed = run_cmd(cmd, repo)
+    return {
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "source": str(source),
+        "output_file": str(output_path),
+        "limit": limit,
     }
 
 
@@ -303,6 +372,15 @@ def main() -> int:
         }
 
     try:
+        if args.lessons_source:
+            current_step = "lessons_refresh"
+            summary["steps"]["lessons_refresh"] = refresh_lessons_snapshot(
+                repo,
+                run_dir,
+                Path(args.lessons_source).resolve(),
+                args.lessons_limit,
+            )
+
         if not args.skip_review:
             current_step = "review"
             review_result = run_review(repo, run_dir, args.base, args.model)
@@ -345,6 +423,9 @@ def main() -> int:
                     args.github_raw_format,
                     review_run_dir,
                     args.model,
+                    args.github_apply_mode,
+                    args.github_apply_target,
+                    args.github_promote_probationary_id,
                 )
 
         if not args.skip_coderabbit_calibration:
