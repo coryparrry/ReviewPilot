@@ -15,6 +15,16 @@ PLAIN_SECTION_HEADINGS = {
 NUMBERED_ITEM_RE = re.compile(r"^\d+\.\s+", re.MULTILINE)
 SEVERITY_RE = re.compile(r"^\[(?P<severity>[^\]]+)\]\s+(?P<title>.+)$")
 LINK_RE = re.compile(r"\[(?P<label>[^\]]+)\]\((?P<target>[^)]+)\)")
+HASH_LINE_RE = re.compile(r"^(?P<path>.+?)#L(?P<start>\d+)(?:-L(?P<end>\d+))?$")
+COLON_LINE_RE = re.compile(r"^(?P<path>[A-Za-z]:.+?):(?P<line>\d+)$")
+
+SEVERITY_PRIORITY = {
+    "critical": 0,
+    "high": 1,
+    "medium": 2,
+    "low": 3,
+    "unknown": 2,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -101,6 +111,37 @@ def build_validation_hints(title: str, refs: list[dict[str, str]]) -> list[str]:
     return hints
 
 
+def parse_link_target(target: str) -> dict | None:
+    cleaned = target.strip()
+    hash_match = HASH_LINE_RE.match(cleaned)
+    if hash_match:
+        start = int(hash_match.group("start"))
+        end = int(hash_match.group("end") or start)
+        return {
+            "file": hash_match.group("path"),
+            "start": start,
+            "end": end,
+        }
+
+    colon_match = COLON_LINE_RE.match(cleaned)
+    if colon_match:
+        line = int(colon_match.group("line"))
+        return {
+            "file": colon_match.group("path"),
+            "start": line,
+            "end": line,
+        }
+
+    return None
+
+
+def build_inline_body(title: str, evidence: str) -> str:
+    compact = " ".join(evidence.split())
+    if compact:
+        return compact[:900]
+    return title
+
+
 def parse_finding(item: str, ordinal: int) -> dict:
     lines = [line.rstrip() for line in item.splitlines()]
     header = lines[0].strip() if lines else ""
@@ -118,11 +159,18 @@ def parse_finding(item: str, ordinal: int) -> dict:
         title = title.split(" - ", 1)[0].strip()
 
     evidence = body or item.strip()
+    primary_location = None
+    for ref in file_refs:
+        parsed = parse_link_target(ref["target"])
+        if parsed is not None:
+            primary_location = parsed
+            break
     return {
         "id": f"repair-{ordinal}",
         "title": title,
         "severity": severity,
         "file_references": file_refs,
+        "primary_location": primary_location,
         "evidence": evidence,
         "repair_goal": f"Fix the issue described as: {title}",
         "validation_hints": build_validation_hints(title, file_refs),
@@ -170,6 +218,29 @@ def render_markdown(plan: dict) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def build_inline_findings(plan: dict) -> list[dict]:
+    inline: list[dict] = []
+    for finding in plan["findings"]:
+        location = finding.get("primary_location")
+        if not isinstance(location, dict):
+            continue
+        title = str(finding.get("title") or "").strip()
+        if not title:
+            continue
+        severity = str(finding.get("severity") or "unknown").lower()
+        entry = {
+            "title": title,
+            "body": build_inline_body(title, str(finding.get("evidence") or "")),
+            "file": str(location.get("file") or ""),
+            "start": int(location.get("start") or 1),
+            "end": int(location.get("end") or location.get("start") or 1),
+            "priority": SEVERITY_PRIORITY.get(severity, 2),
+            "confidence": 0.75 if severity in {"critical", "high"} else 0.6,
+        }
+        inline.append(entry)
+    return inline
+
+
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -183,12 +254,15 @@ def main() -> int:
     plan = build_plan(review_file)
     json_path = output_dir / "repair-plan.json"
     md_path = output_dir / "repair-plan.md"
+    inline_path = output_dir / "inline-findings.json"
 
     write_text(json_path, json.dumps(plan, indent=2) + "\n")
     write_text(md_path, render_markdown(plan))
+    write_text(inline_path, json.dumps(build_inline_findings(plan), indent=2) + "\n")
 
     print(f"Repair plan JSON: {json_path}")
     print(f"Repair plan Markdown: {md_path}")
+    print(f"Inline findings JSON: {inline_path}")
     print(f"Parsed findings: {len(plan['findings'])}")
     return 0
 

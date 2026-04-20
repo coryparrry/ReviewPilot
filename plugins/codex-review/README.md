@@ -128,6 +128,13 @@ The plugin-owned review runner now lives at:
 - `plugins/codex-review/scripts/approve_quality_learning_candidates.py`
 - `plugins/codex-review/scripts/propose_review_repairs.py`
 - `plugins/codex-review/scripts/run_review_fix.py`
+- `plugins/codex-review/scripts/emit_inline_review_comments.py`
+
+Each review run now also produces:
+
+- `inline-findings.json`
+
+That artifact is meant to back Codex inline review cards, not just the plain `review.md` artifact.
 
 For local skill improvement from a private Knowledge-Hub lessons log, use:
 
@@ -252,6 +259,7 @@ That command:
 - invokes Codex non-interactively in read-only mode
 - writes `review.md`
 - writes `repair-plan.json` and `repair-plan.md` next to the review artifact
+- writes `inline-findings.json` for Codex inline review-card rendering
 - writes Codex stdout and stderr logs for inspection
 - benchmarks the resulting review against the configured lanes when depth is `deep`
 - automatically retries once in the same read-only sandbox if review generation fails mechanically or produces a missing or empty `review.md`
@@ -319,6 +327,20 @@ python .\plugins\codex-review\scripts\run_automation_cycle.py `
 ```
 
 That keeps the main workflow in one entrypoint instead of requiring separate manual steps for lessons staging or promotion flags.
+
+The intended user-facing flow is:
+
+- use `$bug-hunting-code-review` for one-off reviews in Codex
+- use `$autonomous-review-cycle` for recurring automation and GitHub learning
+
+The scripts are the implementation layer behind those skills, not the primary product surface.
+
+If Codex needs the inline review directives directly, render them from a completed run with:
+
+```powershell
+python .\plugins\codex-review\scripts\emit_inline_review_comments.py `
+  --review-dir .\.codex-review\<run>
+```
 
 For review-quality tuning against fresh GitHub feedback, capture live GitHub MCP review threads, normalize them through the existing intake pipeline, then compare them directly against a review artifact:
 

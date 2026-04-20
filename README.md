@@ -83,6 +83,7 @@ That gives you:
 - a review artifact
 - benchmark output
 - a repair plan
+- inline review findings for Codex review cards
 
 Review modes:
 
@@ -91,6 +92,16 @@ Review modes:
 - `full`: uses a broader repo scan and treats the diff as only one clue
 - `quick`: skips the benchmark step
 - `deep`: keeps the fuller prompt package and benchmark step
+
+The review run now also writes `inline-findings.json` next to `review.md`.
+That is the intended source for screenshot-style inline review cards inside Codex.
+
+If Codex needs the actual inline review directives from that artifact, use:
+
+```powershell
+python .\plugins\codex-review\scripts\emit_inline_review_comments.py `
+  --review-dir .\.codex-review\<run>
+```
 
 Quick local dirty-worktree review:
 
@@ -119,6 +130,13 @@ python .\plugins\codex-review\scripts\run_automation_cycle.py `
   --skip-github-intake `
   --hardening-length 1
 ```
+
+The intended product surface is:
+
+- use `$bug-hunting-code-review` when you want Codex to review code now
+- use `$autonomous-review-cycle` when you want Codex automations to keep learning from GitHub review feedback over time
+
+The scripts are still there, but they should sit behind those two skills instead of being the main thing a user has to memorize.
 
 ## GitHub Learning Setup 🔌
 
@@ -154,6 +172,16 @@ python .\plugins\codex-review\scripts\run_public_pr_quality_cycle.py `
 ```
 
 That path is comparison-only by default. It fetches public PR review feedback, normalizes it through the existing pipeline, and compares it against your local review artifact without writing directly into the learning corpus.
+
+If you want the same public path to auto-learn safe misses into the probationary lane, use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_public_pr_quality_cycle.py `
+  --repo owner/name `
+  --pr 123 `
+  --review-artifacts .\.codex-review `
+  --auto-learn-probationary
+```
 
 ## Lessons Workflow 🧠
 
