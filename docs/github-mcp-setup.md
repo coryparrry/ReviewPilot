@@ -76,7 +76,7 @@ python .\plugins\codex-review\scripts\capture_github_mcp_feedback.py `
 
 ## Why It Works This Way
 
-The plugin keeps GitHub access read-only and local-artifact based on purpose.
+The plugin keeps GitHub access read-only and local-artifact-based on purpose.
 
 That gives you:
 

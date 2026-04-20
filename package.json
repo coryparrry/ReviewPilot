@@ -13,8 +13,8 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "validate:release": "python .\\scripts\\validate_public_release.py",
-    "smoke:release": "python .\\scripts\\smoke_test_release.py"
+    "validate:release": "python ./scripts/validate_public_release.py",
+    "smoke:release": "python ./scripts/smoke_test_release.py"
   },
   "bin": {
     "codex-review-install": "bin/codex-review-install.cjs"

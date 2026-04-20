@@ -13,7 +13,10 @@ GITHUB_MCP_SETUP_DOC = REPO_ROOT / "docs" / "github-mcp-setup.md"
 
 
 def load_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid JSON in {path}: {exc}") from exc
 
 
 def require_file(path: Path) -> None:

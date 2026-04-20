@@ -34,10 +34,20 @@ def require_text(path: Path, expected: str) -> None:
         raise SystemExit(f"Expected {expected!r} in {path}")
 
 
+def resolve_powershell() -> str:
+    for candidate in ("pwsh", "powershell"):
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+    raise SystemExit("PowerShell is required for the release smoke test. Install `pwsh` or `powershell` and retry.")
+
+
 def verify_install_tree(codex_home: Path, marketplace_name: str) -> None:
     marketplace_root = codex_home / "local-marketplaces" / marketplace_name
     plugin_root = marketplace_root / "plugins" / PLUGIN_NAME
-    plugin_manifest = json.loads((plugin_root / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    plugin_manifest_path = plugin_root / ".codex-plugin" / "plugin.json"
+    require_file(plugin_manifest_path)
+    plugin_manifest = json.loads(plugin_manifest_path.read_text(encoding="utf-8"))
     plugin_version = plugin_manifest.get("version")
     if not plugin_version:
         raise SystemExit(f"Installed plugin manifest did not include a version at {plugin_root}")
@@ -83,7 +93,7 @@ def run_powershell_install_smoke(temp_root: Path) -> None:
     marketplace_name = "codex-review-ps-test"
     run_cmd(
         [
-            "powershell",
+            resolve_powershell(),
             "-ExecutionPolicy",
             "Bypass",
             "-File",
@@ -119,7 +129,7 @@ def run_release_bundle_smoke(temp_root: Path) -> None:
     output_root = temp_root / "release-output"
     run_cmd(
         [
-            "powershell",
+            resolve_powershell(),
             "-ExecutionPolicy",
             "Bypass",
             "-File",
