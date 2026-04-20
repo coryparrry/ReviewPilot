@@ -154,6 +154,21 @@ def derive_expected_groups(record: dict[str, Any]) -> list[list[str]]:
     return [group] if group else []
 
 
+def compact_expectation_signals(record: dict[str, Any], limit: int = 3) -> list[str]:
+    expectations = record.get("candidate_expectations") or []
+    if not isinstance(expectations, list):
+        return []
+    signals: list[str] = []
+    for expectation in expectations:
+        cleaned = " ".join(str(expectation).split())
+        if not cleaned:
+            continue
+        signals.append(cleaned[:220])
+        if len(signals) == limit:
+            break
+    return signals
+
+
 def record_key(record: dict[str, Any]) -> tuple[str, str]:
     return (
         str(record.get("file_path") or ""),
@@ -228,13 +243,42 @@ def classify_gap(record: dict[str, Any], matched: bool, corpus_match: bool, cali
 
 
 def build_prompt_focus(missed_records: list[dict[str, Any]]) -> list[str]:
+    gap_rank = {
+        "prompt-gap": 0,
+        "corpus-and-calibration-gap": 1,
+        "corpus-gap": 2,
+        "caught": 3,
+    }
+    severity_rank = {
+        "critical": 0,
+        "high": 1,
+        "medium": 2,
+        "low": 3,
+    }
+    ordered_records = sorted(
+        missed_records,
+        key=lambda record: (
+            gap_rank.get(str(record.get("gap_classification") or ""), 9),
+            severity_rank.get(str(record.get("severity") or "").lower(), 9),
+            str(record.get("candidate_title") or ""),
+        ),
+    )
     focus: list[str] = []
-    for record in missed_records[:6]:
+    for record in ordered_records[:6]:
         title = str(record.get("candidate_title") or "Untitled finding").strip()
         file_path = str(record.get("file_path") or "unknown-file").strip()
         summary = str(record.get("candidate_summary") or record.get("body") or "").strip()
         snippet = summary[:180] if summary else title
-        focus.append(f"{title} in {file_path}: {snippet}")
+        signals = record.get("suggested_signal_phrases")
+        if not isinstance(signals, list):
+            signals = compact_expectation_signals(record)
+        if signals:
+            focus.append(
+                f"{title} in {file_path}: {snippet}. Evidence anchors to mention if present: "
+                + " | ".join(signals)
+            )
+        else:
+            focus.append(f"{title} in {file_path}: {snippet}")
     return focus
 
 
@@ -304,6 +348,8 @@ def main() -> int:
                 "line": record.get("line"),
                 "normalized_category": record.get("normalized_category"),
                 "severity": record.get("severity"),
+                "candidate_expectations": record.get("candidate_expectations") or [],
+                "suggested_signal_phrases": compact_expectation_signals(record),
                 "review_match": {
                     "matched": review_match.matched,
                     "strict_match": review_match.strict_match,

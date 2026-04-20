@@ -264,6 +264,14 @@ def build_prompt(
         Use the scan hints, but verify them from the diff and surrounding behavior.
         If there are no findings, say so explicitly and mention residual risk or test gaps briefly.
 
+        Output contract:
+        - Use the exact headings: Findings, Open questions, Change summary.
+        - For each finding, name the concrete symbol, field, error type, or state surface that is wrong.
+        - Include one short "Why this is a bug:" sentence that explains the failing scenario and user or system impact.
+        - Include one short "Evidence:" sentence that uses concrete identifiers from the code surface rather than abstract paraphrase.
+        - When the bug is about stale state, source-of-truth drift, or contract mismatch, explicitly name both sides that disagree.
+        - Prefer concrete API names, field names, function names, enum names, and error names when they are visible in the diff or scan.
+
         Review mode guidance:
         - Mode: {mode}
         - Depth: {depth}
@@ -410,8 +418,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("CODEX_REVIEW_MODEL", "gpt-5.1"),
-        help="OpenAI model to use with --use-openai-api. Defaults to CODEX_REVIEW_MODEL or gpt-5.1.",
+        default=os.environ.get("CODEX_REVIEW_MODEL", "gpt-5.4-mini"),
+        help="OpenAI model to use with --use-openai-api. Defaults to CODEX_REVIEW_MODEL or gpt-5.4-mini.",
     )
     parser.add_argument(
         "--output-dir",
