@@ -94,7 +94,8 @@ Review modes:
 - `deep`: keeps the fuller prompt package and benchmark step
 
 The review run now also writes `inline-findings.json` next to `review.md`.
-That is the intended source for screenshot-style inline review cards inside Codex.
+It also writes `codex-inline-comments.txt`.
+Those are the intended sources for native Codex inline review cards inside Codex.
 
 If Codex needs the actual inline review directives from that artifact, use:
 

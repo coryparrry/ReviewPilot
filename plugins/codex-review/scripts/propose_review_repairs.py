@@ -241,6 +241,27 @@ def build_inline_findings(plan: dict) -> list[dict]:
     return inline
 
 
+def escape_attr(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ").strip()
+
+
+def render_code_comment_directives(inline_findings: list[dict]) -> str:
+    lines: list[str] = []
+    for finding in inline_findings:
+        lines.append(
+            "::code-comment{"
+            + f'title="{escape_attr(str(finding.get("title") or "Review finding"))}" '
+            + f'body="{escape_attr(str(finding.get("body") or ""))}" '
+            + f'file="{escape_attr(str(finding.get("file") or ""))}" '
+            + f'start={int(finding.get("start") or 1)} '
+            + f'end={int(finding.get("end") or finding.get("start") or 1)} '
+            + f'priority={int(finding.get("priority") or 2)} '
+            + f'confidence={float(finding.get("confidence") or 0.6):.2f}'
+            + "}"
+        )
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -255,14 +276,18 @@ def main() -> int:
     json_path = output_dir / "repair-plan.json"
     md_path = output_dir / "repair-plan.md"
     inline_path = output_dir / "inline-findings.json"
+    directives_path = output_dir / "codex-inline-comments.txt"
+    inline_findings = build_inline_findings(plan)
 
     write_text(json_path, json.dumps(plan, indent=2) + "\n")
     write_text(md_path, render_markdown(plan))
-    write_text(inline_path, json.dumps(build_inline_findings(plan), indent=2) + "\n")
+    write_text(inline_path, json.dumps(inline_findings, indent=2) + "\n")
+    write_text(directives_path, render_code_comment_directives(inline_findings))
 
     print(f"Repair plan JSON: {json_path}")
     print(f"Repair plan Markdown: {md_path}")
     print(f"Inline findings JSON: {inline_path}")
+    print(f"Codex inline comments: {directives_path}")
     print(f"Parsed findings: {len(plan['findings'])}")
     return 0
 

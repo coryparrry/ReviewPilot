@@ -133,8 +133,9 @@ The plugin-owned review runner now lives at:
 Each review run now also produces:
 
 - `inline-findings.json`
+- `codex-inline-comments.txt`
 
-That artifact is meant to back Codex inline review cards, not just the plain `review.md` artifact.
+Those artifacts are meant to back Codex inline review cards, not just the plain `review.md` artifact.
 
 For local skill improvement from a private Knowledge-Hub lessons log, use:
 
@@ -341,6 +342,8 @@ If Codex needs the inline review directives directly, render them from a complet
 python .\plugins\codex-review\scripts\emit_inline_review_comments.py `
   --review-dir .\.codex-review\<run>
 ```
+
+Most review runs should not need that extra step anymore, because the run now also writes `codex-inline-comments.txt` next to the review artifact.
 
 For review-quality tuning against fresh GitHub feedback, capture live GitHub MCP review threads, normalize them through the existing intake pipeline, then compare them directly against a review artifact:
 
