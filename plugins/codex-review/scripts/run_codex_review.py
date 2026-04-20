@@ -1,12 +1,24 @@
 import argparse
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple
+
+
+SECTION_HEADING_RE = re.compile(r"^\*\*(.+?)\*\*$")
+MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
+NUMBERED_ITEM_RE = re.compile(r"^\d+\.\s+", re.MULTILINE)
+PLAIN_SECTION_HEADINGS = {
+    "findings",
+    "open questions",
+    "change summary",
+    "residual risk",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -137,8 +149,141 @@ def review_file_has_content(review_file: Path) -> bool:
     return review_file.is_file() and bool(read_text_if_present(review_file).strip())
 
 
+def split_sections(text: str) -> dict[str, str]:
+    sections: dict[str, list[str]] = {}
+    current_name = "body"
+    sections[current_name] = []
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        match = SECTION_HEADING_RE.match(stripped)
+        if match:
+            current_name = match.group(1).strip().lower()
+            sections.setdefault(current_name, [])
+            continue
+        markdown_match = MARKDOWN_HEADING_RE.match(stripped)
+        if markdown_match:
+            current_name = markdown_match.group(1).strip().rstrip(":").lower()
+            sections.setdefault(current_name, [])
+            continue
+        if stripped.lower() in PLAIN_SECTION_HEADINGS:
+            current_name = stripped.lower()
+            sections.setdefault(current_name, [])
+            continue
+        sections.setdefault(current_name, []).append(line)
+
+    return {name: "\n".join(lines).strip() for name, lines in sections.items()}
+
+
+def split_numbered_items(block: str) -> list[str]:
+    if not block.strip():
+        return []
+
+    matches = list(NUMBERED_ITEM_RE.finditer(block))
+    if not matches:
+        return [block.strip()]
+
+    items: list[str] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(block)
+        item = block[start:end].strip()
+        if item:
+            items.append(item)
+    return items
+
+
+def extract_findings_items(review_text: str) -> list[str]:
+    sections = split_sections(review_text)
+    findings_block = sections.get("findings", "")
+    if not findings_block:
+        return []
+    lowered = findings_block.strip().lower()
+    if lowered.startswith("no findings"):
+        return []
+    return split_numbered_items(findings_block)
+
+
+def build_pass_prompts(prompt: str, depth: str) -> list[tuple[str, str]]:
+    if depth != "deep":
+        return [("single", prompt)]
+
+    return [
+        (
+            "changed-hunks",
+            prompt
+            + "\n\nFocus pass:\n"
+            + "- Report only bugs directly caused by changed files, changed hunks, or the state transitions those hunks now control.\n"
+            + "- Ignore unrelated pre-existing issues elsewhere unless the diff clearly routes through them.\n",
+        ),
+        (
+            "concurrency-state",
+            prompt
+            + "\n\nFocus pass:\n"
+            + "- Prioritize race conditions, TOCTOU bugs, rollback-on-throw gaps, stale status after reset, and source-of-truth drift.\n"
+            + "- Re-check shared async helpers for state that is only updated after await, fetch, retry, delay, throttle, or detached-process dispatch.\n"
+            + "- Re-check optimistic UI or workflow state for paths where thrown exceptions bypass rollback while returned error objects do not.\n"
+            + "- Prefer findings in the touched functions and their immediate callers/callees.\n",
+        ),
+        (
+            "validation-contract",
+            prompt
+            + "\n\nFocus pass:\n"
+            + "- Prioritize missing input validation, NULL or bounds guards, return-value handling, cleanup failures, and changed contract mismatches.\n"
+            + "- Re-scan sibling touched functions for the same low-level guard pattern once one missing NULL, parameter, bounds, or return-value check is found.\n"
+            + "- Prefer mismatches where the write path stores one source of truth but the read path still uses a live default or fallback value.\n"
+            + "- Prefer findings in the touched functions and their immediate callers/callees.\n",
+        ),
+        (
+            "workflow-lifecycle",
+            prompt
+            + "\n\nFocus pass:\n"
+            + "- Prioritize reset, cleanup, teardown, retry, process-launch, timeout, and refresh behavior.\n"
+            + "- Check whether the first successful or failing request leaves behind durable state that the next request still interprets correctly.\n"
+            + "- Check shell or external-process paths for verification-after-dispatch gaps, missing timeouts, or cleanup steps that depend on unrelated metadata.\n"
+            + "- Prefer findings in the touched functions and their immediate callers/callees.\n",
+        ),
+    ]
+
+
+def combine_pass_reviews(pass_reviews: list[tuple[str, str]]) -> str:
+    combined_items: list[str] = []
+    seen: set[str] = set()
+
+    for _, review_text in pass_reviews:
+        for item in extract_findings_items(review_text):
+            first_line = item.splitlines()[0].strip().lower()
+            key = re.sub(r"\s+", " ", first_line)
+            if key in seen:
+                continue
+            seen.add(key)
+            combined_items.append(item)
+
+    if not combined_items:
+        return "No findings.\n\nResidual risk:\n- Multi-pass review did not surface a concrete release-blocking issue.\n"
+
+    lines = ["**Findings**", ""]
+    for index, item in enumerate(combined_items, start=1):
+        lines.append(f"{index}. {item}")
+        lines.append("")
+    lines.extend(
+        [
+            "**Open questions**",
+            "",
+            "- None.",
+            "",
+            "**Change summary**",
+            "",
+            "- Combined multi-pass deep review from changed-hunk, concurrency-state, validation-contract, and workflow-lifecycle passes.",
+            "",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def run_codex_attempt(
-    codex_cmd: list[str],
+    codex_base_cmd: list[str],
+    model: str | None,
     repo: Path,
     prompt: str,
     review_file: Path,
@@ -147,6 +292,23 @@ def run_codex_attempt(
 ) -> Tuple[bool, str, subprocess.CompletedProcess[str]]:
     if review_file.exists():
         review_file.unlink()
+
+    codex_cmd = [
+        *codex_base_cmd,
+        "exec",
+        "-C",
+        str(repo),
+        "--sandbox",
+        "read-only",
+        "--color",
+        "never",
+        "--ephemeral",
+        "--output-last-message",
+        str(review_file),
+    ]
+    if model:
+        codex_cmd.extend(["--model", model])
+    codex_cmd.append("-")
 
     completed = subprocess.run(
         codex_cmd,
@@ -217,72 +379,73 @@ def main() -> int:
     stderr_log = run_dir / "codex-stderr.txt"
     repair_summary = run_dir / "repair-summary.txt"
 
-    codex_cmd = [
-        *codex_base_cmd,
-        "exec",
-        "-C",
-        str(repo),
-        "--sandbox",
-        "read-only",
-        "--color",
-        "never",
-        "--ephemeral",
-        "--output-last-message",
-        str(review_file),
-    ]
-    if args.model:
-        codex_cmd.extend(["--model", args.model])
-    codex_cmd.append("-")
-
     max_attempts = 2
-    final_completed = None
-    repair_notes: list[str] = []
-    success = False
+    pass_reviews: list[tuple[str, str]] = []
+    overall_notes: list[str] = []
+    pass_prompts = build_pass_prompts(prepared["prompt"], args.depth)
 
-    for attempt in range(1, max_attempts + 1):
-        attempt_success, reason, completed = run_codex_attempt(
-            codex_cmd=codex_cmd,
-            repo=repo,
-            prompt=prepared["prompt"],
-            review_file=review_file,
-            run_dir=run_dir,
-            attempt=attempt,
-        )
-        final_completed = completed
+    for pass_index, (pass_name, pass_prompt) in enumerate(pass_prompts, start=1):
+        final_completed = None
+        repair_notes: list[str] = []
+        success = False
+        pass_review_file = run_dir / f"{pass_name}-review.md"
 
-        if attempt_success:
-            if attempt > 1:
-                repair_notes.append(
-                    f"Recovered after one automatic read-only retry. First attempt failed with: {reason_before_retry}."
+        for attempt in range(1, max_attempts + 1):
+            attempt_success, reason, completed = run_codex_attempt(
+                codex_base_cmd=codex_base_cmd,
+                model=args.model,
+                repo=repo,
+                prompt=pass_prompt,
+                review_file=pass_review_file,
+                run_dir=run_dir,
+                attempt=pass_index * 10 + attempt,
+            )
+            final_completed = completed
+
+            if attempt_success:
+                if attempt > 1:
+                    repair_notes.append(
+                        f"{pass_name}: recovered after one automatic read-only retry. First attempt failed with: {reason_before_retry}."
+                    )
+                success = True
+                break
+
+            if attempt == max_attempts:
+                raise RuntimeError(
+                    "Codex review generation failed after one automatic read-only retry. "
+                    f"Pass {pass_name!r} final failure: {reason}."
                 )
-            success = True
-            break
 
-        if attempt == max_attempts:
-            raise RuntimeError(
-                "Codex review generation failed after one automatic read-only retry. "
-                f"Final failure: {reason}."
+            reason_before_retry = reason
+            repair_notes.append(
+                f"{pass_name}: first Codex review attempt failed mechanically "
+                f"({reason}). Retrying once in the same read-only sandbox."
             )
 
-        reason_before_retry = reason
-        repair_notes.append(
-            "First Codex review attempt failed mechanically "
-            f"({reason}). Retrying once in the same read-only sandbox."
-        )
+        assert final_completed is not None
+        write_file(run_dir / f"{pass_name}-codex-stdout.txt", final_completed.stdout)
+        write_file(run_dir / f"{pass_name}-codex-stderr.txt", final_completed.stderr)
+        if repair_notes:
+            overall_notes.extend(repair_notes)
+        if success:
+            pass_reviews.append((pass_name, read_text_if_present(pass_review_file)))
 
-    assert final_completed is not None
-    write_file(stdout_log, final_completed.stdout)
-    write_file(stderr_log, final_completed.stderr)
-    if repair_notes:
-        write_file(repair_summary, "\n".join(repair_notes) + "\n")
+    combined_review = combine_pass_reviews(pass_reviews)
+    write_file(review_file, combined_review)
+    if pass_reviews:
+        write_file(stdout_log, "\n\n".join(text for _, text in pass_reviews))
+    if overall_notes:
+        write_file(repair_summary, "\n".join(overall_notes) + "\n")
 
     print(f"Artifacts: {run_dir}")
     print(f"Review: {review_file}")
     print(f"Codex command: {' '.join(codex_base_cmd)}")
     print(f"Review mode: {args.mode}")
     print(f"Review depth: {args.depth}")
-    if success and repair_notes:
-        print("Self-repair: recovered after one automatic read-only retry.")
+    if len(pass_prompts) > 1:
+        print(f"Review strategy: multi-pass ({', '.join(name for name, _ in pass_prompts)})")
+    if overall_notes:
+        print("Self-repair: recovered after one or more automatic read-only retries.")
 
     repair_output = run_repair_plan(repair_script, review_file, run_dir, repo)
     print(repair_output.strip())

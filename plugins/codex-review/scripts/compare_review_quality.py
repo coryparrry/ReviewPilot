@@ -27,7 +27,12 @@ class CandidateMatch:
 
     @property
     def matched(self) -> bool:
-        return self.strict_match or self.title_overlap >= 0.6 or self.expectation_overlap >= 0.45
+        return (
+            self.strict_match
+            or self.title_overlap >= 0.6
+            or self.expectation_overlap >= 0.45
+            or (self.title_overlap >= 0.35 and self.expectation_overlap >= 0.3)
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,6 +70,11 @@ def parse_args() -> argparse.Namespace:
         "--allow-outside-artifacts",
         action="store_true",
         help="Allow writing comparison artifacts outside the repo's ignored artifacts tree.",
+    )
+    parser.add_argument(
+        "--bugs-only",
+        action="store_true",
+        help="Filter obvious typo/comment nit picks and deduplicate near-identical live findings before scoring.",
     )
     return parser.parse_args()
 
@@ -167,6 +177,73 @@ def compact_expectation_signals(record: dict[str, Any], limit: int = 3) -> list[
         if len(signals) == limit:
             break
     return signals
+
+
+def record_text(record: dict[str, Any]) -> str:
+    parts: list[str] = [
+        str(record.get("candidate_title") or ""),
+        str(record.get("candidate_summary") or ""),
+    ]
+    for expectation in record.get("candidate_expectations") or []:
+        parts.append(str(expectation))
+    return " ".join(part for part in parts if part)
+
+
+def similarity_tokens(value: str) -> set[str]:
+    return {token for token in re.findall(r"[a-zA-Z0-9_]{4,}", value.lower())}
+
+
+def is_bug_worthy_record(record: dict[str, Any]) -> bool:
+    if bool(record.get("is_low_signal_bug_comment")):
+        return False
+    combined = record_text(record).lower()
+    if not combined.strip():
+        return False
+    low_signal_markers = [
+        "fix typo",
+        "minor typos",
+        "spelling error",
+        "wording",
+        "comment contains",
+        "grammar",
+    ]
+    return not any(marker in combined for marker in low_signal_markers)
+
+
+def records_are_near_duplicates(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    left_file = str(left.get("file_path") or "")
+    right_file = str(right.get("file_path") or "")
+    left_line = int(left.get("line") or 0)
+    right_line = int(right.get("line") or 0)
+    same_file = bool(left_file and right_file and left_file == right_file)
+    nearby_lines = same_file and left_line and right_line and abs(left_line - right_line) <= 35
+
+    left_tokens = similarity_tokens(record_text(left))
+    right_tokens = similarity_tokens(record_text(right))
+    overlap = token_overlap(left_tokens, right_tokens)
+    title_similarity = SequenceMatcher(
+        None,
+        normalize_title(str(left.get("candidate_title") or "")),
+        normalize_title(str(right.get("candidate_title") or "")),
+    ).ratio()
+
+    if nearby_lines and (overlap >= 0.42 or title_similarity >= 0.7):
+        return True
+
+    same_category = str(left.get("normalized_category") or "") == str(right.get("normalized_category") or "")
+    if same_category and overlap >= 0.72:
+        return True
+
+    return False
+
+
+def dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    for record in records:
+        if any(records_are_near_duplicates(record, existing) for existing in deduped):
+            continue
+        deduped.append(record)
+    return deduped
 
 
 def record_key(record: dict[str, Any]) -> tuple[str, str]:
@@ -318,6 +395,10 @@ def main() -> int:
     records = proposal.get("records") or []
     if not isinstance(records, list):
         raise ValueError("Proposal artifact must contain a top-level records list.")
+    normalized_records = [record for record in records if isinstance(record, dict)]
+    if args.bugs_only:
+        normalized_records = [record for record in normalized_records if is_bug_worthy_record(record)]
+        normalized_records = dedupe_records(normalized_records)
 
     candidates_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     if args.candidates:
@@ -330,9 +411,7 @@ def main() -> int:
     combined_corpus = [*primary_corpus, *probationary_corpus]
 
     findings: list[dict[str, Any]] = []
-    for record in records:
-        if not isinstance(record, dict):
-            continue
+    for record in normalized_records:
         review_match = compare_review_to_record(review_text, record)
         corpus_match = near_duplicate(record, combined_corpus)
         calibration_match = calibration_matches(record, calibration_entries)

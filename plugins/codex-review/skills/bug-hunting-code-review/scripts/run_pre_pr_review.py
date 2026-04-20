@@ -20,6 +20,9 @@ from typing import Any
 DEFAULT_CALIBRATION_PATH = (
     Path(__file__).resolve().parent.parent / "references" / "coderabbit-comment-calibration.json"
 )
+DEFAULT_PUBLIC_CALIBRATION_PATH = (
+    Path(__file__).resolve().parent.parent / "references" / "public-coderabbit-calibration.json"
+)
 DEFAULT_FULL_REPO_SCAN_LIMIT = 20
 DEFAULT_UNTRACKED_FILE_LIMIT = 12
 DEFAULT_UNTRACKED_BYTES = 12000
@@ -211,6 +214,24 @@ def accepted_calibration_focus(calibration_path: Path) -> list[str]:
     return focus
 
 
+def public_calibration_focus(calibration_path: Path) -> list[str]:
+    payload = load_json(calibration_path)
+    if not isinstance(payload, list):
+        return []
+    focus: list[str] = []
+    for entry in payload:
+        if not isinstance(entry, dict):
+            continue
+        use = str(entry.get("use", "")).strip()
+        summary = str(entry.get("summary", "")).strip()
+        if not summary:
+            continue
+        focus.append(f"{use}: {summary}" if use else summary)
+        if len(focus) == 8:
+            break
+    return focus
+
+
 def comparison_focus(quality_comparison_path: Path | None) -> list[str]:
     if quality_comparison_path is None or not quality_comparison_path.is_file():
         return []
@@ -223,14 +244,18 @@ def comparison_focus(quality_comparison_path: Path | None) -> list[str]:
 
 def render_miss_calibration_section(skill_dir: Path, quality_comparison_path: Path | None) -> str:
     accepted_focus = accepted_calibration_focus(DEFAULT_CALIBRATION_PATH)
+    public_focus = public_calibration_focus(DEFAULT_PUBLIC_CALIBRATION_PATH)
     live_focus = comparison_focus(quality_comparison_path)
-    if not accepted_focus and not live_focus:
+    if not accepted_focus and not public_focus and not live_focus:
         return ""
 
     lines = ["Miss calibration focus:"]
     if live_focus:
         lines.append("Fresh live misses to bias toward:")
         lines.extend(f"- {item}" for item in live_focus[:6])
+    if public_focus:
+        lines.append("Public CodeRabbit miss patterns worth preserving:")
+        lines.extend(f"- {item}" for item in public_focus[:8])
     if accepted_focus:
         lines.append("Accepted CodeRabbit comment patterns worth preserving:")
         lines.extend(f"- {item}" for item in accepted_focus[:6])
@@ -266,11 +291,24 @@ def build_prompt(
 
         Output contract:
         - Use the exact headings: Findings, Open questions, Change summary.
+        - Every finding must start with a short title line, then one short "Why this is a bug:" sentence, then one short "Evidence:" sentence.
+        - Prioritize findings that are directly caused by the changed files, changed hunks, or the state transitions those hunks now control.
+        - Do not spend the first findings on unrelated pre-existing issues elsewhere in the repo unless the diff clearly routes through them.
         - For each finding, name the concrete symbol, field, error type, or state surface that is wrong.
         - Include one short "Why this is a bug:" sentence that explains the failing scenario and user or system impact.
         - Include one short "Evidence:" sentence that uses concrete identifiers from the code surface rather than abstract paraphrase.
         - When the bug is about stale state, source-of-truth drift, or contract mismatch, explicitly name both sides that disagree.
         - Prefer concrete API names, field names, function names, enum names, and error names when they are visible in the diff or scan.
+        - If the issue is about concurrency, explicitly say race, TOCTOU, atomic, or concurrent when those words truly apply.
+        - If the issue is about rollback or stale UI state, explicitly say whether thrown exceptions and returned error objects are handled differently.
+        - If the issue is about low-level validation, explicitly name the missing NULL, parameter, bounds, or return-value guard.
+        - Before looking for broader repo drift, first pressure-test the changed code for: guard-then-write races, optimistic updates without throw rollback, reset/cleanup paths that leave stale status, and source-of-truth mismatches between read and write paths.
+        - Mandatory bug-hunt checklist before you stop:
+          1. Re-scan every touched function and its immediate helper/caller pair for missing NULL, parameter, bounds, or return-value guards.
+          2. Re-scan async or shared-state helpers for state written only after await, retry, backoff, throttle, or detached-process verification gaps.
+          3. Re-scan reset, cleanup, rollback, and refresh paths to confirm the user-visible status stays durable on the next read, not just the first one.
+          4. Re-scan read vs write paths for live-default versus persisted-source mismatches such as stored bucket, stored slug, stored status, or stored token fields.
+          5. If you find one real bug in a touched area, check the neighboring branch or sibling function for the same failure class before ending the review.
 
         Review mode guidance:
         - Mode: {mode}

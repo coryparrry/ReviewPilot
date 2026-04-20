@@ -165,6 +165,7 @@ def main() -> int:
             str(intake_dir / f"{prefix}-candidates.json"),
             "--output-dir",
             str(comparison_dir),
+            "--bugs-only",
         ]
         comparison = run_cmd(compare_cmd, repo)
         summary["steps"]["quality_comparison"] = {
