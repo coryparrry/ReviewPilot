@@ -37,6 +37,17 @@ def parse_args() -> argparse.Namespace:
         "--output-dir",
         help="Optional output directory. Defaults to artifacts/public-pr-quality/<repo>-pr-<number>-<timestamp>.",
     )
+    parser.add_argument(
+        "--auto-learn-probationary",
+        action="store_true",
+        help="Run the gated probationary auto-learning path on public comparison misses after quality comparison.",
+    )
+    parser.add_argument(
+        "--quality-apply-mode",
+        default="auto",
+        choices=["auto", "review", "force"],
+        help="Apply mode for gated probationary auto-learning. Defaults to auto.",
+    )
     return parser.parse_args()
 
 
@@ -50,6 +61,13 @@ def run_cmd(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         errors="replace",
         check=True,
     )
+
+
+def completed_to_dict(completed: subprocess.CompletedProcess[str]) -> dict[str, str]:
+    return {
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
 
 
 def repo_root(cwd: Path) -> Path:
@@ -108,6 +126,10 @@ def resolve_review_file(candidate: str | None, artifacts: str | None) -> Path | 
 
 def artifact_prefix_for_source(source: str) -> str:
     return "rest" if source == "rest" else "graphql"
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8", errors="replace"))
 
 
 def main() -> int:
@@ -174,6 +196,75 @@ def main() -> int:
             "comparison_file": str(comparison_dir / "quality-comparison.json"),
             "comparison_markdown": str(comparison_dir / "quality-comparison.md"),
         }
+
+        if args.auto_learn_probationary:
+            learning_dir = output_dir / "quality-learning"
+            approved_candidates_file = learning_dir / "quality-learning-candidates.json"
+            apply_result_file = learning_dir / "quality-learning-apply-result.json"
+            probationary_corpus = (
+                repo
+                / "plugins"
+                / "codex-review"
+                / "skills"
+                / "bug-hunting-code-review"
+                / "references"
+                / "probationary-review-cases.json"
+            )
+            approval_cmd = [
+                sys.executable,
+                str(repo / "plugins" / "codex-review" / "scripts" / "approve_quality_learning_candidates.py"),
+                "--candidates",
+                str(intake_dir / f"{prefix}-candidates.json"),
+                "--comparison",
+                str(comparison_dir / "quality-comparison.json"),
+                "--output",
+                str(approved_candidates_file),
+            ]
+            approval = run_cmd(approval_cmd, repo)
+            approved_payload = read_json(approved_candidates_file)
+            approved_ids = approved_payload.get("approved_ids") or []
+            if approved_ids:
+                apply_cmd = [
+                    sys.executable,
+                    str(repo / "plugins" / "codex-review" / "scripts" / "apply_corpus_updates.py"),
+                    "--input",
+                    str(approved_candidates_file),
+                    "--mode",
+                    args.quality_apply_mode,
+                    "--corpus",
+                    str(probationary_corpus),
+                    "--result-output",
+                    str(apply_result_file),
+                    "--allow-outside-artifacts",
+                ]
+                try:
+                    apply_completed = run_cmd(apply_cmd, repo)
+                    summary["steps"]["quality_learning"] = {
+                        "stdout": approval.stdout + apply_completed.stdout,
+                        "stderr": approval.stderr + apply_completed.stderr,
+                        "approved_candidates_file": str(approved_candidates_file),
+                        "apply_result_file": str(apply_result_file),
+                        "approved_ids": approved_ids,
+                    }
+                except subprocess.CalledProcessError as exc:
+                    summary["steps"]["quality_learning"] = {
+                        "stdout": approval.stdout + exc.stdout,
+                        "stderr": approval.stderr + exc.stderr,
+                        "approved_candidates_file": str(approved_candidates_file),
+                        "apply_result_file": str(apply_result_file),
+                        "approved_ids": approved_ids,
+                        "apply_failed": True,
+                        "reason": "apply_corpus_updates.py rejected the approved public candidate batch.",
+                    }
+            else:
+                summary["steps"]["quality_learning"] = {
+                    "stdout": approval.stdout,
+                    "stderr": approval.stderr,
+                    "approved_candidates_file": str(approved_candidates_file),
+                    "approved_ids": [],
+                    "skipped": True,
+                    "reason": "Quality comparison did not approve any corpus-gap misses for probationary learning.",
+                }
 
     summary_path = output_dir / "public-pr-quality-summary.json"
     write_json(summary_path, summary)

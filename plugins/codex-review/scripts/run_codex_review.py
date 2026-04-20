@@ -243,6 +243,15 @@ def build_pass_prompts(prompt: str, depth: str) -> list[tuple[str, str]]:
             + "- Check shell or external-process paths for verification-after-dispatch gaps, missing timeouts, or cleanup steps that depend on unrelated metadata.\n"
             + "- Prefer findings in the touched functions and their immediate callers/callees.\n",
         ),
+        (
+            "async-helpers",
+            prompt
+            + "\n\nFocus pass:\n"
+            + "- Prioritize shared async helpers such as throttle, retry, backoff, queue, cache, and client wrappers.\n"
+            + "- Check whether coordination state is read before await and only written after await, which lets concurrent callers bypass the intended guard.\n"
+            + "- Check whether helper fallbacks, retries, and Retry-After handling preserve the intended delay semantics when headers or metadata are absent.\n"
+            + "- Prefer findings in the touched helper and the immediate call site that depends on its coordination behavior.\n",
+        ),
     ]
 
 
@@ -274,7 +283,7 @@ def combine_pass_reviews(pass_reviews: list[tuple[str, str]]) -> str:
             "",
             "**Change summary**",
             "",
-            "- Combined multi-pass deep review from changed-hunk, concurrency-state, validation-contract, and workflow-lifecycle passes.",
+            "- Combined multi-pass deep review from changed-hunk, concurrency-state, validation-contract, workflow-lifecycle, and async-helper passes.",
             "",
         ]
     )
