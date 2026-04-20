@@ -5,7 +5,7 @@
   "homepage": "https://github.com/coryparrry/ReviewPilot",
   "repository": {
     "type": "git",
-    "url": "https://github.com/coryparrry/ReviewPilot.git"
+    "url": "git+https://github.com/coryparrry/ReviewPilot.git"
   },
   "bugs": {
     "url": "https://github.com/coryparrry/ReviewPilot/issues"
