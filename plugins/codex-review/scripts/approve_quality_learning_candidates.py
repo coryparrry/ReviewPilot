@@ -46,7 +46,8 @@ def resolve_output_path(repo_root: Path, requested: str | None, allow_outside_ar
     if requested is None:
         return default_output_path(repo_root)
 
-    candidate = Path(requested).resolve()
+    requested_path = Path(requested)
+    candidate = requested_path.resolve() if requested_path.is_absolute() else (repo_root / requested_path).resolve()
     if allow_outside_artifacts:
         return candidate
 
@@ -80,8 +81,11 @@ def finding_is_auto_approvable(finding: dict[str, Any]) -> bool:
     review_match = finding.get("review_match") or {}
     if review_match.get("matched") is not False:
         return False
-    expectation_overlap = float(review_match.get("expectation_overlap") or 0.0)
-    title_overlap = float(review_match.get("title_overlap") or 0.0)
+    try:
+        expectation_overlap = float(review_match.get("expectation_overlap") or 0.0)
+        title_overlap = float(review_match.get("title_overlap") or 0.0)
+    except (TypeError, ValueError):
+        return False
     return expectation_overlap < 0.35 and title_overlap < 0.35
 
 
@@ -97,7 +101,10 @@ def main() -> int:
 
     candidates = candidate_payload.get("candidates")
     findings = comparison_payload.get("findings")
-    approved_ids = set(comparison_payload.get("recommended_probationary_candidates") or [])
+    approved_ids = {
+        str(candidate_id)
+        for candidate_id in (comparison_payload.get("recommended_probationary_candidates") or [])
+    }
 
     if not isinstance(candidates, list):
         raise ValueError("Candidate artifact must contain a top-level candidates list.")
