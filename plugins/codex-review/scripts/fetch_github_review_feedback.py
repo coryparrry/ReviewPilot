@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-
 GRAPHQL_THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $name) {
@@ -135,7 +134,9 @@ def split_repo(repo: str) -> tuple[str, str]:
         raise ValueError(f"Repo path segments may not be dot-segments, got: {repo}")
     for segment in (owner, name):
         if not all(ch.isalnum() or ch in "._-" for ch in segment):
-            raise ValueError(f"Repo must contain only GitHub-safe owner/name characters, got: {repo}")
+            raise ValueError(
+                f"Repo must contain only GitHub-safe owner/name characters, got: {repo}"
+            )
     return owner, name
 
 
@@ -148,12 +149,18 @@ def ensure_gh_auth() -> None:
     subprocess.run([GH_BIN, "auth", "status"], capture_output=True, check=True)
 
 
-def gh_api_read_only(path: str, paginate: bool = False) -> dict[str, Any] | list[dict[str, Any]]:
+def gh_api_read_only(
+    path: str, paginate: bool = False
+) -> dict[str, Any] | list[dict[str, Any]]:
     cmd = [GH_BIN, "api", path]
     if paginate:
         cmd.extend(["--paginate", "--slurp"])
     payload = json.loads(run_cmd(cmd))
-    if paginate and isinstance(payload, list) and all(isinstance(page, list) for page in payload):
+    if (
+        paginate
+        and isinstance(payload, list)
+        and all(isinstance(page, list) for page in payload)
+    ):
         flattened: list[dict[str, Any]] = []
         for page in payload:
             flattened.extend(page)
@@ -176,7 +183,9 @@ def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
 
 def fetch_rest_comments(repo: str, pr_number: int) -> dict[str, Any]:
     encoded_repo = encode_repo_path(repo)
-    comments = gh_api_read_only(f"repos/{encoded_repo}/pulls/{pr_number}/comments", paginate=True)
+    comments = gh_api_read_only(
+        f"repos/{encoded_repo}/pulls/{pr_number}/comments", paginate=True
+    )
     return {
         "source": "github-rest-review-comments",
         "repo": repo,
@@ -186,7 +195,9 @@ def fetch_rest_comments(repo: str, pr_number: int) -> dict[str, Any]:
 
 
 def fetch_thread_comments(thread_id: str, after: str | None = None) -> dict[str, Any]:
-    payload = gh_graphql(GRAPHQL_THREAD_COMMENTS_QUERY, {"threadId": thread_id, "cursor": after})
+    payload = gh_graphql(
+        GRAPHQL_THREAD_COMMENTS_QUERY, {"threadId": thread_id, "cursor": after}
+    )
     comments = payload["data"]["node"]["comments"]
     return comments
 
@@ -259,12 +270,24 @@ def fetch_graphql_threads(repo: str, pr_number: int) -> dict[str, Any]:
 
 def default_output_dir(repo_root: Path, repo: str, pr_number: int) -> Path:
     safe_repo = repo.replace("/", "-")
-    return repo_root / "artifacts" / "github-intake" / "fetches" / f"{safe_repo}-pr-{pr_number}"
+    return (
+        repo_root
+        / "artifacts"
+        / "github-intake"
+        / "fetches"
+        / f"{safe_repo}-pr-{pr_number}"
+    )
 
 
-def resolve_output_dir(repo_root: Path, output_dir: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_output_dir(
+    repo_root: Path, output_dir: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
-    candidate = Path(output_dir).resolve() if output_dir else default_output_dir(repo_root, repo="", pr_number=0)
+    candidate = (
+        Path(output_dir).resolve()
+        if output_dir
+        else default_output_dir(repo_root, repo="", pr_number=0)
+    )
     if output_dir is None:
         return artifacts_root / "fetches" / candidate.name
     if allow_outside_artifacts:
@@ -309,7 +332,10 @@ def main() -> int:
     try:
         graphql_payload = fetch_graphql_threads(args.repo, args.pr)
     except subprocess.CalledProcessError:
-        print("GraphQL review-thread fetch failed after REST artifact was saved.", file=sys.stderr)
+        print(
+            "GraphQL review-thread fetch failed after REST artifact was saved.",
+            file=sys.stderr,
+        )
         print()
         print("Next normalization command:")
         print(f'{sys.executable} "{normalize_script}" --input "{rest_path}"')

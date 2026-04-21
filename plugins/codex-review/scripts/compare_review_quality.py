@@ -7,7 +7,6 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_PRIMARY_CORPUS = Path(
     "plugins/codex-review/skills/bug-hunting-code-review/references/review-corpus-cases.json"
 )
@@ -41,8 +40,14 @@ def parse_args() -> argparse.Namespace:
             "Compare a review artifact against normalized GitHub intake findings and classify caught vs missed issues."
         )
     )
-    parser.add_argument("--review-file", required=True, help="Path to a review markdown artifact.")
-    parser.add_argument("--proposal", required=True, help="Path to a normalized GitHub intake proposal artifact.")
+    parser.add_argument(
+        "--review-file", required=True, help="Path to a review markdown artifact."
+    )
+    parser.add_argument(
+        "--proposal",
+        required=True,
+        help="Path to a normalized GitHub intake proposal artifact.",
+    )
     parser.add_argument(
         "--candidates",
         help="Optional corpus-candidate artifact generated from the same proposal. Used for stable ids when available.",
@@ -85,15 +90,26 @@ def repo_root_from_script() -> Path:
 
 def resolve_path(repo_root: Path, requested: str) -> Path:
     candidate = Path(requested)
-    return candidate.resolve() if candidate.is_absolute() else (repo_root / candidate).resolve()
+    return (
+        candidate.resolve()
+        if candidate.is_absolute()
+        else (repo_root / candidate).resolve()
+    )
 
 
 def default_output_dir(repo_root: Path, proposal_path: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo_root / "artifacts" / "review-quality" / f"{timestamp}-{proposal_path.stem}"
+    return (
+        repo_root / "artifacts" / "review-quality" / f"{timestamp}-{proposal_path.stem}"
+    )
 
 
-def resolve_output_dir(repo_root: Path, requested: str | None, proposal_path: Path, allow_outside_artifacts: bool) -> Path:
+def resolve_output_dir(
+    repo_root: Path,
+    requested: str | None,
+    proposal_path: Path,
+    allow_outside_artifacts: bool,
+) -> Path:
     artifacts_root = (repo_root / "artifacts").resolve()
     if requested is None:
         return default_output_dir(repo_root, proposal_path)
@@ -216,7 +232,9 @@ def records_are_near_duplicates(left: dict[str, Any], right: dict[str, Any]) -> 
     left_line = int(left.get("line") or 0)
     right_line = int(right.get("line") or 0)
     same_file = bool(left_file and right_file and left_file == right_file)
-    nearby_lines = same_file and left_line and right_line and abs(left_line - right_line) <= 35
+    nearby_lines = (
+        same_file and left_line and right_line and abs(left_line - right_line) <= 35
+    )
 
     left_tokens = similarity_tokens(record_text(left))
     right_tokens = similarity_tokens(record_text(right))
@@ -230,7 +248,9 @@ def records_are_near_duplicates(left: dict[str, Any], right: dict[str, Any]) -> 
     if nearby_lines and (overlap >= 0.42 or title_similarity >= 0.7):
         return True
 
-    same_category = str(left.get("normalized_category") or "") == str(right.get("normalized_category") or "")
+    same_category = str(left.get("normalized_category") or "") == str(
+        right.get("normalized_category") or ""
+    )
     if same_category and overlap >= 0.72:
         return True
 
@@ -253,7 +273,9 @@ def record_key(record: dict[str, Any]) -> tuple[str, str]:
     )
 
 
-def candidate_map(candidate_payload: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
+def candidate_map(
+    candidate_payload: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
     mapped: dict[tuple[str, str], dict[str, Any]] = {}
     for candidate in candidate_payload.get("candidates", []):
         notes = candidate.get("review_notes") or {}
@@ -265,11 +287,24 @@ def candidate_map(candidate_payload: dict[str, Any]) -> dict[tuple[str, str], di
     return mapped
 
 
-def compare_review_to_record(review_text: str, record: dict[str, Any]) -> CandidateMatch:
+def compare_review_to_record(
+    review_text: str, record: dict[str, Any]
+) -> CandidateMatch:
     review_token_set = review_tokens(review_text)
-    title_overlap = token_overlap(title_tokens(str(record.get("candidate_title", ""))), review_token_set)
-    expected_overlap = token_overlap(expectation_tokens(derive_expected_groups(record)), review_token_set)
-    strict_match = all(re.search(pattern, review_text, re.IGNORECASE | re.MULTILINE | re.DOTALL) for pattern in derive_expected_groups(record)[0]) if derive_expected_groups(record) else False
+    title_overlap = token_overlap(
+        title_tokens(str(record.get("candidate_title", ""))), review_token_set
+    )
+    expected_overlap = token_overlap(
+        expectation_tokens(derive_expected_groups(record)), review_token_set
+    )
+    strict_match = (
+        all(
+            re.search(pattern, review_text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+            for pattern in derive_expected_groups(record)[0]
+        )
+        if derive_expected_groups(record)
+        else False
+    )
     return CandidateMatch(
         strict_match=strict_match,
         title_overlap=round(title_overlap, 3),
@@ -284,14 +319,20 @@ def near_duplicate(record: dict[str, Any], corpus: list[dict[str, Any]]) -> bool
     for entry in corpus:
         if str(entry.get("category", "")) != category:
             continue
-        title_similarity = SequenceMatcher(None, record_title, normalize_title(str(entry.get("title", "")))).ratio()
-        overlap = token_overlap(record_expectations, expectation_tokens(entry.get("expected_groups") or []))
+        title_similarity = SequenceMatcher(
+            None, record_title, normalize_title(str(entry.get("title", "")))
+        ).ratio()
+        overlap = token_overlap(
+            record_expectations, expectation_tokens(entry.get("expected_groups") or [])
+        )
         if title_similarity >= 0.88 or overlap >= 0.75:
             return True
     return False
 
 
-def calibration_matches(record: dict[str, Any], calibration_entries: list[dict[str, Any]]) -> bool:
+def calibration_matches(
+    record: dict[str, Any], calibration_entries: list[dict[str, Any]]
+) -> bool:
     record_file = str(record.get("file_path") or "").lower()
     record_title_tokens = title_tokens(str(record.get("candidate_title", "")))
     record_summary_tokens = title_tokens(str(record.get("candidate_summary", "")))
@@ -309,7 +350,9 @@ def calibration_matches(record: dict[str, Any], calibration_entries: list[dict[s
     return False
 
 
-def classify_gap(record: dict[str, Any], matched: bool, corpus_match: bool, calibration_match: bool) -> str:
+def classify_gap(
+    record: dict[str, Any], matched: bool, corpus_match: bool, calibration_match: bool
+) -> str:
     if matched:
         return "caught"
     if corpus_match or calibration_match:
@@ -344,10 +387,16 @@ def build_prompt_focus(missed_records: list[dict[str, Any]]) -> list[str]:
     for record in ordered_records[:6]:
         title = str(record.get("candidate_title") or "Untitled finding").strip()
         file_path = str(record.get("file_path") or "unknown-file").strip()
-        summary = str(record.get("candidate_summary") or record.get("body") or "").strip()
+        summary = str(
+            record.get("candidate_summary") or record.get("body") or ""
+        ).strip()
         snippet = title
         if summary:
-            snippet = summary if len(summary) <= 240 else summary[:237].rsplit(" ", 1)[0].rstrip(" ,;:") + "..."
+            snippet = (
+                summary
+                if len(summary) <= 240
+                else summary[:237].rsplit(" ", 1)[0].rstrip(" ,;:") + "..."
+            )
         signals = record.get("suggested_signal_phrases")
         if not isinstance(signals, list):
             signals = compact_expectation_signals(record)
@@ -361,7 +410,9 @@ def build_prompt_focus(missed_records: list[dict[str, Any]]) -> list[str]:
     return focus
 
 
-def build_markdown_report(summary: dict[str, Any], findings: list[dict[str, Any]], prompt_focus: list[str]) -> str:
+def build_markdown_report(
+    summary: dict[str, Any], findings: list[dict[str, Any]], prompt_focus: list[str]
+) -> str:
     lines = [
         "# Review Quality Comparison",
         "",
@@ -391,7 +442,9 @@ def main() -> int:
     args = parse_args()
     repo_root = repo_root_from_script()
     proposal_path = resolve_path(repo_root, args.proposal)
-    output_dir = resolve_output_dir(repo_root, args.output_dir, proposal_path, args.allow_outside_artifacts)
+    output_dir = resolve_output_dir(
+        repo_root, args.output_dir, proposal_path, args.allow_outside_artifacts
+    )
     review_text = Path(args.review_file).read_text(encoding="utf-8")
     proposal = load_json(proposal_path)
     records = proposal.get("records") or []
@@ -399,7 +452,9 @@ def main() -> int:
         raise ValueError("Proposal artifact must contain a top-level records list.")
     normalized_records = [record for record in records if isinstance(record, dict)]
     if args.bugs_only:
-        normalized_records = [record for record in normalized_records if is_bug_worthy_record(record)]
+        normalized_records = [
+            record for record in normalized_records if is_bug_worthy_record(record)
+        ]
         normalized_records = dedupe_records(normalized_records)
 
     candidates_by_key: dict[tuple[str, str], dict[str, Any]] = {}
@@ -418,7 +473,9 @@ def main() -> int:
         corpus_match = near_duplicate(record, combined_corpus)
         calibration_match = calibration_matches(record, calibration_entries)
         stable_candidate = candidates_by_key.get(record_key(record)) or {}
-        gap = classify_gap(record, review_match.matched, corpus_match, calibration_match)
+        gap = classify_gap(
+            record, review_match.matched, corpus_match, calibration_match
+        )
         findings.append(
             {
                 "comment_id": record.get("comment_id"),
@@ -449,10 +506,16 @@ def main() -> int:
         "accepted_live_findings": len(findings),
         "caught": sum(1 for item in findings if item["gap_classification"] == "caught"),
         "missed": len(missed),
-        "prompt_gaps": sum(1 for item in findings if item["gap_classification"] == "prompt-gap"),
-        "corpus_gaps": sum(1 for item in findings if item["gap_classification"] == "corpus-gap"),
+        "prompt_gaps": sum(
+            1 for item in findings if item["gap_classification"] == "prompt-gap"
+        ),
+        "corpus_gaps": sum(
+            1 for item in findings if item["gap_classification"] == "corpus-gap"
+        ),
         "corpus_and_calibration_gaps": sum(
-            1 for item in findings if item["gap_classification"] == "corpus-and-calibration-gap"
+            1
+            for item in findings
+            if item["gap_classification"] == "corpus-and-calibration-gap"
         ),
     }
 
@@ -476,7 +539,8 @@ def main() -> int:
                 "severity": item["severity"],
             }
             for item in findings
-            if item["gap_classification"] in {"prompt-gap", "corpus-and-calibration-gap"}
+            if item["gap_classification"]
+            in {"prompt-gap", "corpus-and-calibration-gap"}
         ],
     }
 

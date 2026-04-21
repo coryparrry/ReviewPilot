@@ -5,7 +5,9 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
+JsonDict = dict[str, Any]
 
 DEFAULT_CORPUS_PATH = Path(
     "plugins/codex-review/skills/bug-hunting-code-review/references/review-corpus-cases.json"
@@ -199,7 +201,13 @@ def repo_root_from_script() -> Path:
 def default_output_dir(repo_root: Path, repo: str, pr_number: int) -> Path:
     safe_repo = repo.replace("/", "-")
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo_root / "artifacts" / "github-intake" / "pipeline" / f"{safe_repo}-pr-{pr_number}-{timestamp}"
+    return (
+        repo_root
+        / "artifacts"
+        / "github-intake"
+        / "pipeline"
+        / f"{safe_repo}-pr-{pr_number}-{timestamp}"
+    )
 
 
 def resolve_output_dir(
@@ -235,9 +243,12 @@ def run_cmd_with_result(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, capture_output=True, text=True, check=False)
 
 
-def run_json_cmd(cmd: list[str]) -> dict:
+def run_json_cmd(cmd: list[str]) -> JsonDict:
     completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("Expected JSON object command output.")
+    return payload
 
 
 def find_single_artifact(fetch_dir: Path, pattern: str) -> Path:
@@ -284,14 +295,22 @@ def print_summary(
         print(f"Primary promotion result artifact: {promotion_result_path}")
 
 
-def resolve_corpus_path(repo_root: Path, requested_path: str | None, apply_target: str) -> Path:
+def resolve_corpus_path(
+    repo_root: Path, requested_path: str | None, apply_target: str
+) -> Path:
     if requested_path:
         return Path(requested_path).resolve()
-    default_corpus = DEFAULT_CORPUS_PATH if apply_target == "primary" else DEFAULT_PROBATIONARY_CORPUS_PATH
+    default_corpus = (
+        DEFAULT_CORPUS_PATH
+        if apply_target == "primary"
+        else DEFAULT_PROBATIONARY_CORPUS_PATH
+    )
     return (repo_root / default_corpus).resolve()
 
 
-def resolve_lane_corpus_path(repo_root: Path, requested_path: str | None, default_path: Path) -> Path:
+def resolve_lane_corpus_path(
+    repo_root: Path, requested_path: str | None, default_path: Path
+) -> Path:
     if requested_path:
         return Path(requested_path).resolve()
     return (repo_root / default_path).resolve()
@@ -303,7 +322,7 @@ def run_benchmarks(
     probationary_corpus: Path,
     review_file: str | None,
     review_text: str | None,
-) -> dict:
+) -> JsonDict:
     cmd = [
         sys.executable,
         str(benchmark_script),
@@ -334,7 +353,11 @@ def resolve_review_artifact_file(review_artifacts: str) -> Path:
         return direct_review
 
     child_runs = sorted(
-        (child for child in candidate.iterdir() if child.is_dir() and (child / "review.md").is_file()),
+        (
+            child
+            for child in candidate.iterdir()
+            if child.is_dir() and (child / "review.md").is_file()
+        ),
         key=lambda child: child.name,
         reverse=True,
     )
@@ -347,25 +370,37 @@ def resolve_review_artifact_file(review_artifacts: str) -> Path:
     )
 
 
-def build_benchmark_delta(before: dict, after: dict) -> dict:
-    def lane_delta(before_lane: dict, after_lane: dict) -> dict:
+def build_benchmark_delta(before: JsonDict, after: JsonDict) -> JsonDict:
+    def lane_delta(before_lane: JsonDict, after_lane: JsonDict) -> JsonDict:
         before_summary = before_lane["summary"]
         after_summary = after_lane["summary"]
         return {
             "matched_cases_before": before_summary["matched_cases"],
             "matched_cases_after": after_summary["matched_cases"],
-            "matched_cases_delta": after_summary["matched_cases"] - before_summary["matched_cases"],
+            "matched_cases_delta": after_summary["matched_cases"]
+            - before_summary["matched_cases"],
             "weighted_recall_before": before_summary["weighted_recall"],
             "weighted_recall_after": after_summary["weighted_recall"],
-            "weighted_recall_delta": after_summary["weighted_recall"] - before_summary["weighted_recall"],
-            "critical_or_high_misses_before": before_summary.get("critical_or_high_misses") or [],
-            "critical_or_high_misses_after": after_summary.get("critical_or_high_misses") or [],
+            "weighted_recall_delta": after_summary["weighted_recall"]
+            - before_summary["weighted_recall"],
+            "critical_or_high_misses_before": before_summary.get(
+                "critical_or_high_misses"
+            )
+            or [],
+            "critical_or_high_misses_after": after_summary.get(
+                "critical_or_high_misses"
+            )
+            or [],
         }
 
-    return {lane_name: lane_delta(before[lane_name], after[lane_name]) for lane_name in before if lane_name in after}
+    return {
+        lane_name: lane_delta(before[lane_name], after[lane_name])
+        for lane_name in before
+        if lane_name in after
+    }
 
 
-def write_json(path: Path, payload: dict) -> None:
+def write_json(path: Path, payload: JsonDict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -380,31 +415,49 @@ def artifact_prefix_for_raw_format(raw_format: str) -> str:
 
 def main() -> int:
     args = parse_args()
-    run_primary_promotion = bool(args.promote_probationary_all or args.promote_probationary_ids)
+    run_primary_promotion = bool(
+        args.promote_probationary_all or args.promote_probationary_ids
+    )
     if args.promote_all and args.promote_ids:
         raise ValueError("Use either --promote-all or --promote-ids, not both.")
     if args.promote_probationary_all and args.promote_probationary_ids:
-        raise ValueError("Use either --promote-probationary-all or --promote-probationary-ids, not both.")
+        raise ValueError(
+            "Use either --promote-probationary-all or --promote-probationary-ids, not both."
+        )
     if args.score_review_artifacts and args.score_review_file:
-        raise ValueError("Use either --score-review-artifacts or --score-review-file, not both.")
+        raise ValueError(
+            "Use either --score-review-artifacts or --score-review-file, not both."
+        )
     resolved_review_file: str | None = None
     if args.score_review_artifacts:
-        resolved_review_file = str(resolve_review_artifact_file(args.score_review_artifacts))
+        resolved_review_file = str(
+            resolve_review_artifact_file(args.score_review_artifacts)
+        )
     if args.score_review_file and args.score_review_text is not None:
-        raise ValueError("Use either --score-review-file or --score-review-text, not both.")
+        raise ValueError(
+            "Use either --score-review-file or --score-review-text, not both."
+        )
     if args.score_review_artifacts and args.score_review_text is not None:
-        raise ValueError("Use either --score-review-artifacts or --score-review-text, not both.")
+        raise ValueError(
+            "Use either --score-review-artifacts or --score-review-text, not both."
+        )
     if resolved_review_file is None:
         resolved_review_file = args.score_review_file
-    effective_review_text = args.score_review_text.strip() if args.score_review_text else None
+    effective_review_text = (
+        args.score_review_text.strip() if args.score_review_text else None
+    )
     if args.stop_after == "promote-primary" and not run_primary_promotion:
-        raise ValueError("--stop-after promote-primary requires --promote-probationary-all or --promote-probationary-ids.")
+        raise ValueError(
+            "--stop-after promote-primary requires --promote-probationary-all or --promote-probationary-ids."
+        )
     if run_primary_promotion and args.stop_after == "apply":
         raise ValueError(
             "Durable promotion was requested, but --stop-after apply was selected. "
             "Use --stop-after promote-primary to execute the promotion stage."
         )
-    if run_primary_promotion and not (resolved_review_file or args.score_review_artifacts):
+    if run_primary_promotion and not (
+        resolved_review_file or args.score_review_artifacts
+    ):
         raise ValueError(
             "Probationary-to-primary promotion requires --score-review-file or --score-review-artifacts. "
             "Inline review text is not supported for that step."
@@ -416,9 +469,15 @@ def main() -> int:
         raise ValueError("Use either --review-run-dir or --output-dir, not both.")
     resolved_output_dir = args.review_run_dir or args.output_dir
     allow_outside_artifacts = args.allow_outside_artifacts
-    output_dir = resolve_output_dir(repo_root, args.repo, args.pr, resolved_output_dir, allow_outside_artifacts)
+    output_dir = resolve_output_dir(
+        repo_root, args.repo, args.pr, resolved_output_dir, allow_outside_artifacts
+    )
     fetch_dir = output_dir / "fetches"
-    selected_prefix = artifact_prefix_for_raw_format(args.raw_format) if args.raw_input else args.source
+    selected_prefix = (
+        artifact_prefix_for_raw_format(args.raw_format)
+        if args.raw_input
+        else args.source
+    )
 
     fetch_script = script_path.parent / "fetch_github_review_feedback.py"
     ingest_script = script_path.parent / "ingest_github_review_feedback.py"
@@ -428,10 +487,16 @@ def main() -> int:
     quality_gate_script = script_path.parent / "score_candidate_quality.py"
     apply_script = script_path.parent / "apply_corpus_updates.py"
     benchmark_script = (
-        script_path.parent.parent / "skills" / "bug-hunting-code-review" / "scripts" / "run_review_benchmarks.py"
+        script_path.parent.parent
+        / "skills"
+        / "bug-hunting-code-review"
+        / "scripts"
+        / "run_review_benchmarks.py"
     )
     corpus_path = resolve_corpus_path(repo_root, args.corpus, args.apply_target)
-    primary_corpus_path = resolve_lane_corpus_path(repo_root, args.primary_corpus, DEFAULT_CORPUS_PATH)
+    primary_corpus_path = resolve_lane_corpus_path(
+        repo_root, args.primary_corpus, DEFAULT_CORPUS_PATH
+    )
     probationary_corpus_path = resolve_lane_corpus_path(
         repo_root, args.probationary_corpus, DEFAULT_PROBATIONARY_CORPUS_PATH
     )
@@ -473,21 +538,33 @@ def main() -> int:
 
     proposal_path = output_dir / f"{selected_prefix}-proposal.json"
     candidates_path = output_dir / f"{selected_prefix}-candidates.json"
-    promoted_candidates_path = output_dir / f"{selected_prefix}-promoted-candidates.json"
+    promoted_candidates_path = (
+        output_dir / f"{selected_prefix}-promoted-candidates.json"
+    )
     quality_result_path = output_dir / f"{selected_prefix}-candidate-quality.json"
-    gated_candidates_path = output_dir / f"{selected_prefix}-gate-approved-candidates.json"
+    gated_candidates_path = (
+        output_dir / f"{selected_prefix}-gate-approved-candidates.json"
+    )
     apply_result_path = output_dir / f"{selected_prefix}-apply-result.json"
-    promotion_result_path = output_dir / f"{selected_prefix}-primary-promotion-result.json"
+    promotion_result_path = (
+        output_dir / f"{selected_prefix}-primary-promotion-result.json"
+    )
     benchmark_before_path = output_dir / f"{selected_prefix}-benchmarks-before.json"
     benchmark_after_path = output_dir / f"{selected_prefix}-benchmarks-after.json"
     benchmark_delta_path = output_dir / f"{selected_prefix}-benchmark-delta.json"
-    benchmark_before_primary_snapshot = output_dir / f"{selected_prefix}-primary-corpus-before.json"
-    benchmark_before_probationary_snapshot = output_dir / f"{selected_prefix}-probationary-corpus-before.json"
+    benchmark_before_primary_snapshot = (
+        output_dir / f"{selected_prefix}-primary-corpus-before.json"
+    )
+    benchmark_before_probationary_snapshot = (
+        output_dir / f"{selected_prefix}-probationary-corpus-before.json"
+    )
     raw_format_for_ingest = args.raw_format
     if args.raw_input:
         selected_raw_path = Path(args.raw_input).resolve()
         if not selected_raw_path.is_file():
-            raise FileNotFoundError(f"Raw input file does not exist: {selected_raw_path}")
+            raise FileNotFoundError(
+                f"Raw input file does not exist: {selected_raw_path}"
+            )
     else:
         if not args.use_gh_legacy_fetch:
             raise ValueError(
@@ -496,10 +573,16 @@ def main() -> int:
                 "the legacy gh-based fetch script."
             )
 
-        rest_raw_path = find_optional_single_artifact(fetch_dir, "*-rest-review-comments.json")
-        graphql_raw_path = find_optional_single_artifact(fetch_dir, "*-graphql-review-threads.json")
+        rest_raw_path = find_optional_single_artifact(
+            fetch_dir, "*-rest-review-comments.json"
+        )
+        graphql_raw_path = find_optional_single_artifact(
+            fetch_dir, "*-graphql-review-threads.json"
+        )
         need_fetch = not (
-            args.resume and rest_raw_path is not None and (args.source == "rest" or graphql_raw_path is not None)
+            args.resume
+            and rest_raw_path is not None
+            and (args.source == "rest" or graphql_raw_path is not None)
         )
 
         if need_fetch:
@@ -521,8 +604,12 @@ def main() -> int:
             if fetch_result.stderr:
                 print(fetch_result.stderr, end="", file=sys.stderr)
 
-            rest_raw_path = find_single_artifact(fetch_dir, "*-rest-review-comments.json")
-            graphql_raw_path = find_optional_single_artifact(fetch_dir, "*-graphql-review-threads.json")
+            rest_raw_path = find_single_artifact(
+                fetch_dir, "*-rest-review-comments.json"
+            )
+            graphql_raw_path = find_optional_single_artifact(
+                fetch_dir, "*-graphql-review-threads.json"
+            )
 
             if fetch_result.returncode != 0:
                 if args.source == "rest" and graphql_raw_path is None:
@@ -541,7 +628,9 @@ def main() -> int:
             print(f"Reusing existing fetch artifacts in {fetch_dir}")
 
         if rest_raw_path is None:
-            raise FileNotFoundError(f"No REST review artifact was found under {fetch_dir}.")
+            raise FileNotFoundError(
+                f"No REST review artifact was found under {fetch_dir}."
+            )
 
         if args.source == "rest":
             selected_raw_path = rest_raw_path
@@ -649,7 +738,9 @@ def main() -> int:
                 promote_cmd.append("--allow-outside-artifacts")
             run_step(promote_cmd)
         else:
-            print(f"Reusing existing promoted candidate artifact: {promoted_candidates_path}")
+            print(
+                f"Reusing existing promoted candidate artifact: {promoted_candidates_path}"
+            )
         apply_input_path = promoted_candidates_path
 
     if args.stop_after == "promote":
@@ -688,6 +779,7 @@ def main() -> int:
         if resolved_review_file:
             quality_cmd.extend(["--review-file", resolved_review_file])
         else:
+            assert effective_review_text is not None
             quality_cmd.extend(["--review-text", effective_review_text])
         if allow_outside_artifacts:
             quality_cmd.append("--allow-outside-artifacts")
@@ -735,8 +827,14 @@ def main() -> int:
 
     printed_benchmark_delta_path: Path | None = None
     if scoring_enabled:
-        after_primary_corpus = corpus_path if args.apply_target == "primary" else primary_corpus_path
-        after_probationary_corpus = corpus_path if args.apply_target == "probationary" else probationary_corpus_path
+        after_primary_corpus = (
+            corpus_path if args.apply_target == "primary" else primary_corpus_path
+        )
+        after_probationary_corpus = (
+            corpus_path
+            if args.apply_target == "probationary"
+            else probationary_corpus_path
+        )
         after_benchmarks = run_benchmarks(
             benchmark_script,
             after_primary_corpus,

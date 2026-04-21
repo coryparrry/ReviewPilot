@@ -5,8 +5,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
-PR_URL_PATTERN = re.compile(r"github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<pr>\d+)", re.IGNORECASE)
+PR_URL_PATTERN = re.compile(
+    r"github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<pr>\d+)", re.IGNORECASE
+)
 
 
 CATEGORY_RULES = [
@@ -14,13 +15,26 @@ CATEGORY_RULES = [
         "category": "fixture-masking",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"feature.?gate", r"full object", r"overwrite", r"fixture", r"helper", r"rewrites? the whole"],
+        "patterns": [
+            r"feature.?gate",
+            r"full object",
+            r"overwrite",
+            r"fixture",
+            r"helper",
+            r"rewrites? the whole",
+        ],
     },
     {
         "category": "registry-drift",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"allowlist", r"classifier", r"registry", r"exact-key", r"connector family"],
+        "patterns": [
+            r"allowlist",
+            r"classifier",
+            r"registry",
+            r"exact-key",
+            r"connector family",
+        ],
     },
     {
         "category": "state-symmetry",
@@ -55,19 +69,41 @@ CATEGORY_RULES = [
         "category": "error-shaping",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"500", r"4xx", r"422", r"typed error", r"plain error", r"error mapping", r"malformed json"],
+        "patterns": [
+            r"500",
+            r"4xx",
+            r"422",
+            r"typed error",
+            r"plain error",
+            r"error mapping",
+            r"malformed json",
+        ],
     },
     {
         "category": "request-contract",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"request", r"patch", r"payload", r"schema", r"validation", r"role-only", r"objecttype"],
+        "patterns": [
+            r"request",
+            r"patch",
+            r"payload",
+            r"schema",
+            r"validation",
+            r"role-only",
+            r"objecttype",
+        ],
     },
     {
         "category": "fail-open-synthesis",
         "severity": "critical",
         "confidence": "medium",
-        "patterns": [r"fallback owner", r"synthetic", r"borrow", r"inherit", r"copy another"],
+        "patterns": [
+            r"fallback owner",
+            r"synthetic",
+            r"borrow",
+            r"inherit",
+            r"copy another",
+        ],
     },
     {
         "category": "source-of-truth-drift",
@@ -100,13 +136,28 @@ CATEGORY_RULES = [
         "category": "migration-cleared-state",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"explicit null", r"cleared state", r"\?\?", r"nullish", r"fallback", r"nullable", r"null"],
+        "patterns": [
+            r"explicit null",
+            r"cleared state",
+            r"\?\?",
+            r"nullish",
+            r"fallback",
+            r"nullable",
+            r"null",
+        ],
     },
     {
         "category": "concurrency-queue-claim",
         "severity": "critical",
         "confidence": "medium",
-        "patterns": [r"claim", r"duplicate", r"second poll", r"queue", r"heartbeat", r"wake"],
+        "patterns": [
+            r"claim",
+            r"duplicate",
+            r"second poll",
+            r"queue",
+            r"heartbeat",
+            r"wake",
+        ],
     },
     {
         "category": "test-realism",
@@ -128,13 +179,23 @@ CATEGORY_RULES = [
         "category": "legacy-fallback-source",
         "severity": "high",
         "confidence": "medium",
-        "patterns": [r"runtimeAdapterType", r"adapterType", r"legacy fallback", r"wrong source field"],
+        "patterns": [
+            r"runtimeAdapterType",
+            r"adapterType",
+            r"legacy fallback",
+            r"wrong source field",
+        ],
     },
     {
         "category": "response-contract",
         "severity": "medium",
         "confidence": "medium",
-        "patterns": [r"wrapped payload", r"response shape", r"payload shape", r"assert the real"],
+        "patterns": [
+            r"wrapped payload",
+            r"response shape",
+            r"payload shape",
+            r"assert the real",
+        ],
     },
 ]
 
@@ -182,7 +243,10 @@ SKIP_SUMMARY_PATTERNS = [
     re.compile(r"^comittable suggestion$", re.IGNORECASE),
     re.compile(r"^committable suggestion$", re.IGNORECASE),
     re.compile(r"^important$", re.IGNORECASE),
-    re.compile(r"^verify each finding against the current code and only fix it if needed\.?$", re.IGNORECASE),
+    re.compile(
+        r"^verify each finding against the current code and only fix it if needed\.?$",
+        re.IGNORECASE,
+    ),
     re.compile(r"^addressed in commit\s+[0-9a-f]{6,}$", re.IGNORECASE),
 ]
 
@@ -191,7 +255,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Normalize GitHub PR review feedback into proposal-only corpus-update artifacts."
     )
-    parser.add_argument("--input", required=True, help="Path to a GitHub review feedback JSON file.")
+    parser.add_argument(
+        "--input", required=True, help="Path to a GitHub review feedback JSON file."
+    )
     parser.add_argument(
         "--format",
         default="auto",
@@ -266,13 +332,19 @@ def build_ignored_author_patterns(extra_authors: list[str]) -> list[re.Pattern[s
     return patterns
 
 
-def is_self_authored_comment(comment: dict[str, Any], ignored_author_patterns: list[re.Pattern[str]]) -> bool:
+def is_self_authored_comment(
+    comment: dict[str, Any], ignored_author_patterns: list[re.Pattern[str]]
+) -> bool:
     author_login = extract_author_login(comment)
-    if author_login and any(pattern.search(author_login) for pattern in ignored_author_patterns):
+    if author_login and any(
+        pattern.search(author_login) for pattern in ignored_author_patterns
+    ):
         return True
 
     body = str(comment.get("body", "")).strip()
-    if body and any(pattern.search(body) for pattern in DEFAULT_SELF_COMMENT_BODY_PATTERNS):
+    if body and any(
+        pattern.search(body) for pattern in DEFAULT_SELF_COMMENT_BODY_PATTERNS
+    ):
         return True
 
     return False
@@ -282,7 +354,11 @@ def detect_format(payload: Any) -> str:
     if isinstance(payload, list):
         if payload and all(
             isinstance(item, dict)
-            and ("pull_request_review_id" in item or "path" in item or "diff_hunk" in item)
+            and (
+                "pull_request_review_id" in item
+                or "path" in item
+                or "diff_hunk" in item
+            )
             for item in payload
         ):
             return "github_rest_review_comments"
@@ -294,10 +370,18 @@ def detect_format(payload: Any) -> str:
     if not isinstance(payload, dict):
         raise ValueError("Unsupported input payload. Expected a JSON object or array.")
 
-    if nested_get(payload, "data", "repository", "pullRequest", "reviewThreads", "nodes") is not None:
+    if (
+        nested_get(
+            payload, "data", "repository", "pullRequest", "reviewThreads", "nodes"
+        )
+        is not None
+    ):
         return "github_graphql_review_threads"
 
-    if nested_get(payload, "repository", "pullRequest", "reviewThreads", "nodes") is not None:
+    if (
+        nested_get(payload, "repository", "pullRequest", "reviewThreads", "nodes")
+        is not None
+    ):
         return "github_graphql_review_threads"
 
     if isinstance(payload, dict) and isinstance(payload.get("review_threads"), list):
@@ -317,14 +401,18 @@ def detect_format(payload: Any) -> str:
 
     raw_comments = payload.get("comments")
     if isinstance(raw_comments, list):
-        if any(key in payload for key in ("url", "display_url", "title", "display_title")):
+        if any(
+            key in payload for key in ("url", "display_url", "title", "display_title")
+        ):
             return "github_mcp_pr_comments"
         if not raw_comments and "repo" in payload and "pr_number" in payload:
             return "github_rest_review_comments"
         if raw_comments:
             first_comment = raw_comments[0]
             if isinstance(first_comment, dict) and (
-                "pull_request_review_id" in first_comment or "path" in first_comment or "diff_hunk" in first_comment
+                "pull_request_review_id" in first_comment
+                or "path" in first_comment
+                or "diff_hunk" in first_comment
             ):
                 return "github_rest_review_comments"
 
@@ -375,7 +463,10 @@ def extract_repo_context(payload: Any, format_name: str) -> dict[str, Any]:
         pr_number = payload.get("pr_number")
         if not repo or pr_number is None:
             parsed_repo, parsed_pr_number = parse_pr_url_context(
-                payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
+                payload.get("display_url")
+                or payload.get("url")
+                or payload.get("title")
+                or payload.get("display_title")
             )
             repo = repo or parsed_repo
             pr_number = pr_number if pr_number is not None else parsed_pr_number
@@ -391,7 +482,10 @@ def extract_repo_context(payload: Any, format_name: str) -> dict[str, Any]:
         pr_number = payload.get("pr_number")
         if not repo or pr_number is None:
             parsed_repo, parsed_pr_number = parse_pr_url_context(
-                payload.get("display_url") or payload.get("url") or payload.get("title") or payload.get("display_title")
+                payload.get("display_url")
+                or payload.get("url")
+                or payload.get("title")
+                or payload.get("display_title")
             )
             repo = repo or parsed_repo
             pr_number = pr_number if pr_number is not None else parsed_pr_number
@@ -408,7 +502,11 @@ def extract_repo_context(payload: Any, format_name: str) -> dict[str, Any]:
     name = repository.get("name")
     repo = f"{owner}/{name}" if owner and name else "unknown"
     return {
-        "source": payload.get("source", "github-graphql-review-threads") if isinstance(payload, dict) else "github-graphql-review-threads",
+        "source": (
+            payload.get("source", "github-graphql-review-threads")
+            if isinstance(payload, dict)
+            else "github-graphql-review-threads"
+        ),
         "repo": repo,
         "pr_number": pull_request.get("number"),
     }
@@ -440,11 +538,14 @@ def iter_github_rest_review_comments(payload: Any) -> list[dict[str, Any]]:
     for comment in raw_comments:
         comments.append(
             {
-                "review_id": comment.get("pull_request_review_id") or comment.get("review_id"),
+                "review_id": comment.get("pull_request_review_id")
+                or comment.get("review_id"),
                 "comment_id": comment.get("id") or comment.get("comment_id"),
                 "source_type": "github_review_comment",
                 "file_path": comment.get("path") or comment.get("file_path"),
-                "line": comment.get("line") or comment.get("original_line") or comment.get("position"),
+                "line": comment.get("line")
+                or comment.get("original_line")
+                or comment.get("position"),
                 "body": comment.get("body", ""),
                 "author_login": extract_author_login(comment),
             }
@@ -454,7 +555,9 @@ def iter_github_rest_review_comments(payload: Any) -> list[dict[str, Any]]:
 
 def iter_github_graphql_review_threads(payload: dict[str, Any]) -> list[dict[str, Any]]:
     root = payload.get("data", payload)
-    thread_nodes = nested_get(root, "repository", "pullRequest", "reviewThreads", "nodes") or []
+    thread_nodes = (
+        nested_get(root, "repository", "pullRequest", "reviewThreads", "nodes") or []
+    )
     comments: list[dict[str, Any]] = []
 
     for thread in thread_nodes:
@@ -482,11 +585,14 @@ def iter_github_mcp_pr_comments(payload: dict[str, Any]) -> list[dict[str, Any]]
     for comment in payload.get("comments", []):
         # The MCP timeline payload may include top-level review summaries or issue comments.
         # Keep the inline review-comment surface only so the learning lane matches the legacy fetch semantics.
-        if not (comment.get("path") or comment.get("line") or comment.get("start_line")):
+        if not (
+            comment.get("path") or comment.get("line") or comment.get("start_line")
+        ):
             continue
         comments.append(
             {
-                "review_id": comment.get("pull_request_review_id") or comment.get("review_id"),
+                "review_id": comment.get("pull_request_review_id")
+                or comment.get("review_id"),
                 "comment_id": comment.get("id") or comment.get("comment_id"),
                 "source_type": "github_review_comment",
                 "file_path": comment.get("path") or comment.get("file_path"),
@@ -499,7 +605,8 @@ def iter_github_mcp_pr_comments(payload: dict[str, Any]) -> list[dict[str, Any]]
 
 
 def iter_github_mcp_review_threads(
-    payload: dict[str, Any], ignored_author_patterns: list[re.Pattern[str]] | None = None
+    payload: dict[str, Any],
+    ignored_author_patterns: list[re.Pattern[str]] | None = None,
 ) -> list[dict[str, Any]]:
     ignored_patterns = ignored_author_patterns or DEFAULT_IGNORED_AUTHOR_PATTERNS
     comments: list[dict[str, Any]] = []
@@ -507,7 +614,11 @@ def iter_github_mcp_review_threads(
         if thread.get("is_resolved") or thread.get("is_outdated"):
             continue
         thread_path = thread.get("path")
-        thread_line = thread.get("line") or thread.get("start_line") or thread.get("original_line")
+        thread_line = (
+            thread.get("line")
+            or thread.get("start_line")
+            or thread.get("original_line")
+        )
         thread_comments = thread.get("comments", [])
         for comment in thread_comments:
             if is_self_authored_comment(comment, ignored_patterns):
@@ -580,7 +691,11 @@ def strip_review_boilerplate(body: str) -> str:
 
 def extract_comment_summary(body: str) -> tuple[str, str]:
     trimmed = strip_review_boilerplate(body)
-    paragraphs = [normalize_markdown_text(chunk) for chunk in re.split(r"\n\s*\n", trimmed) if chunk.strip()]
+    paragraphs = [
+        normalize_markdown_text(chunk)
+        for chunk in re.split(r"\n\s*\n", trimmed)
+        if chunk.strip()
+    ]
     cleaned_paragraphs: list[str] = []
 
     for paragraph in paragraphs:
@@ -605,9 +720,21 @@ def extract_comment_summary(body: str) -> tuple[str, str]:
             continue
         if "refactor suggestion" in lowered and len(paragraph) <= 80:
             continue
-        if any(label in lowered for label in (" major", " minor", " critical", " warning")) and "potential issue" in lowered:
+        if (
+            any(
+                label in lowered
+                for label in (" major", " minor", " critical", " warning")
+            )
+            and "potential issue" in lowered
+        ):
             continue
-        if any(label in lowered for label in (" major", " minor", " critical", " warning")) and "refactor suggestion" in lowered:
+        if (
+            any(
+                label in lowered
+                for label in (" major", " minor", " critical", " warning")
+            )
+            and "refactor suggestion" in lowered
+        ):
             continue
         cleaned_paragraphs.append(paragraph)
 
@@ -645,7 +772,11 @@ def classify_comment(body: str, file_path: str | None = None) -> tuple[str, str,
         for pattern in rule["patterns"]:
             if re.search(pattern, lowered):
                 score += 1
-        if rule["category"] == "test-realism" and file_path and "/test/" in file_path.replace("\\", "/"):
+        if (
+            rule["category"] == "test-realism"
+            and file_path
+            and "/test/" in file_path.replace("\\", "/")
+        ):
             score += 1
         if score > best_match[0]:
             best_match = (score, rule)
@@ -690,11 +821,15 @@ def is_low_signal_bug_comment(title: str, summary: str, body: str) -> bool:
     return any(pattern.search(combined) for pattern in LOW_SIGNAL_BUG_PATTERNS)
 
 
-def normalize_record(context: dict[str, Any], comment: dict[str, Any]) -> dict[str, Any]:
+def normalize_record(
+    context: dict[str, Any], comment: dict[str, Any]
+) -> dict[str, Any]:
     body = str(comment.get("body", "")).strip()
     title, summary = extract_comment_summary(body)
     body_for_classification = "\n".join(part for part in [title, summary] if part)
-    category, severity, confidence = classify_comment(body_for_classification or body, comment.get("file_path"))
+    category, severity, confidence = classify_comment(
+        body_for_classification or body, comment.get("file_path")
+    )
     return {
         "source": context.get("source", "unknown"),
         "repo": context.get("repo", "unknown"),
@@ -722,7 +857,9 @@ def default_output_path(repo_root: Path) -> Path:
     return repo_root / "artifacts" / "github-intake" / f"{timestamp}-proposal.json"
 
 
-def resolve_output_path(repo_root: Path, output_path: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_output_path(
+    repo_root: Path, output_path: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
     if output_path is None:
         return default_output_path(repo_root)
@@ -760,7 +897,11 @@ def main() -> int:
         raw_comments = iter_github_mcp_review_threads(payload, ignored_author_patterns)
     else:
         raw_comments = iter_comments(payload, format_name)
-    comments = [comment for comment in raw_comments if not is_self_authored_comment(comment, ignored_author_patterns)]
+    comments = [
+        comment
+        for comment in raw_comments
+        if not is_self_authored_comment(comment, ignored_author_patterns)
+    ]
 
     proposal = {
         "schema_version": "codex-review.github-intake.v1",
@@ -771,11 +912,15 @@ def main() -> int:
         "records": [normalize_record(context, comment) for comment in comments],
     }
 
-    output_path = resolve_output_path(repo_root, args.output, args.allow_outside_artifacts)
+    output_path = resolve_output_path(
+        repo_root, args.output, args.allow_outside_artifacts
+    )
     write_output(output_path, proposal)
     print(f"Wrote proposal artifact: {output_path}")
     print(f"Format: {format_name}")
-    print(f"Skipped self-authored comments: {proposal['ignored_self_authored_comments']}")
+    print(
+        f"Skipped self-authored comments: {proposal['ignored_self_authored_comments']}"
+    )
     print(f"Records: {len(proposal['records'])}")
     return 0
 

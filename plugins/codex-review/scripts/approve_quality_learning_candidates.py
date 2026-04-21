@@ -13,8 +13,14 @@ def parse_args() -> argparse.Namespace:
             " matching candidate rows with a tight learning gate."
         )
     )
-    parser.add_argument("--candidates", required=True, help="Path to a corpus-candidate artifact.")
-    parser.add_argument("--comparison", required=True, help="Path to a quality-comparison JSON artifact.")
+    parser.add_argument(
+        "--candidates", required=True, help="Path to a corpus-candidate artifact."
+    )
+    parser.add_argument(
+        "--comparison",
+        required=True,
+        help="Path to a quality-comparison JSON artifact.",
+    )
     parser.add_argument(
         "--output",
         help="Optional output path. Defaults to artifacts/github-intake/<timestamp>-quality-learning-candidates.json",
@@ -33,21 +39,36 @@ def repo_root_from_script() -> Path:
 
 def resolve_path(repo_root: Path, requested: str) -> Path:
     candidate = Path(requested)
-    return candidate.resolve() if candidate.is_absolute() else (repo_root / candidate).resolve()
+    return (
+        candidate.resolve()
+        if candidate.is_absolute()
+        else (repo_root / candidate).resolve()
+    )
 
 
 def default_output_path(repo_root: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo_root / "artifacts" / "github-intake" / f"{timestamp}-quality-learning-candidates.json"
+    return (
+        repo_root
+        / "artifacts"
+        / "github-intake"
+        / f"{timestamp}-quality-learning-candidates.json"
+    )
 
 
-def resolve_output_path(repo_root: Path, requested: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_output_path(
+    repo_root: Path, requested: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts").resolve()
     if requested is None:
         return default_output_path(repo_root)
 
     requested_path = Path(requested)
-    candidate = requested_path.resolve() if requested_path.is_absolute() else (repo_root / requested_path).resolve()
+    candidate = (
+        requested_path.resolve()
+        if requested_path.is_absolute()
+        else (repo_root / requested_path).resolve()
+    )
     if allow_outside_artifacts:
         return candidate
 
@@ -96,7 +117,9 @@ def main() -> int:
     repo_root = repo_root_from_script()
     candidates_path = resolve_path(repo_root, args.candidates)
     comparison_path = resolve_path(repo_root, args.comparison)
-    output_path = resolve_output_path(repo_root, args.output, args.allow_outside_artifacts)
+    output_path = resolve_output_path(
+        repo_root, args.output, args.allow_outside_artifacts
+    )
 
     candidate_payload = load_json(candidates_path)
     comparison_payload = load_json(comparison_path)
@@ -105,13 +128,17 @@ def main() -> int:
     findings = comparison_payload.get("findings")
     approved_ids = {
         str(candidate_id)
-        for candidate_id in (comparison_payload.get("recommended_probationary_candidates") or [])
+        for candidate_id in (
+            comparison_payload.get("recommended_probationary_candidates") or []
+        )
     }
 
     if not isinstance(candidates, list):
         raise ValueError("Candidate artifact must contain a top-level candidates list.")
     if not isinstance(findings, list):
-        raise ValueError("Quality comparison artifact must contain a top-level findings list.")
+        raise ValueError(
+            "Quality comparison artifact must contain a top-level findings list."
+        )
 
     findings_by_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for finding in findings:
@@ -129,7 +156,10 @@ def main() -> int:
         if candidate_id not in approved_ids:
             continue
         matching_findings = findings_by_id.get(candidate_id) or []
-        finding = next((item for item in matching_findings if finding_is_auto_approvable(item)), None)
+        finding = next(
+            (item for item in matching_findings if finding_is_auto_approvable(item)),
+            None,
+        )
         if not isinstance(finding, dict):
             continue
 

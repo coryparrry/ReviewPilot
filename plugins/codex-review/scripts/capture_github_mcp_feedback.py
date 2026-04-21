@@ -97,16 +97,26 @@ def validate_payload(kind: str, payload: Any) -> None:
     if kind == "pr_comments":
         comments = payload.get("comments")
         if not isinstance(comments, list):
-            raise ValueError("PR comments capture must contain a top-level comments array.")
+            raise ValueError(
+                "PR comments capture must contain a top-level comments array."
+            )
         return
 
     threads = payload.get("review_threads")
     if not isinstance(threads, list):
-        raise ValueError("Review-thread capture must contain a top-level review_threads array.")
+        raise ValueError(
+            "Review-thread capture must contain a top-level review_threads array."
+        )
 
 
-def build_enriched_payload(repo: str, pr_number: int, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
-    display_url = payload.get("display_url") or payload.get("url") or f"https://github.com/{repo}/pull/{pr_number}"
+def build_enriched_payload(
+    repo: str, pr_number: int, kind: str, payload: dict[str, Any]
+) -> dict[str, Any]:
+    display_url = (
+        payload.get("display_url")
+        or payload.get("url")
+        or f"https://github.com/{repo}/pull/{pr_number}"
+    )
     if kind == "pr_comments":
         return {
             "source": "github-mcp-pr-comments",
@@ -115,7 +125,9 @@ def build_enriched_payload(repo: str, pr_number: int, kind: str, payload: dict[s
             "url": payload.get("url") or display_url,
             "display_url": display_url,
             "title": payload.get("title") or f"{repo} PR #{pr_number} comments",
-            "display_title": payload.get("display_title") or payload.get("title") or f"{repo} PR #{pr_number} comments",
+            "display_title": payload.get("display_title")
+            or payload.get("title")
+            or f"{repo} PR #{pr_number} comments",
             "comments": payload.get("comments", []),
         }
 
@@ -155,12 +167,22 @@ def main() -> int:
     enriched_payload = build_enriched_payload(args.repo, args.pr, args.kind, payload)
     write_output(output_path, enriched_payload)
 
-    raw_format = "github_mcp_pr_comments" if args.kind == "pr_comments" else "github_mcp_review_threads"
+    raw_format = (
+        "github_mcp_pr_comments"
+        if args.kind == "pr_comments"
+        else "github_mcp_review_threads"
+    )
     print(f"Wrote MCP capture artifact: {output_path}")
     print()
     print("Next pipeline command:")
     allow_flag = " --allow-outside-artifacts" if args.allow_outside_artifacts else ""
-    pipeline_script = (repo_root / "plugins" / "codex-review" / "scripts" / "run_github_intake_pipeline.py").as_posix()
+    pipeline_script = (
+        repo_root
+        / "plugins"
+        / "codex-review"
+        / "scripts"
+        / "run_github_intake_pipeline.py"
+    ).as_posix()
     print(
         f'{sys.executable} "{pipeline_script}" '
         f'--repo {args.repo} --pr {args.pr} --raw-input "{output_path}" --raw-format {raw_format} --apply-mode review{allow_flag}'

@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-
 FULL_REPO_SCAN_LIMIT = 20
 UNTRACKED_TEXT_LIMIT = 8000
 
@@ -41,8 +40,13 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="State-machine or companion-state drift risk",
         severity="high",
         patterns=(
-            re.compile(r"\b(status|state|phase|paused|running|completed|failed)\b", re.I),
-            re.compile(r"\b(approvalRequired|pendingApproval|queue|artifact|finishedAt|summary)\b", re.I),
+            re.compile(
+                r"\b(status|state|phase|paused|running|completed|failed)\b", re.I
+            ),
+            re.compile(
+                r"\b(approvalRequired|pendingApproval|queue|artifact|finishedAt|summary)\b",
+                re.I,
+            ),
         ),
         why="Transitions that touch headline state often leave approval flags, queue summaries, or artifacts stale.",
         check="List every companion surface that should change with the transition and verify each one.",
@@ -52,7 +56,10 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="Central registry or allowlist drift risk",
         severity="high",
         patterns=(
-            re.compile(r"\b(allowlist|registry|capabilityFamil(?:y|ies)|runtimeFamil(?:y|ies)|connector(?:Type|Key)?)\b", re.I),
+            re.compile(
+                r"\b(allowlist|registry|capabilityFamil(?:y|ies)|runtimeFamil(?:y|ies)|connector(?:Type|Key)?)\b",
+                re.I,
+            ),
             re.compile(r"\b(enum|family|kind|adapterType)\b", re.I),
         ),
         why="New families or kinds often require updates in central classifiers; missing one silently misclassifies runtime behavior.",
@@ -63,8 +70,13 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="Duplicated-context parity risk",
         severity="high",
         patterns=(
-            re.compile(r"\b(runtime|binder|executionPackage|preview|readiness|metadata)\b", re.I),
-            re.compile(r"\b(trustLevel|capabilityFamilies|runtimeFamily|connectorType)\b", re.I),
+            re.compile(
+                r"\b(runtime|binder|executionPackage|preview|readiness|metadata)\b",
+                re.I,
+            ),
+            re.compile(
+                r"\b(trustLevel|capabilityFamilies|runtimeFamily|connectorType)\b", re.I
+            ),
         ),
         why="Duplicated runtime or preview context often validates one field but lets other mismatches leak deeper.",
         check="Compare every duplicated field that downstream execution or UI reads, not just the headline ones.",
@@ -74,7 +86,10 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="Over-broad test fixture risk",
         severity="high",
         patterns=(
-            re.compile(r"\b(featureGates|toolPolicy|policy|capabilityFamilies|permissions)\b", re.I),
+            re.compile(
+                r"\b(featureGates|toolPolicy|policy|capabilityFamilies|permissions)\b",
+                re.I,
+            ),
             re.compile(r"=\s*\{", re.I),
         ),
         why="Tests can keep passing by replacing an entire policy object instead of flipping only the needed gate.",
@@ -85,7 +100,9 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="Request or response contract drift risk",
         severity="medium",
         patterns=(
-            re.compile(r"\b(schema|contract|dto|mapper|response|request|parse)\b", re.I),
+            re.compile(
+                r"\b(schema|contract|dto|mapper|response|request|parse)\b", re.I
+            ),
             re.compile(r"\b(create|patch|update)\b", re.I),
         ),
         why="Generated-looking API code often reuses response or persisted shapes as input validation.",
@@ -96,7 +113,10 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="Typed error or parser-shaping risk",
         severity="medium",
         patterns=(
-            re.compile(r"\b(validate|parse|cron|timezone|throw new Error|jsonError|status)\b", re.I),
+            re.compile(
+                r"\b(validate|parse|cron|timezone|throw new Error|jsonError|status)\b",
+                re.I,
+            ),
         ),
         why="User faults often leak as 500s when helpers throw plain errors or parser semantics drift.",
         check="Trace validation and parse failures to the route boundary and confirm they still map to the intended 4xx response.",
@@ -106,7 +126,10 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="Security or trust-boundary risk",
         severity="high",
         patterns=(
-            re.compile(r"\b(auth|token|secret|permission|authorize|html|sql|exec|shell|path|redirect|gateway)\b", re.I),
+            re.compile(
+                r"\b(auth|token|secret|permission|authorize|html|sql|exec|shell|path|redirect|gateway)\b",
+                re.I,
+            ),
         ),
         why="These surfaces need an explicit security pass; diff-local review is not enough.",
         check="Trace attacker-controlled input to sinks, confirm allowlists or authorization, and inspect sibling write paths.",
@@ -116,7 +139,10 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="UI affordance or reachability risk",
         severity="medium",
         patterns=(
-            re.compile(r"\b(disabled|readOnly|aria-|focus|navigate|tab|dialog|modal|selected)\b", re.I),
+            re.compile(
+                r"\b(disabled|readOnly|aria-|focus|navigate|tab|dialog|modal|selected)\b",
+                re.I,
+            ),
         ),
         why="UI refactors often keep the surface looking plausible while losing accessibility, saveability, or reachability.",
         check="Verify editability, accessible naming, focus state, navigation reachability, and stale-selection clearing.",
@@ -126,7 +152,10 @@ RISK_RULES: tuple[RiskRule, ...] = (
         title="Import, path, or validation-claim reachability risk",
         severity="medium",
         patterns=(
-            re.compile(r"\b(import|from|require|README|AGENTS\.md|docs/|scripts/|npm run|typecheck|lint|build)\b", re.I),
+            re.compile(
+                r"\b(import|from|require|README|AGENTS\.md|docs/|scripts/|npm run|typecheck|lint|build)\b",
+                re.I,
+            ),
         ),
         why="AI-written changes often advertise a path, command, or docs move that no longer resolves.",
         check="Confirm imports, example paths, docs references, and claimed validation commands still resolve in the repo.",
@@ -171,7 +200,9 @@ def render_untracked_snapshot(repo: Path) -> str:
     for path in git_untracked_files(repo)[:8]:
         rel = path.relative_to(repo).as_posix()
         if not path.is_file() or not is_probably_text_file(path):
-            sections.append(f"Untracked file: {rel}\n(Binary or unreadable file omitted)")
+            sections.append(
+                f"Untracked file: {rel}\n(Binary or unreadable file omitted)"
+            )
             continue
         try:
             body = path.read_text(encoding="utf-8", errors="replace")
@@ -181,7 +212,9 @@ def render_untracked_snapshot(repo: Path) -> str:
     return "\n\n".join(sections)
 
 
-def changed_files(repo: Path, base: str | None, head: str | None, mode: str) -> list[Path]:
+def changed_files(
+    repo: Path, base: str | None, head: str | None, mode: str
+) -> list[Path]:
     if mode == "dirty":
         name_out = run_git(repo, "diff", "--name-only", "HEAD")
         untracked = run_git(repo, "ls-files", "--others", "--exclude-standard")
@@ -209,7 +242,9 @@ def diff_text(repo: Path, base: str | None, head: str | None, mode: str) -> str:
     if mode == "dirty":
         tracked = run_git(repo, "diff", "-U0", "HEAD")
         untracked = render_untracked_snapshot(repo)
-        return "\n\n".join(chunk for chunk in [tracked.strip(), untracked.strip()] if chunk)
+        return "\n\n".join(
+            chunk for chunk in [tracked.strip(), untracked.strip()] if chunk
+        )
     if base:
         spec = f"{base}...{head or 'HEAD'}"
         return run_git(repo, "diff", "-U0", spec)
@@ -221,21 +256,56 @@ def classify_layer(path: Path) -> str:
     parts = value.split("/")
     name = path.name.lower()
     stem = path.stem.lower()
-    if any(part in {"test", "tests", "__tests__"} for part in parts) or name.endswith((".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")):
+    if any(part in {"test", "tests", "__tests__"} for part in parts) or name.endswith(
+        (".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")
+    ):
         return "tests"
-    if any(part in {"routes", "controllers"} for part in parts) or stem in {"route", "routes", "controller", "controllers"}:
+    if any(part in {"routes", "controllers"} for part in parts) or stem in {
+        "route",
+        "routes",
+        "controller",
+        "controllers",
+    }:
         return "route-controller"
-    if any(part in {"service", "services"} for part in parts) or stem in {"service", "services"}:
+    if any(part in {"service", "services"} for part in parts) or stem in {
+        "service",
+        "services",
+    }:
         return "service"
-    if any(part in {"mappers", "mapper"} for part in parts) or stem in {"mapper", "mappers"}:
+    if any(part in {"mappers", "mapper"} for part in parts) or stem in {
+        "mapper",
+        "mappers",
+    }:
         return "mapping"
-    if any(part in {"types", "contracts", "schemas"} for part in parts) or stem in {"types", "type", "contracts", "contract", "schema", "schemas"}:
+    if any(part in {"types", "contracts", "schemas"} for part in parts) or stem in {
+        "types",
+        "type",
+        "contracts",
+        "contract",
+        "schema",
+        "schemas",
+    }:
         return "contracts-types"
-    if any(part in {"migration", "migrations", "seed", "workspace"} for part in parts) or stem in {"migration", "migrations", "seed", "workspace"}:
+    if any(
+        part in {"migration", "migrations", "seed", "workspace"} for part in parts
+    ) or stem in {"migration", "migrations", "seed", "workspace"}:
         return "persistence-migration"
-    if any(part in {"runtime-connectors", "connectors", "scheduler", "workflow", "automations"} for part in parts) or stem in {"scheduler", "workflow", "automations", "executor", "runtime-connectors", "connectors"}:
+    if any(
+        part
+        in {"runtime-connectors", "connectors", "scheduler", "workflow", "automations"}
+        for part in parts
+    ) or stem in {
+        "scheduler",
+        "workflow",
+        "automations",
+        "executor",
+        "runtime-connectors",
+        "connectors",
+    }:
         return "workflow-runtime"
-    if any(part in {"pages", "components", "ui"} for part in parts) or name.endswith((".tsx", ".jsx")):
+    if any(part in {"pages", "components", "ui"} for part in parts) or name.endswith(
+        (".tsx", ".jsx")
+    ):
         return "ui"
     if any(part in {"docs"} for part in parts) or name.endswith(".md"):
         return "docs"
@@ -273,7 +343,14 @@ def find_adjacent(repo: Path, changed: Iterable[Path]) -> list[str]:
 
         if layer == "route-controller":
             parent = "/".join(parts[:-2])
-            for hint in ("contracts", "mappers", "service", "services", "test", "tests"):
+            for hint in (
+                "contracts",
+                "mappers",
+                "service",
+                "services",
+                "test",
+                "tests",
+            ):
                 if parent:
                     suggestions.add(f"{parent}/{hint}/")
         elif layer == "mapping":
@@ -283,7 +360,14 @@ def find_adjacent(repo: Path, changed: Iterable[Path]) -> list[str]:
                     suggestions.add(f"{parent}/{hint}/")
         elif layer == "service":
             parent = "/".join(parts[:-2])
-            for hint in ("routes", "controllers", "types", "contracts", "test", "tests"):
+            for hint in (
+                "routes",
+                "controllers",
+                "types",
+                "contracts",
+                "test",
+                "tests",
+            ):
                 if parent:
                     suggestions.add(f"{parent}/{hint}/")
         elif layer == "workflow-runtime":
@@ -306,21 +390,40 @@ def find_adjacent(repo: Path, changed: Iterable[Path]) -> list[str]:
                 if candidate.resolve() in changed_set:
                     continue
                 candidate_name = candidate.name.lower()
-                if stem and stem in candidate_name and (
-                    candidate_name.endswith((".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx"))
-                    or "/test/" in candidate.as_posix().lower()
-                    or "/tests/" in candidate.as_posix().lower()
+                if (
+                    stem
+                    and stem in candidate_name
+                    and (
+                        candidate_name.endswith(
+                            (".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx")
+                        )
+                        or "/test/" in candidate.as_posix().lower()
+                        or "/tests/" in candidate.as_posix().lower()
+                    )
                 ):
                     suggestions.add(candidate.relative_to(repo).as_posix())
     return sorted(suggestions)[:20]
 
 
-def repo_hotspots(repo: Path, limit: int = FULL_REPO_SCAN_LIMIT) -> list[dict[str, object]]:
+def repo_hotspots(
+    repo: Path, limit: int = FULL_REPO_SCAN_LIMIT
+) -> list[dict[str, object]]:
     hotspot_patterns = (
-        (re.compile(r"(auth|session|permission|policy|secret|token)", re.I), "auth-session"),
-        (re.compile(r"(workflow|automation|scheduler|queue|wake|review|benchmark)", re.I), "workflow-review"),
+        (
+            re.compile(r"(auth|session|permission|policy|secret|token)", re.I),
+            "auth-session",
+        ),
+        (
+            re.compile(
+                r"(workflow|automation|scheduler|queue|wake|review|benchmark)", re.I
+            ),
+            "workflow-review",
+        ),
         (re.compile(r"(migrat|store|persist|adapter|repository)", re.I), "persistence"),
-        (re.compile(r"(install|publish|release|smoke|validate)", re.I), "release-install"),
+        (
+            re.compile(r"(install|publish|release|smoke|validate)", re.I),
+            "release-install",
+        ),
         (re.compile(r"(test|spec)", re.I), "tests"),
     )
     tracked = run_git(repo, "ls-files")
@@ -340,10 +443,15 @@ def repo_hotspots(repo: Path, limit: int = FULL_REPO_SCAN_LIMIT) -> list[dict[st
         if score:
             scored.append((score, rel, tags))
     scored.sort(key=lambda item: (-item[0], item[1]))
-    return [{"path": rel, "score": score, "tags": tags} for score, rel, tags in scored[:limit]]
+    return [
+        {"path": rel, "score": score, "tags": tags}
+        for score, rel, tags in scored[:limit]
+    ]
 
 
-def build_report(repo: Path, base: str | None, head: str | None, mode: str) -> dict[str, object]:
+def build_report(
+    repo: Path, base: str | None, head: str | None, mode: str
+) -> dict[str, object]:
     files = changed_files(repo, base, head, mode)
     patch = diff_text(repo, base, head, mode)
     layer_counts: dict[str, int] = defaultdict(int)
@@ -353,14 +461,23 @@ def build_report(repo: Path, base: str | None, head: str | None, mode: str) -> d
         layer_counts[layer] += 1
         grouped_files[layer].append(file_path.relative_to(repo).as_posix())
 
-    code_like_change_present = any(layer not in {"docs", "config"} for layer in grouped_files)
+    code_like_change_present = any(
+        layer not in {"docs", "config"} for layer in grouped_files
+    )
     risk_hits = scan_risks(patch, code_like_change_present=code_like_change_present)
     report = {
         "repo_root": str(repo),
         "mode": mode,
-        "diff_basis": "HEAD vs working tree" if mode == "dirty" else (f"{base}...{head or 'HEAD'}" if base else "working-tree-vs-HEAD"),
+        "diff_basis": (
+            "HEAD vs working tree"
+            if mode == "dirty"
+            else (f"{base}...{head or 'HEAD'}" if base else "working-tree-vs-HEAD")
+        ),
         "changed_file_count": len(files),
-        "layers": {key: {"count": layer_counts[key], "files": sorted(grouped_files[key])} for key in sorted(grouped_files)},
+        "layers": {
+            key: {"count": layer_counts[key], "files": sorted(grouped_files[key])}
+            for key in sorted(grouped_files)
+        },
         "risk_hits": risk_hits,
         "adjacent_paths_to_inspect": find_adjacent(repo, files),
         "repo_hotspots": repo_hotspots(repo) if mode == "full" else [],
@@ -407,7 +524,9 @@ def print_text_report(report: dict[str, object]) -> None:
             print(f"  Why: {risk['why']}")
             print(f"  Check: {risk['check']}")
     else:
-        print("- No heuristic risk hits. Do not treat this as proof the patch is clean.")
+        print(
+            "- No heuristic risk hits. Do not treat this as proof the patch is clean."
+        )
     print()
     print("Adjacent paths to inspect:")
     paths = report["adjacent_paths_to_inspect"]
@@ -423,17 +542,27 @@ def print_text_report(report: dict[str, object]) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Summarize change surface and deep-review prompts.")
-    parser.add_argument("--repo", default=".", help="Path inside the git repo to inspect.")
-    parser.add_argument("--base", help="Optional merge-base or branch ref for PR-style reviews.")
-    parser.add_argument("--head", help="Optional head ref when --base is used. Defaults to HEAD.")
+    parser = argparse.ArgumentParser(
+        description="Summarize change surface and deep-review prompts."
+    )
+    parser.add_argument(
+        "--repo", default=".", help="Path inside the git repo to inspect."
+    )
+    parser.add_argument(
+        "--base", help="Optional merge-base or branch ref for PR-style reviews."
+    )
+    parser.add_argument(
+        "--head", help="Optional head ref when --base is used. Defaults to HEAD."
+    )
     parser.add_argument(
         "--mode",
         default="changes",
         choices=["changes", "dirty", "full"],
         help="Review surface mode. changes=base...HEAD, dirty=working tree, full=broader repo scan.",
     )
-    parser.add_argument("--json", action="store_true", help="Emit JSON instead of text.")
+    parser.add_argument(
+        "--json", action="store_true", help="Emit JSON instead of text."
+    )
     return parser.parse_args()
 
 

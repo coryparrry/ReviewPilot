@@ -14,8 +14,12 @@ def parse_args() -> argparse.Namespace:
             "does not write to the corpus lanes."
         )
     )
-    parser.add_argument("--repo", required=True, help="Public GitHub repo in owner/name form.")
-    parser.add_argument("--pr", required=True, type=int, help="Public pull request number.")
+    parser.add_argument(
+        "--repo", required=True, help="Public GitHub repo in owner/name form."
+    )
+    parser.add_argument(
+        "--pr", required=True, type=int, help="Public pull request number."
+    )
     parser.add_argument(
         "--source",
         default="rest",
@@ -78,13 +82,24 @@ def repo_root(cwd: Path) -> Path:
 def default_output_dir(repo: Path, github_repo: str, pr_number: int) -> Path:
     safe_repo = github_repo.replace("/", "-")
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo / "artifacts" / "public-pr-quality" / f"{safe_repo}-pr-{pr_number}-{timestamp}"
+    return (
+        repo
+        / "artifacts"
+        / "public-pr-quality"
+        / f"{safe_repo}-pr-{pr_number}-{timestamp}"
+    )
 
 
 def default_intake_dir(repo: Path, github_repo: str, pr_number: int) -> Path:
     safe_repo = github_repo.replace("/", "-")
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo / "artifacts" / "github-intake" / "pipeline" / f"public-{safe_repo}-pr-{pr_number}-{timestamp}"
+    return (
+        repo
+        / "artifacts"
+        / "github-intake"
+        / "pipeline"
+        / f"public-{safe_repo}-pr-{pr_number}-{timestamp}"
+    )
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -114,7 +129,11 @@ def resolve_review_file(candidate: str | None, artifacts: str | None) -> Path | 
         return direct_review
 
     child_runs = sorted(
-        (child for child in artifact_root.iterdir() if child.is_dir() and (child / "review.md").is_file()),
+        (
+            child
+            for child in artifact_root.iterdir()
+            if child.is_dir() and (child / "review.md").is_file()
+        ),
         key=lambda child: child.name,
         reverse=True,
     )
@@ -135,7 +154,11 @@ def read_json(path: Path) -> dict:
 def main() -> int:
     args = parse_args()
     repo = repo_root(Path.cwd())
-    output_dir = Path(args.output_dir).resolve() if args.output_dir else default_output_dir(repo, args.repo, args.pr)
+    output_dir = (
+        Path(args.output_dir).resolve()
+        if args.output_dir
+        else default_output_dir(repo, args.repo, args.pr)
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     review_file = resolve_review_file(args.review_file, args.review_artifacts)
@@ -144,7 +167,13 @@ def main() -> int:
 
     pipeline_cmd = [
         sys.executable,
-        str(repo / "plugins" / "codex-review" / "scripts" / "run_github_intake_pipeline.py"),
+        str(
+            repo
+            / "plugins"
+            / "codex-review"
+            / "scripts"
+            / "run_github_intake_pipeline.py"
+        ),
         "--repo",
         args.repo,
         "--pr",
@@ -178,7 +207,13 @@ def main() -> int:
         prefix = artifact_prefix_for_source(args.source)
         compare_cmd = [
             sys.executable,
-            str(repo / "plugins" / "codex-review" / "scripts" / "compare_review_quality.py"),
+            str(
+                repo
+                / "plugins"
+                / "codex-review"
+                / "scripts"
+                / "compare_review_quality.py"
+            ),
             "--review-file",
             str(review_file),
             "--proposal",
@@ -212,7 +247,13 @@ def main() -> int:
             )
             approval_cmd = [
                 sys.executable,
-                str(repo / "plugins" / "codex-review" / "scripts" / "approve_quality_learning_candidates.py"),
+                str(
+                    repo
+                    / "plugins"
+                    / "codex-review"
+                    / "scripts"
+                    / "approve_quality_learning_candidates.py"
+                ),
                 "--candidates",
                 str(intake_dir / f"{prefix}-candidates.json"),
                 "--comparison",
@@ -226,7 +267,13 @@ def main() -> int:
             if approved_ids:
                 apply_cmd = [
                     sys.executable,
-                    str(repo / "plugins" / "codex-review" / "scripts" / "apply_corpus_updates.py"),
+                    str(
+                        repo
+                        / "plugins"
+                        / "codex-review"
+                        / "scripts"
+                        / "apply_corpus_updates.py"
+                    ),
                     "--input",
                     str(approved_candidates_file),
                     "--mode",

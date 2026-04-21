@@ -5,7 +5,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
 SUPPORTED_SCHEMA = "codex-review.repair-plan.v1"
 LINE_SUFFIX_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+)$")
 
@@ -16,10 +15,18 @@ def parse_args() -> argparse.Namespace:
             "Select one finding from a repair plan and prepare or execute a bounded Codex fix pass."
         )
     )
-    parser.add_argument("--repo", default=".", help="Repository path. Defaults to the current directory.")
-    parser.add_argument("--repair-plan", required=True, help="Path to repair-plan.json.")
+    parser.add_argument(
+        "--repo",
+        default=".",
+        help="Repository path. Defaults to the current directory.",
+    )
+    parser.add_argument(
+        "--repair-plan", required=True, help="Path to repair-plan.json."
+    )
     parser.add_argument("--finding-id", help="Repair finding id to execute.")
-    parser.add_argument("--finding-index", type=int, help="1-based repair finding index to execute.")
+    parser.add_argument(
+        "--finding-index", type=int, help="1-based repair finding index to execute."
+    )
     parser.add_argument(
         "--output-dir",
         help="Optional output directory. Defaults to the repair plan directory.",
@@ -53,10 +60,14 @@ def resolve_codex_base_command() -> list[str]:
     npx_cmd = shutil.which("npx.cmd") or shutil.which("npx")
     if npx_cmd:
         return [npx_cmd, "-y", "@openai/codex"]
-    raise FileNotFoundError("Could not find a working Codex transport. Neither codex nor npx.cmd was usable.")
+    raise FileNotFoundError(
+        "Could not find a working Codex transport. Neither codex nor npx.cmd was usable."
+    )
 
 
-def select_finding(plan: dict, finding_id: str | None, finding_index: int | None) -> tuple[dict, int]:
+def select_finding(
+    plan: dict, finding_id: str | None, finding_index: int | None
+) -> tuple[dict, int]:
     findings = plan.get("findings", [])
     if not findings:
         raise ValueError("The repair plan does not contain any findings.")
@@ -112,7 +123,9 @@ def collect_repo_targets(repo: Path, finding: dict) -> list[Path]:
         try:
             candidate.relative_to(repo)
         except ValueError as exc:
-            raise ValueError(f"Repair target {candidate} is outside the repo and cannot be used.") from exc
+            raise ValueError(
+                f"Repair target {candidate} is outside the repo and cannot be used."
+            ) from exc
 
         key = str(candidate)
         if key not in seen:
@@ -206,7 +219,9 @@ def main() -> int:
     args = parse_args()
     repo = Path(args.repo).resolve()
     repair_plan = Path(args.repair_plan).resolve()
-    output_dir = Path(args.output_dir).resolve() if args.output_dir else repair_plan.parent
+    output_dir = (
+        Path(args.output_dir).resolve() if args.output_dir else repair_plan.parent
+    )
 
     plan = read_json(repair_plan)
     validate_plan(plan)
@@ -218,7 +233,8 @@ def main() -> int:
     write_text(output_dir / "fix-prompt.txt", prompt)
     write_text(
         output_dir / "fix-targets.txt",
-        "\n".join(str(target.relative_to(repo)) for target in repo_targets) + ("\n" if repo_targets else ""),
+        "\n".join(str(target.relative_to(repo)) for target in repo_targets)
+        + ("\n" if repo_targets else ""),
     )
 
     print(f"Selected finding: {finding.get('id', f'index-{ordinal}')}")
@@ -231,7 +247,9 @@ def main() -> int:
         return 0
 
     if not repo_targets:
-        raise ValueError("Refusing to apply a fix without at least one repo-local file target.")
+        raise ValueError(
+            "Refusing to apply a fix without at least one repo-local file target."
+        )
 
     raise ValueError(
         "Refusing --apply because Codex workspace-write cannot enforce the selected file-target boundary yet. "

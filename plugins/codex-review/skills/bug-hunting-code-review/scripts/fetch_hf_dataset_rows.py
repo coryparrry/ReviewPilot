@@ -5,11 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
-
 
 BASE_URL = "https://datasets-server.huggingface.co/rows"
 
@@ -30,8 +28,14 @@ def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) 
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fetch rows from a Hugging Face dataset via the Dataset Viewer API.")
-    parser.add_argument("--dataset", required=True, help="Dataset repo id, e.g. SWE-bench/SWE-bench_Verified")
+    parser = argparse.ArgumentParser(
+        description="Fetch rows from a Hugging Face dataset via the Dataset Viewer API."
+    )
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        help="Dataset repo id, e.g. SWE-bench/SWE-bench_Verified",
+    )
     parser.add_argument("--config", default="default", help="Dataset config name")
     parser.add_argument("--split", default="test", help="Dataset split")
     parser.add_argument("--offset", type=int, default=0, help="0-based row offset")
@@ -42,7 +46,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    payload = fetch_rows(args.dataset, args.config, args.split, args.offset, args.length)
+    payload = fetch_rows(
+        args.dataset, args.config, args.split, args.offset, args.length
+    )
     rendered = json.dumps(payload, indent=2)
     if args.output:
         Path(args.output).write_text(rendered, encoding="utf-8")

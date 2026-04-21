@@ -5,10 +5,12 @@ import re
 import shutil
 import subprocess
 import sys
+import types
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
+JsonDict = dict[str, Any]
 
 SECTION_HEADING_RE = re.compile(r"^\*\*(.+?)\*\*$")
 MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
@@ -27,8 +29,16 @@ def parse_args() -> argparse.Namespace:
             "Prepare a bug-hunting review run, invoke Codex non-interactively, and benchmark the resulting review."
         )
     )
-    parser.add_argument("--repo", default=".", help="Repository path. Defaults to the current directory.")
-    parser.add_argument("--base", default="origin/main", help="Base branch for review diff mode. Defaults to origin/main.")
+    parser.add_argument(
+        "--repo",
+        default=".",
+        help="Repository path. Defaults to the current directory.",
+    )
+    parser.add_argument(
+        "--base",
+        default="origin/main",
+        help="Base branch for review diff mode. Defaults to origin/main.",
+    )
     parser.add_argument(
         "--mode",
         default="changes",
@@ -68,7 +78,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_pre_pr_module(skill_dir: Path):
+def load_pre_pr_module(skill_dir: Path) -> types.ModuleType:
     pre_pr_path = skill_dir / "scripts" / "run_pre_pr_review.py"
     spec = importlib.util.spec_from_file_location("bug_hunting_pre_pr", pre_pr_path)
     if spec is None or spec.loader is None:
@@ -108,10 +118,12 @@ def resolve_codex_base_command() -> list[str]:
     npx_cmd = shutil.which("npx.cmd") or shutil.which("npx")
     if npx_cmd:
         return [npx_cmd, "-y", "@openai/codex"]
-    raise FileNotFoundError("Could not find a working Codex transport. Neither codex nor npx.cmd was usable.")
+    raise FileNotFoundError(
+        "Could not find a working Codex transport. Neither codex nor npx.cmd was usable."
+    )
 
 
-def run_json_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> dict:
+def run_json_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> JsonDict:
     runner = skill_dir / "scripts" / "run_review_benchmarks.py"
     completed = subprocess.run(
         [sys.executable, str(runner), "--review-file", str(review_file), "--json"],
@@ -122,10 +134,15 @@ def run_json_benchmarks(skill_dir: Path, review_file: Path, repo: Path) -> dict:
         errors="replace",
         check=True,
     )
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("Benchmark runner returned a non-object JSON payload.")
+    return payload
 
 
-def run_repair_plan(script_path: Path, review_file: Path, output_dir: Path, repo: Path) -> str:
+def run_repair_plan(
+    script_path: Path, review_file: Path, output_dir: Path, repo: Path
+) -> str:
     completed = subprocess.run(
         [
             sys.executable,
@@ -377,7 +394,9 @@ def main() -> int:
     write_file(run_dir / "surface-scan.txt", prepared["scan"])
     write_file(run_dir / "review-prompt.txt", prepared["prompt"])
     if prepared["calibration_section"]:
-        write_file(run_dir / "miss-calibration.txt", prepared["calibration_section"] + "\n")
+        write_file(
+            run_dir / "miss-calibration.txt", prepared["calibration_section"] + "\n"
+        )
 
     if args.prepare_only:
         print(f"Prepared review artifacts in {run_dir}")
@@ -399,6 +418,7 @@ def main() -> int:
     for pass_index, (pass_name, pass_prompt) in enumerate(pass_prompts, start=1):
         final_completed = None
         repair_notes: list[str] = []
+        reason_before_retry: str | None = None
         success = False
         pass_review_file = run_dir / f"{pass_name}-review.md"
 
@@ -417,7 +437,8 @@ def main() -> int:
             if attempt_success:
                 if attempt > 1:
                     repair_notes.append(
-                        f"{pass_name}: recovered after one automatic read-only retry. First attempt failed with: {reason_before_retry}."
+                        f"{pass_name}: recovered after one automatic read-only retry. "
+                        f"First attempt failed with: {reason_before_retry or 'unknown mechanical failure'}."
                     )
                 success = True
                 break
@@ -457,7 +478,9 @@ def main() -> int:
     print(f"Review mode: {args.mode}")
     print(f"Review depth: {args.depth}")
     if len(pass_prompts) > 1:
-        print(f"Review strategy: multi-pass ({', '.join(name for name, _ in pass_prompts)})")
+        print(
+            f"Review strategy: multi-pass ({', '.join(name for name, _ in pass_prompts)})"
+        )
     if overall_notes:
         print("Self-repair: recovered after one or more automatic read-only retries.")
 
@@ -471,7 +494,9 @@ def main() -> int:
     benchmark_output = pre_pr.run_benchmarks(skill_dir, review_file, repo)
     benchmark_json = run_json_benchmarks(skill_dir, review_file, repo)
     write_file(run_dir / "benchmark-summary.txt", benchmark_output)
-    write_file(run_dir / "benchmark-summary.json", json.dumps(benchmark_json, indent=2) + "\n")
+    write_file(
+        run_dir / "benchmark-summary.json", json.dumps(benchmark_json, indent=2) + "\n"
+    )
 
     print()
     print(benchmark_output.strip())

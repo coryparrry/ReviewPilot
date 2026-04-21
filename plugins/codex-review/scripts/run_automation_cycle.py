@@ -5,6 +5,9 @@ import sys
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+JsonDict = dict[str, Any]
 
 
 def parse_args() -> argparse.Namespace:
@@ -14,8 +17,12 @@ def parse_args() -> argparse.Namespace:
             "bounded repair handoff, and optional Hugging Face hardening."
         )
     )
-    parser.add_argument("--repo", default=".", help="Repository path. Defaults to current directory.")
-    parser.add_argument("--base", default="origin/main", help="Base branch for the local review diff.")
+    parser.add_argument(
+        "--repo", default=".", help="Repository path. Defaults to current directory."
+    )
+    parser.add_argument(
+        "--base", default="origin/main", help="Base branch for the local review diff."
+    )
     parser.add_argument("--output-dir", help="Optional automation run directory.")
     parser.add_argument(
         "--model",
@@ -36,7 +43,9 @@ def parse_args() -> argparse.Namespace:
         help="Maximum number of most-recent lessons to stage when --lessons-source is used.",
     )
 
-    parser.add_argument("--skip-review", action="store_true", help="Skip the local review run.")
+    parser.add_argument(
+        "--skip-review", action="store_true", help="Skip the local review run."
+    )
     parser.add_argument(
         "--review-quality-comparison",
         help="Optional quality-comparison JSON artifact to feed into the local review prompt.",
@@ -53,9 +62,14 @@ def parse_args() -> argparse.Namespace:
         help="1-based repair finding index for the bounded fix handoff. Defaults to 1.",
     )
 
-    parser.add_argument("--github-repo", help="GitHub repo in owner/name form for intake.")
+    parser.add_argument(
+        "--github-repo", help="GitHub repo in owner/name form for intake."
+    )
     parser.add_argument("--github-pr", type=int, help="PR number for intake.")
-    parser.add_argument("--github-raw-input", help="Captured GitHub raw artifact for the intake pipeline.")
+    parser.add_argument(
+        "--github-raw-input",
+        help="Captured GitHub raw artifact for the intake pipeline.",
+    )
     parser.add_argument(
         "--github-apply-mode",
         default="auto",
@@ -137,13 +151,16 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def write_json(path: Path, payload: dict) -> None:
+def write_json(path: Path, payload: JsonDict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8", errors="replace"))
+def read_json(path: Path) -> JsonDict:
+    payload = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}")
+    return payload
 
 
 def run_cmd(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -159,7 +176,11 @@ def run_cmd(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
 
 
 def newest_child_dir(path: Path) -> Path:
-    children = sorted((child for child in path.iterdir() if child.is_dir()), key=lambda item: item.name, reverse=True)
+    children = sorted(
+        (child for child in path.iterdir() if child.is_dir()),
+        key=lambda item: item.name,
+        reverse=True,
+    )
     if not children:
         raise FileNotFoundError(f"No child directories found under {path}")
     return children[0]
@@ -193,11 +214,15 @@ def find_latest_quality_comparison(repo: Path) -> Path | None:
     return latest_file
 
 
-def resolve_review_quality_comparison(repo: Path, configured_path: str | None) -> dict:
+def resolve_review_quality_comparison(
+    repo: Path, configured_path: str | None
+) -> JsonDict:
     if configured_path:
         resolved = Path(configured_path).resolve()
         if not resolved.is_file():
-            raise FileNotFoundError(f"Configured quality comparison file not found: {resolved}")
+            raise FileNotFoundError(
+                f"Configured quality comparison file not found: {resolved}"
+            )
         return {"path": str(resolved), "source": "argument"}
 
     latest = find_latest_quality_comparison(repo)
@@ -206,7 +231,13 @@ def resolve_review_quality_comparison(repo: Path, configured_path: str | None) -
     return {"path": str(latest.resolve()), "source": "latest_artifact"}
 
 
-def run_review(repo: Path, run_dir: Path, base: str, model: str | None, quality_comparison: str | None) -> dict:
+def run_review(
+    repo: Path,
+    run_dir: Path,
+    base: str,
+    model: str | None,
+    quality_comparison: str | None,
+) -> JsonDict:
     review_root = run_dir / "review"
     cmd = [
         sys.executable,
@@ -233,7 +264,9 @@ def run_review(repo: Path, run_dir: Path, base: str, model: str | None, quality_
     }
 
 
-def run_repair_handoff(repo: Path, run_dir: Path, repair_plan: Path, finding_index: int, model: str | None) -> dict:
+def run_repair_handoff(
+    repo: Path, run_dir: Path, repair_plan: Path, finding_index: int, model: str | None
+) -> JsonDict:
     output_dir = run_dir / "repair-handoff"
     cmd = [
         sys.executable,
@@ -271,11 +304,17 @@ def run_github_intake(
     apply_mode: str,
     apply_target: str,
     promote_probationary_ids: list[str],
-) -> dict:
+) -> JsonDict:
     output_dir = run_dir / "github-intake"
     cmd = [
         sys.executable,
-        str(repo / "plugins" / "codex-review" / "scripts" / "run_github_intake_pipeline.py"),
+        str(
+            repo
+            / "plugins"
+            / "codex-review"
+            / "scripts"
+            / "run_github_intake_pipeline.py"
+        ),
         "--repo",
         github_repo,
         "--pr",
@@ -320,14 +359,16 @@ def run_github_quality_comparison(
     review_file: Path,
     intake_output_dir: Path,
     raw_format: str,
-) -> dict:
+) -> JsonDict:
     output_dir = run_dir / "github-quality-comparison"
     prefix = artifact_prefix_for_raw_format(raw_format)
     proposal_file = intake_output_dir / f"{prefix}-proposal.json"
     candidates_file = intake_output_dir / f"{prefix}-candidates.json"
     cmd = [
         sys.executable,
-        str(repo / "plugins" / "codex-review" / "scripts" / "compare_review_quality.py"),
+        str(
+            repo / "plugins" / "codex-review" / "scripts" / "compare_review_quality.py"
+        ),
         "--review-file",
         str(review_file),
         "--proposal",
@@ -354,7 +395,7 @@ def run_github_auto_learn(
     comparison_file: Path,
     raw_format: str,
     apply_mode: str,
-) -> dict:
+) -> JsonDict:
     output_dir = run_dir / "github-quality-learning"
     prefix = artifact_prefix_for_raw_format(raw_format)
     candidates_file = intake_output_dir / f"{prefix}-candidates.json"
@@ -372,7 +413,13 @@ def run_github_auto_learn(
 
     approval_cmd = [
         sys.executable,
-        str(repo / "plugins" / "codex-review" / "scripts" / "approve_quality_learning_candidates.py"),
+        str(
+            repo
+            / "plugins"
+            / "codex-review"
+            / "scripts"
+            / "approve_quality_learning_candidates.py"
+        ),
         "--candidates",
         str(candidates_file),
         "--comparison",
@@ -414,7 +461,9 @@ def run_github_auto_learn(
     }
 
 
-def refresh_lessons_snapshot(repo: Path, run_dir: Path, source: Path, limit: int) -> dict:
+def refresh_lessons_snapshot(
+    repo: Path, run_dir: Path, source: Path, limit: int
+) -> JsonDict:
     output_path = run_dir / "lessons" / "local-lessons-snapshot.md"
     cmd = [
         sys.executable,
@@ -444,7 +493,9 @@ def refresh_lessons_snapshot(repo: Path, run_dir: Path, source: Path, limit: int
     }
 
 
-def run_hf_hardening(repo: Path, run_dir: Path, offset: int, length: int, model: str | None) -> dict:
+def run_hf_hardening(
+    repo: Path, run_dir: Path, offset: int, length: int, model: str | None
+) -> JsonDict:
     output_dir = run_dir / "hf-hardening"
     cmd = [
         sys.executable,
@@ -478,12 +529,18 @@ def run_hf_hardening(repo: Path, run_dir: Path, offset: int, length: int, model:
     }
 
 
-def run_coderabbit_calibration(repo: Path, run_dir: Path) -> dict:
+def run_coderabbit_calibration(repo: Path, run_dir: Path) -> JsonDict:
     output_dir = run_dir / "coderabbit-calibration"
     summary_file = output_dir / "summary.json"
     cmd = [
         sys.executable,
-        str(repo / "plugins" / "codex-review" / "scripts" / "score_coderabbit_calibration.py"),
+        str(
+            repo
+            / "plugins"
+            / "codex-review"
+            / "scripts"
+            / "score_coderabbit_calibration.py"
+        ),
         "--output",
         str(summary_file),
         "--allow-outside-artifacts",
@@ -503,10 +560,12 @@ def run_coderabbit_calibration(repo: Path, run_dir: Path) -> dict:
 def main() -> int:
     args = parse_args()
     repo = repo_root(Path(args.repo).resolve())
-    run_dir = Path(args.output_dir).resolve() if args.output_dir else default_run_dir(repo)
+    run_dir = (
+        Path(args.output_dir).resolve() if args.output_dir else default_run_dir(repo)
+    )
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    summary: dict[str, object] = {
+    summary: JsonDict = {
         "schema_version": "codex-review.automation-cycle.v2",
         "repo": str(repo),
         "run_dir": str(run_dir),
@@ -517,9 +576,10 @@ def main() -> int:
     repair_plan: Path | None = None
     exit_code = 0
     current_step = "automation_cycle"
+    steps: JsonDict = summary["steps"]
 
     def record_failure(step_name: str, exc: Exception) -> None:
-        failure: dict[str, object] = {
+        failure: JsonDict = {
             "failed": True,
             "error_type": type(exc).__name__,
             "error": str(exc),
@@ -529,7 +589,7 @@ def main() -> int:
             failure["cmd"] = exc.cmd
             failure["stdout"] = exc.stdout
             failure["stderr"] = exc.stderr
-        summary["steps"][step_name] = failure
+        steps[step_name] = failure
         summary["failure"] = {
             "step": step_name,
             **failure,
@@ -539,7 +599,7 @@ def main() -> int:
     try:
         if args.lessons_source:
             current_step = "lessons_refresh"
-            summary["steps"]["lessons_refresh"] = refresh_lessons_snapshot(
+            steps["lessons_refresh"] = refresh_lessons_snapshot(
                 repo,
                 run_dir,
                 Path(args.lessons_source).resolve(),
@@ -548,10 +608,14 @@ def main() -> int:
 
         if not args.skip_review:
             current_step = "review"
-            review_quality = resolve_review_quality_comparison(repo, args.review_quality_comparison)
-            review_result = run_review(repo, run_dir, args.base, args.model, review_quality["path"])
+            review_quality = resolve_review_quality_comparison(
+                repo, args.review_quality_comparison
+            )
+            review_result = run_review(
+                repo, run_dir, args.base, args.model, review_quality["path"]
+            )
             review_result["quality_comparison"] = review_quality
-            summary["steps"]["review"] = review_result
+            steps["review"] = review_result
             review_run_dir = Path(review_result["review_run_dir"])
             repair_plan = Path(review_result["repair_plan"])
 
@@ -559,13 +623,13 @@ def main() -> int:
             current_step = "repair_handoff"
             repair_plan_payload = read_json(repair_plan)
             if not repair_plan_payload.get("findings"):
-                summary["steps"]["repair_handoff"] = {
+                steps["repair_handoff"] = {
                     "skipped": True,
                     "reason": "Repair plan did not contain any parsed findings.",
                     "repair_plan": str(repair_plan),
                 }
             else:
-                summary["steps"]["repair_handoff"] = run_repair_handoff(
+                steps["repair_handoff"] = run_repair_handoff(
                     repo,
                     run_dir,
                     repair_plan,
@@ -576,13 +640,18 @@ def main() -> int:
         intake_output_dir: Path | None = None
         if not args.skip_github_intake:
             current_step = "github_intake"
-            if not (args.github_repo and args.github_pr and args.github_raw_input and review_run_dir):
-                summary["steps"]["github_intake"] = {
+            if not (
+                args.github_repo
+                and args.github_pr
+                and args.github_raw_input
+                and review_run_dir
+            ):
+                steps["github_intake"] = {
                     "skipped": True,
                     "reason": "GitHub intake needs --github-repo, --github-pr, --github-raw-input, and a completed review run.",
                 }
             else:
-                summary["steps"]["github_intake"] = run_github_intake(
+                github_intake_step = run_github_intake(
                     repo,
                     run_dir,
                     args.github_repo,
@@ -595,17 +664,18 @@ def main() -> int:
                     args.github_apply_target,
                     args.github_promote_probationary_id,
                 )
-                intake_output_dir = Path(summary["steps"]["github_intake"]["output_dir"])
+                steps["github_intake"] = github_intake_step
+                intake_output_dir = Path(str(github_intake_step["output_dir"]))
 
         if not args.skip_github_quality_comparison:
             current_step = "github_quality_comparison"
             if not (review_run_dir and intake_output_dir):
-                summary["steps"]["github_quality_comparison"] = {
+                steps["github_quality_comparison"] = {
                     "skipped": True,
                     "reason": "GitHub quality comparison needs a completed review run and GitHub intake output.",
                 }
             else:
-                summary["steps"]["github_quality_comparison"] = run_github_quality_comparison(
+                steps["github_quality_comparison"] = run_github_quality_comparison(
                     repo,
                     run_dir,
                     review_run_dir / "review.md",
@@ -615,19 +685,20 @@ def main() -> int:
 
         if not args.skip_github_auto_learn:
             current_step = "github_auto_learn"
-            comparison_step = summary["steps"].get("github_quality_comparison")
+            comparison_step = steps.get("github_quality_comparison")
             comparison_file = (
-                Path(comparison_step["comparison_file"])
-                if isinstance(comparison_step, dict) and comparison_step.get("comparison_file")
+                Path(str(comparison_step["comparison_file"]))
+                if isinstance(comparison_step, dict)
+                and comparison_step.get("comparison_file")
                 else None
             )
             if not (intake_output_dir and comparison_file):
-                summary["steps"]["github_auto_learn"] = {
+                steps["github_auto_learn"] = {
                     "skipped": True,
                     "reason": "GitHub auto-learn needs both quality comparison output and GitHub intake output.",
                 }
             else:
-                summary["steps"]["github_auto_learn"] = run_github_auto_learn(
+                steps["github_auto_learn"] = run_github_auto_learn(
                     repo,
                     run_dir,
                     intake_output_dir,
@@ -638,11 +709,11 @@ def main() -> int:
 
         if not args.skip_coderabbit_calibration:
             current_step = "coderabbit_calibration"
-            summary["steps"]["coderabbit_calibration"] = run_coderabbit_calibration(repo, run_dir)
+            steps["coderabbit_calibration"] = run_coderabbit_calibration(repo, run_dir)
 
         if not args.skip_hardening:
             current_step = "hf_hardening"
-            summary["steps"]["hf_hardening"] = run_hf_hardening(
+            steps["hf_hardening"] = run_hf_hardening(
                 repo,
                 run_dir,
                 args.hardening_offset,
@@ -650,14 +721,18 @@ def main() -> int:
                 args.model,
             )
     except Exception as exc:
-        exit_code = exc.returncode if isinstance(exc, subprocess.CalledProcessError) and exc.returncode else 1
+        exit_code = (
+            exc.returncode
+            if isinstance(exc, subprocess.CalledProcessError) and exc.returncode
+            else 1
+        )
         record_failure(current_step, exc)
     finally:
         write_json(run_dir / "automation-summary.json", summary)
 
     print(f"Automation run: {run_dir}")
     print(f"Summary: {run_dir / 'automation-summary.json'}")
-    print(f"Completed steps: {', '.join(summary['steps'].keys())}")
+    print(f"Completed steps: {', '.join(str(key) for key in steps.keys())}")
     return exit_code
 
 

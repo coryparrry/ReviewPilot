@@ -27,7 +27,7 @@ def resolve_input(args: argparse.Namespace) -> Path:
     if args.input:
         path = Path(args.input).resolve()
     elif args.review_dir:
-        path = (Path(args.review_dir).resolve() / "inline-findings.json")
+        path = Path(args.review_dir).resolve() / "inline-findings.json"
     else:
         raise ValueError("Pass either --input or --review-dir.")
 
@@ -48,7 +48,7 @@ def load_findings(path: Path) -> list[dict[str, Any]]:
 
 
 def escape_attr(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", " ").strip()
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ").strip()
 
 
 def to_directive(finding: dict[str, Any]) -> str:

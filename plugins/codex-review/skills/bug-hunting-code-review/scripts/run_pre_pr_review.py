@@ -7,7 +7,6 @@ import argparse
 import datetime as dt
 import json
 import os
-import re
 import subprocess
 import sys
 import textwrap
@@ -16,12 +15,15 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_CALIBRATION_PATH = (
-    Path(__file__).resolve().parent.parent / "references" / "coderabbit-comment-calibration.json"
+    Path(__file__).resolve().parent.parent
+    / "references"
+    / "coderabbit-comment-calibration.json"
 )
 DEFAULT_PUBLIC_CALIBRATION_PATH = (
-    Path(__file__).resolve().parent.parent / "references" / "public-coderabbit-calibration.json"
+    Path(__file__).resolve().parent.parent
+    / "references"
+    / "public-coderabbit-calibration.json"
 )
 DEFAULT_FULL_REPO_SCAN_LIMIT = 20
 DEFAULT_UNTRACKED_FILE_LIMIT = 12
@@ -76,39 +78,48 @@ def git_untracked_files(repo: Path) -> list[Path]:
     return [repo / line.strip() for line in output.splitlines() if line.strip()]
 
 
-def render_untracked_files(repo: Path, limit: int = DEFAULT_UNTRACKED_FILE_LIMIT) -> tuple[str, list[str]]:
+def render_untracked_files(
+    repo: Path, limit: int = DEFAULT_UNTRACKED_FILE_LIMIT
+) -> tuple[str, list[str]]:
     sections: list[str] = []
     included: list[str] = []
     for path in git_untracked_files(repo)[:limit]:
         rel = path.relative_to(repo).as_posix()
         if not path.is_file() or not is_probably_text_file(path):
-            sections.append(f"Untracked file: {rel}\n(Binary or unreadable file omitted)\n")
+            sections.append(
+                f"Untracked file: {rel}\n(Binary or unreadable file omitted)\n"
+            )
             included.append(rel)
             continue
         try:
             body = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             body = "[Could not read file contents]"
-        sections.append(
-            textwrap.dedent(
-                f"""\
+        sections.append(textwrap.dedent(f"""\
                 Untracked file: {rel}
                 ```
                 {body[:DEFAULT_UNTRACKED_BYTES]}
                 ```
-                """
-            ).strip()
-        )
+                """).strip())
         included.append(rel)
     return ("\n\n".join(sections), included)
 
 
-def get_diff(repo: Path, base: str | None, pr: str | None, mode: str) -> tuple[str, str]:
+def get_diff(
+    repo: Path, base: str | None, pr: str | None, mode: str
+) -> tuple[str, str]:
     if pr:
         diff = run_cmd(["gh", "pr", "diff", pr, "--patch"], repo)
         try:
             meta = run_cmd(
-                ["gh", "pr", "view", pr, "--json", "number,title,baseRefName,headRefName,url"],
+                [
+                    "gh",
+                    "pr",
+                    "view",
+                    pr,
+                    "--json",
+                    "number,title,baseRefName,headRefName,url",
+                ],
                 repo,
             )
         except subprocess.CalledProcessError:
@@ -141,7 +152,12 @@ def get_diff(repo: Path, base: str | None, pr: str | None, mode: str) -> tuple[s
         untracked_rendered, untracked_files = render_untracked_files(repo)
         if untracked_rendered:
             diff = "\n\n".join(
-                chunk for chunk in [diff.strip(), "Untracked working tree files:\n" + untracked_rendered] if chunk
+                chunk
+                for chunk in [
+                    diff.strip(),
+                    "Untracked working tree files:\n" + untracked_rendered,
+                ]
+                if chunk
             )
         metadata.update(
             {
@@ -242,7 +258,9 @@ def comparison_focus(quality_comparison_path: Path | None) -> list[str]:
     return [str(item).strip() for item in prompt_focus if str(item).strip()]
 
 
-def render_miss_calibration_section(skill_dir: Path, quality_comparison_path: Path | None) -> str:
+def render_miss_calibration_section(
+    skill_dir: Path, quality_comparison_path: Path | None
+) -> str:
     accepted_focus = accepted_calibration_focus(DEFAULT_CALIBRATION_PATH)
     public_focus = public_calibration_focus(DEFAULT_PUBLIC_CALIBRATION_PATH)
     live_focus = comparison_focus(quality_comparison_path)
@@ -280,8 +298,7 @@ def build_prompt(
         "quick": "Keep the review fast and high-signal. Prefer a short list of the strongest findings over broad exploration.",
         "deep": "Spend extra review budget on cross-file tracing, negative paths, stale-state behavior, and source-of-truth drift.",
     }[depth]
-    return textwrap.dedent(
-        f"""\
+    return textwrap.dedent(f"""\
         {default_prompt}
 
         Produce a release-blocking code review.
@@ -326,8 +343,7 @@ def build_prompt(
 
         Diff or review surface:
         {diff}
-        """
-    ).strip() + "\n"
+        """).strip() + "\n"
 
 
 def call_openai(prompt: str, model: str) -> str:
@@ -416,7 +432,9 @@ def prepare_review_artifacts(
         skill_dir,
         Path(quality_comparison).resolve() if quality_comparison else None,
     )
-    prompt = build_prompt(default_prompt, metadata, scan, diff, mode, depth, calibration_section)
+    prompt = build_prompt(
+        default_prompt, metadata, scan, diff, mode, depth, calibration_section
+    )
     return {
         "diff": diff,
         "metadata": metadata,
@@ -427,9 +445,17 @@ def prepare_review_artifacts(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Prepare and score a pre-PR bug-hunting review.")
-    parser.add_argument("--repo", default=".", help="Repository path. Defaults to the current directory.")
-    parser.add_argument("--base", help="Base branch for local diff mode. Defaults to origin/main.")
+    parser = argparse.ArgumentParser(
+        description="Prepare and score a pre-PR bug-hunting review."
+    )
+    parser.add_argument(
+        "--repo",
+        default=".",
+        help="Repository path. Defaults to the current directory.",
+    )
+    parser.add_argument(
+        "--base", help="Base branch for local diff mode. Defaults to origin/main."
+    )
     parser.add_argument("--pr", help="PR number, URL, or branch to review via gh.")
     parser.add_argument(
         "--mode",
@@ -443,7 +469,9 @@ def parse_args() -> argparse.Namespace:
         choices=["quick", "deep"],
         help="Prompt depth. quick uses a lighter prompt package; deep uses the fuller one.",
     )
-    parser.add_argument("--review-file", help="Path to an existing review artifact to score.")
+    parser.add_argument(
+        "--review-file", help="Path to an existing review artifact to score."
+    )
     parser.add_argument("--review-text", help="Inline review text to score.")
     parser.add_argument(
         "--quality-comparison",
@@ -497,7 +525,9 @@ def main() -> int:
     write_file(out_dir / "surface-scan.txt", prepared["scan"])
     write_file(out_dir / "review-prompt.txt", prepared["prompt"])
     if prepared["calibration_section"]:
-        write_file(out_dir / "miss-calibration.txt", prepared["calibration_section"] + "\n")
+        write_file(
+            out_dir / "miss-calibration.txt", prepared["calibration_section"] + "\n"
+        )
 
     if args.prepare_only:
         print(f"Prepared review artifacts in {out_dir}")
@@ -508,7 +538,9 @@ def main() -> int:
         if not args.use_openai_api:
             print(f"Prepared review artifacts in {out_dir}")
             print("No review artifact was supplied, so no model call was attempted.")
-            print(f"Next step: review the prompt in {out_dir / 'review-prompt.txt'} and rerun with --review-file or --review-text.")
+            print(
+                f"Next step: review the prompt in {out_dir / 'review-prompt.txt'} and rerun with --review-file or --review-text."
+            )
             return 0
         review_text = call_openai(prepared["prompt"], args.model)
 

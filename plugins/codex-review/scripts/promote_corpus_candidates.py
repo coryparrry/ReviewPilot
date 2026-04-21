@@ -9,7 +9,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Promote reviewed corpus candidates into auto-eligible candidates."
     )
-    parser.add_argument("--input", required=True, help="Path to a corpus-candidate JSON file.")
+    parser.add_argument(
+        "--input", required=True, help="Path to a corpus-candidate JSON file."
+    )
     parser.add_argument(
         "--output",
         help="Path to promoted candidate output. Defaults to artifacts/github-intake/<timestamp>-promoted-candidates.json",
@@ -54,10 +56,17 @@ def write_json(path: Path, payload: Any) -> None:
 
 def default_output_path(repo_root: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo_root / "artifacts" / "github-intake" / f"{timestamp}-promoted-candidates.json"
+    return (
+        repo_root
+        / "artifacts"
+        / "github-intake"
+        / f"{timestamp}-promoted-candidates.json"
+    )
 
 
-def resolve_output_path(repo_root: Path, output_path: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_output_path(
+    repo_root: Path, output_path: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
     if output_path is None:
         return default_output_path(repo_root)
@@ -79,14 +88,18 @@ def resolve_output_path(repo_root: Path, output_path: str | None, allow_outside_
 def require_candidate_list(payload: dict[str, Any]) -> list[dict[str, Any]]:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
-        raise ValueError("Corpus-candidate artifact must contain a top-level 'candidates' list.")
+        raise ValueError(
+            "Corpus-candidate artifact must contain a top-level 'candidates' list."
+        )
     for index, candidate in enumerate(candidates):
         if not isinstance(candidate, dict):
             raise ValueError(f"Candidate at index {index} is not a JSON object.")
     return candidates
 
 
-def promote_candidate(candidate: dict[str, Any], reviewer: str, note: str) -> dict[str, Any]:
+def promote_candidate(
+    candidate: dict[str, Any], reviewer: str, note: str
+) -> dict[str, Any]:
     promoted = dict(candidate)
     review_notes = dict(candidate.get("review_notes") or {})
     review_notes["needs_human_review"] = False
@@ -109,11 +122,15 @@ def main() -> int:
     script_path = Path(__file__).resolve()
     repo_root = script_path.parents[3]
     input_path = Path(args.input).resolve()
-    output_path = resolve_output_path(repo_root, args.output, args.allow_outside_artifacts)
+    output_path = resolve_output_path(
+        repo_root, args.output, args.allow_outside_artifacts
+    )
 
     payload = load_json(input_path)
     candidates = require_candidate_list(payload)
-    selected_ids = {candidate_id.strip() for candidate_id in args.ids if candidate_id.strip()}
+    selected_ids = {
+        candidate_id.strip() for candidate_id in args.ids if candidate_id.strip()
+    }
 
     promoted_candidates: list[dict[str, Any]] = []
     promoted_ids: list[str] = []
@@ -127,7 +144,9 @@ def main() -> int:
             continue
 
         if args.all or candidate_id in selected_ids:
-            promoted_candidates.append(promote_candidate(candidate, args.reviewer, args.note))
+            promoted_candidates.append(
+                promote_candidate(candidate, args.reviewer, args.note)
+            )
             promoted_ids.append(candidate_id)
         else:
             promoted_candidates.append(candidate)

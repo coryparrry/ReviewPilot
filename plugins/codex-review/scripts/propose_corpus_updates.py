@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 ALLOWED_SEVERITIES = {"critical", "high", "medium", "low"}
 
 
@@ -13,7 +12,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Turn normalized GitHub intake proposal records into reviewed corpus-candidate output."
     )
-    parser.add_argument("--input", required=True, help="Path to a normalized proposal artifact JSON file.")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to a normalized proposal artifact JSON file.",
+    )
     parser.add_argument(
         "--output",
         help="Path to candidate output. Defaults to artifacts/github-intake/<timestamp>-corpus-candidates.json",
@@ -32,10 +35,17 @@ def load_input(path: Path) -> dict[str, Any]:
 
 def default_output_path(repo_root: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo_root / "artifacts" / "github-intake" / f"{timestamp}-corpus-candidates.json"
+    return (
+        repo_root
+        / "artifacts"
+        / "github-intake"
+        / f"{timestamp}-corpus-candidates.json"
+    )
 
 
-def resolve_output_path(repo_root: Path, output_path: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_output_path(
+    repo_root: Path, output_path: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
     if output_path is None:
         return default_output_path(repo_root)
@@ -74,7 +84,10 @@ def derive_title(record: dict[str, Any]) -> str:
 def derive_expected_groups(record: dict[str, Any]) -> list[list[str]]:
     expectations = record.get("candidate_expectations") or []
     if not expectations:
-        body = str(record.get("candidate_summary", "")).strip() or str(record.get("body", "")).strip()
+        body = (
+            str(record.get("candidate_summary", "")).strip()
+            or str(record.get("body", "")).strip()
+        )
         if not body:
             return []
         expectations = [body[:120]]
@@ -112,7 +125,9 @@ def should_skip(record: dict[str, Any]) -> str | None:
     return None
 
 
-def build_candidate(proposal: dict[str, Any], record: dict[str, Any], index: int) -> dict[str, Any]:
+def build_candidate(
+    proposal: dict[str, Any], record: dict[str, Any], index: int
+) -> dict[str, Any]:
     title = derive_title(record)
     category = str(record["normalized_category"])
     severity = str(record["severity"])
@@ -182,7 +197,9 @@ def main() -> int:
     input_path = Path(args.input).resolve()
     proposal = load_input(input_path)
     output = build_output(proposal)
-    output_path = resolve_output_path(repo_root, args.output, args.allow_outside_artifacts)
+    output_path = resolve_output_path(
+        repo_root, args.output, args.allow_outside_artifacts
+    )
     write_output(output_path, output)
     print(f"Wrote corpus candidates: {output_path}")
     print(f"Candidates: {len(output['candidates'])}")
