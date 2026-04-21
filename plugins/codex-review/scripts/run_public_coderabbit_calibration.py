@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -77,7 +78,13 @@ def load_json(path: Path) -> Any:
 
 
 def safe_label(entry: dict[str, Any]) -> str:
-    return str(entry.get("label") or f"{entry['repo'].replace('/', '-')}-pr-{entry['pr']}")
+    raw = str(entry.get("label") or f"{entry['repo'].replace('/', '-')}-pr-{entry['pr']}")
+    sanitized = re.sub(r"[^A-Za-z0-9._-]+", "-", raw).strip(".-")
+    sanitized = sanitized.replace("..", "-")
+    if sanitized:
+        return sanitized[:120]
+    fallback = f"{entry['repo'].replace('/', '-')}-pr-{entry['pr']}"
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", fallback).strip(".-")[:120]
 
 
 def ensure_repo_clone(root: Path, github_repo: str) -> Path:
@@ -109,6 +116,11 @@ def newest_child_dir(path: Path) -> Path:
     if not children:
         raise FileNotFoundError(f"No child directories found under {path}")
     return children[0]
+
+
+def review_run_is_complete(path: Path) -> bool:
+    review_file = path / "review.md"
+    return review_file.is_file() and bool(review_file.read_text(encoding="utf-8", errors="replace").strip())
 
 
 def run_review(repo_root_dir: Path, target_repo: Path, base_ref: str, output_dir: Path, model: str) -> Path:
@@ -215,6 +227,8 @@ def main() -> int:
         if args.resume and review_parent.is_dir():
             try:
                 existing_review_run = newest_child_dir(review_parent)
+                if not review_run_is_complete(existing_review_run):
+                    existing_review_run = None
             except FileNotFoundError:
                 existing_review_run = None
         review_run_dir = existing_review_run or run_review(root, repo_dir, base_ref, review_parent, args.model)

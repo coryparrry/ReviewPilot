@@ -2,6 +2,7 @@ import argparse
 import json
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 SECTION_HEADING_RE = re.compile(r"^\*\*(.+?)\*\*$")
@@ -16,7 +17,8 @@ NUMBERED_ITEM_RE = re.compile(r"^\d+\.\s+", re.MULTILINE)
 SEVERITY_RE = re.compile(r"^\[(?P<severity>[^\]]+)\]\s+(?P<title>.+)$")
 LINK_RE = re.compile(r"\[(?P<label>[^\]]+)\]\((?P<target>[^)]+)\)")
 HASH_LINE_RE = re.compile(r"^(?P<path>.+?)#L(?P<start>\d+)(?:-L(?P<end>\d+))?$")
-COLON_LINE_RE = re.compile(r"^(?P<path>[A-Za-z]:.+?):(?P<line>\d+)$")
+COLON_LINE_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+)$")
+GITHUB_BLOB_URL_RE = re.compile(r"^/[^/]+/[^/]+/blob/(?P<ref>[^/]+)/(?P<path>.+)$", re.IGNORECASE)
 
 SEVERITY_PRIORITY = {
     "critical": 0,
@@ -60,8 +62,9 @@ def split_sections(text: str) -> dict[str, str]:
             current_name = markdown_match.group(1).strip().rstrip(":").lower()
             sections.setdefault(current_name, [])
             continue
-        if stripped.lower() in PLAIN_SECTION_HEADINGS:
-            current_name = stripped.lower()
+        plain_name = stripped.lower().rstrip(":")
+        if plain_name in PLAIN_SECTION_HEADINGS:
+            current_name = plain_name
             sections.setdefault(current_name, [])
             continue
         sections.setdefault(current_name, []).append(line)
@@ -115,10 +118,16 @@ def parse_link_target(target: str) -> dict | None:
     cleaned = target.strip()
     hash_match = HASH_LINE_RE.match(cleaned)
     if hash_match:
+        path = hash_match.group("path")
+        parsed_url = urlparse(path)
+        if parsed_url.scheme and parsed_url.netloc.lower() == "github.com":
+            blob_match = GITHUB_BLOB_URL_RE.match(parsed_url.path)
+            if blob_match:
+                path = blob_match.group("path")
         start = int(hash_match.group("start"))
         end = int(hash_match.group("end") or start)
         return {
-            "file": hash_match.group("path"),
+            "file": path,
             "start": start,
             "end": end,
         }

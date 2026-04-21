@@ -1,5 +1,6 @@
 import argparse
 import json
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -68,6 +69,22 @@ def write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def finding_is_auto_approvable(finding: dict[str, Any]) -> bool:
+    if finding.get("gap_classification") != "corpus-gap":
+        return False
+    if finding.get("represented_in_corpus") is not False:
+        return False
+    if finding.get("represented_in_calibration") is not False:
+        return False
+
+    review_match = finding.get("review_match") or {}
+    if review_match.get("matched") is not False:
+        return False
+    expectation_overlap = float(review_match.get("expectation_overlap") or 0.0)
+    title_overlap = float(review_match.get("title_overlap") or 0.0)
+    return expectation_overlap < 0.35 and title_overlap < 0.35
+
+
 def main() -> int:
     args = parse_args()
     repo_root = repo_root_from_script()
@@ -87,11 +104,13 @@ def main() -> int:
     if not isinstance(findings, list):
         raise ValueError("Quality comparison artifact must contain a top-level findings list.")
 
-    finding_by_id = {
-        str(finding.get("candidate_id")): finding
-        for finding in findings
-        if isinstance(finding, dict) and finding.get("candidate_id")
-    }
+    findings_by_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        candidate_id = finding.get("candidate_id")
+        if candidate_id:
+            findings_by_id[str(candidate_id)].append(finding)
 
     approved_candidates: list[dict[str, Any]] = []
     for index, candidate in enumerate(candidates, start=1):
@@ -100,22 +119,9 @@ def main() -> int:
         candidate_id = str(candidate.get("id") or "")
         if candidate_id not in approved_ids:
             continue
-        finding = finding_by_id.get(candidate_id)
+        matching_findings = findings_by_id.get(candidate_id) or []
+        finding = next((item for item in matching_findings if finding_is_auto_approvable(item)), None)
         if not isinstance(finding, dict):
-            continue
-        if finding.get("gap_classification") != "corpus-gap":
-            continue
-        if finding.get("represented_in_corpus") is not False:
-            continue
-        if finding.get("represented_in_calibration") is not False:
-            continue
-
-        review_match = finding.get("review_match") or {}
-        if review_match.get("matched") is not False:
-            continue
-        expectation_overlap = float(review_match.get("expectation_overlap") or 0.0)
-        title_overlap = float(review_match.get("title_overlap") or 0.0)
-        if expectation_overlap >= 0.35 or title_overlap >= 0.35:
             continue
 
         severity = str(candidate.get("severity") or "").lower()

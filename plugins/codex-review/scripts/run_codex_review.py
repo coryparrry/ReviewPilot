@@ -166,8 +166,9 @@ def split_sections(text: str) -> dict[str, str]:
             current_name = markdown_match.group(1).strip().rstrip(":").lower()
             sections.setdefault(current_name, [])
             continue
-        if stripped.lower() in PLAIN_SECTION_HEADINGS:
-            current_name = stripped.lower()
+        plain_name = stripped.lower().rstrip(":")
+        if plain_name in PLAIN_SECTION_HEADINGS:
+            current_name = plain_name
             sections.setdefault(current_name, [])
             continue
         sections.setdefault(current_name, []).append(line)
@@ -390,6 +391,8 @@ def main() -> int:
 
     max_attempts = 2
     pass_reviews: list[tuple[str, str]] = []
+    pass_stdout_texts: list[str] = []
+    pass_stderr_texts: list[str] = []
     overall_notes: list[str] = []
     pass_prompts = build_pass_prompts(prepared["prompt"], args.depth)
 
@@ -434,6 +437,8 @@ def main() -> int:
         assert final_completed is not None
         write_file(run_dir / f"{pass_name}-codex-stdout.txt", final_completed.stdout)
         write_file(run_dir / f"{pass_name}-codex-stderr.txt", final_completed.stderr)
+        pass_stdout_texts.append(final_completed.stdout)
+        pass_stderr_texts.append(final_completed.stderr)
         if repair_notes:
             overall_notes.extend(repair_notes)
         if success:
@@ -441,8 +446,8 @@ def main() -> int:
 
     combined_review = combine_pass_reviews(pass_reviews)
     write_file(review_file, combined_review)
-    if pass_reviews:
-        write_file(stdout_log, "\n\n".join(text for _, text in pass_reviews))
+    write_file(stdout_log, "\n\n".join(pass_stdout_texts))
+    write_file(stderr_log, "\n\n".join(pass_stderr_texts))
     if overall_notes:
         write_file(repair_summary, "\n".join(overall_notes) + "\n")
 

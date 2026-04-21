@@ -329,7 +329,6 @@ def repo_hotspots(repo: Path, limit: int = FULL_REPO_SCAN_LIMIT) -> list[dict[st
         rel = line.strip()
         if not rel:
             continue
-        path = repo / rel
         score = 0
         tags: list[str] = []
         for pattern, tag in hotspot_patterns:

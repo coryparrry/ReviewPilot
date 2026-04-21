@@ -1,0 +1,2 @@
+# Keep text files normalized across Windows and macOS checkouts.
+* text=auto eol=lf

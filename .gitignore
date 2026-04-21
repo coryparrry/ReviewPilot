@@ -1,5 +1,6 @@
 .codex-review/
 __pycache__/
 *.pyc
+.DS_Store
 artifacts/
 plugins/codex-review/skills/bug-hunting-code-review/references/local-lessons-snapshot.md

@@ -345,14 +345,16 @@ def build_prompt_focus(missed_records: list[dict[str, Any]]) -> list[str]:
         title = str(record.get("candidate_title") or "Untitled finding").strip()
         file_path = str(record.get("file_path") or "unknown-file").strip()
         summary = str(record.get("candidate_summary") or record.get("body") or "").strip()
-        snippet = summary[:180] if summary else title
+        snippet = title
+        if summary:
+            snippet = summary if len(summary) <= 240 else summary[:237].rsplit(" ", 1)[0].rstrip(" ,;:") + "..."
         signals = record.get("suggested_signal_phrases")
         if not isinstance(signals, list):
             signals = compact_expectation_signals(record)
         if signals:
             focus.append(
                 f"{title} in {file_path}: {snippet}. Evidence anchors to mention if present: "
-                + " | ".join(signals)
+                + "; ".join(signals)
             )
         else:
             focus.append(f"{title} in {file_path}: {snippet}")
