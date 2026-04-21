@@ -79,6 +79,8 @@ def finding_is_auto_approvable(finding: dict[str, Any]) -> bool:
         return False
 
     review_match = finding.get("review_match") or {}
+    if not isinstance(review_match, dict):
+        return False
     if review_match.get("matched") is not False:
         return False
     try:

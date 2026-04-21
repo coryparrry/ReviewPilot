@@ -116,6 +116,8 @@ def build_validation_hints(title: str, refs: list[dict[str, str]]) -> list[str]:
 
 def parse_link_target(target: str) -> dict | None:
     cleaned = target.strip()
+    if cleaned.startswith("<") and cleaned.endswith(">"):
+        cleaned = cleaned[1:-1].strip()
     hash_match = HASH_LINE_RE.match(cleaned)
     if hash_match:
         path = hash_match.group("path")
