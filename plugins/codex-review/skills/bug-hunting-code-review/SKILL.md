@@ -1,13 +1,13 @@
 ---
 name: bug-hunting-code-review
-description: Review code like a release blocker. Focus on correctness, security, broken user flows, stale state, contract drift, and missing regression coverage instead of style.
+description: Review code like a release blocker. Route Codex to the right review references and scripts based on review size, risk, and whether the task is review, scoring, or skill tuning.
 ---
 
 # Bug-Hunting Code Review
 
-Use this skill when Codex should review code like a release blocker.
+Use this skill when Codex should review code for real bugs, not style.
 
-Prioritize real bugs:
+Prioritize:
 - correctness
 - security
 - broken feature behavior
@@ -17,57 +17,35 @@ Prioritize real bugs:
 
 Ignore style and cleanup unless they clearly cause a real bug.
 
-## Core Rules
+## Router
 
-- Treat the diff as the entry point, not the review boundary.
-- Trace adjacent callers, callees, contracts, tests, and state transitions.
-- Prefer a short list of strong findings over a long list of weak ones.
-- Findings come first.
-- If there are no findings, say so explicitly and mention residual risk or test gaps briefly.
+Start by classifying the task, then load only the references needed for that class.
 
-## Default Workflow
+### 1. Small Review
 
-For any non-trivial review:
+Use for:
+- a small diff
+- one file or one narrow bugfix
+- a quick confidence pass
 
-1. Read the diff and identify the repo root.
-2. Build the change map.
-3. Run the surface scan.
-4. Run the review passes below.
-5. Do not conclude `No findings` until the evidence bar is met.
+Load:
+- `references/review-checklist.md`
+- `references/evidence-bar.md`
 
-Preferred commands:
+Then:
+- review the changed code and adjacent flow
+- keep findings short and high-confidence
+- do not load the full deep-review stack unless the change proves wider risk
 
-```sh
-python "<skill-path>/scripts/review_surface_scan.py" --repo .
-python "<skill-path>/scripts/review_surface_scan.py" --repo . --base origin/main
-```
+### 2. Standard Review
 
-If you already have a review artifact:
+Use for:
+- normal PR review
+- multi-file change
+- stateful feature change
+- API, persistence, auth, workflow, or UI behavior change
 
-```sh
-python "<skill-path>/scripts/run_pre_pr_review.py" --base origin/main --review-file "./draft-review.md"
-python "<skill-path>/scripts/run_pre_pr_review.py" --base origin/main --prepare-only
-python "./plugins/codex-review/scripts/run_codex_review.py" --repo . --base origin/main
-python "./plugins/codex-review/scripts/emit_inline_review_comments.py" --review-dir "<review-run-dir>"
-```
-
-For regression checks:
-
-```sh
-python "<skill-path>/scripts/review_corpus_score.py" --review-file "./draft-review.md"
-python "<skill-path>/scripts/run_review_benchmarks.py" --review-file "./draft-review.md"
-```
-
-For optional lessons refresh:
-
-```sh
-python "<skill-path>/scripts/refresh_lessons_reference.py" --source "<path-to-codex-lessons.md>"
-```
-
-## Required References
-
-Read these before declaring a meaningful patch clean:
-
+Load:
 - `references/review-checklist.md`
 - `references/evidence-bar.md`
 - `references/bug-patterns-from-lessons.md`
@@ -75,60 +53,66 @@ Read these before declaring a meaningful patch clean:
 - `references/deep-review-rubric.md`
 
 Also use:
-- `references/review-corpus-workflow.md` when tuning the skill itself
-- `references/external-benchmark-workflow.md` when working on the Hugging Face lane
+- `scripts/review_surface_scan.py`
 
-## Required Review Passes
+### 3. Deep Or High-Risk Review
 
-Run all four passes on every non-trivial review:
+Use for:
+- auth or session changes
+- external input handling
+- persistence semantics
+- schedulers, workflows, retries, or state machines
+- changes where the diff is only one clue
 
-1. Correctness: logic errors, regressions, stale state, contract mismatches, edge cases.
-2. Security: trust boundaries, attacker input, dangerous sinks, auth and secret handling.
-3. Feature completeness: success path, negative path, retry, refresh, cleanup, permission loss.
-4. Integrity: imports, registries, validators, tests, and executable-path reality.
+Load the full standard-review set and treat the diff as an entry point, not the boundary.
 
-Before you decide the patch is clean, identify:
-- the real execution surface
-- the contract that must still hold
-- the inputs and failure modes
-- any trust boundary involved
-- the real user-visible flow that must still work
+### 4. Review-Quality Tuning
 
-## Bug Classes To Hunt
+Use when:
+- scoring review artifacts
+- tuning the skill itself
+- checking recall against the corpus or hardening lanes
 
-Actively pressure-test:
+Also load as needed:
+- `references/review-corpus-workflow.md`
+- `references/external-benchmark-workflow.md`
+- `references/review-entrypoints.md`
 
-- source-of-truth drift
-- stale or unsynchronized state
-- contract mismatches across layers
-- broken retries, resets, cleanup, or refresh paths
-- authorization gaps or privacy leaks
-- fail-open fallbacks
-- missing validation on real inputs
-- registry or allowlist drift
-- helper or fixture widening that hides the real behavior
-- broken imports, paths, or example commands
-- missing regression coverage for the actual bug class introduced
+### 5. Lessons Refresh
 
-## Review Output
+Use when:
+- staging local lessons
+- updating review guidance from repeated mistakes
 
-Report findings first, ordered by severity.
+Load:
+- `references/review-entrypoints.md`
 
-For each finding:
-- name the failing scenario
-- explain the broken invariant or user expectation
-- point to the concrete location that causes it
-- explain the user-visible or system-visible impact
-- classify it as correctness, security, or broken feature behavior
+## Entry Points
 
-Use inline review comments as the preferred output when the task is an actual code review.
-Treat `inline-findings.json` and `codex-inline-comments.txt` as first-class artifacts.
+For script selection and commands, read:
+
+- `references/review-entrypoints.md`
+
+That file is the command map for:
+- surface scan
+- pre-PR review prep
+- full plugin review runs
+- benchmark scoring
+- inline review comment rendering
+- lessons refresh
+
+## Output Rules
+
+- Findings come first.
+- Prefer a short list of strong findings over a long list of weak ones.
+- If there are no findings, say so explicitly and mention residual risk or test gaps briefly.
+- Use inline review comments as the preferred review output when the task is an actual code review.
 
 ## Good Habits
 
+- Treat the diff as the entry point, not the review boundary.
+- Trace adjacent callers, callees, contracts, tests, and state transitions.
 - Reconstruct behavior from source, not comments.
-- Check neighboring files when contracts or persistence change.
 - Check mirrored write paths and sibling entry points.
 - Re-check negative paths, retries, and stale-state behavior.
-- Check whether tests would actually fail for the bug you suspect.
 - Do not upgrade a weak hunch into a finding if the evidence bar is not met.
