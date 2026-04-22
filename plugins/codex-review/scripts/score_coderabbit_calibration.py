@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_CALIBRATION_INPUT = Path(
     "plugins/codex-review/skills/bug-hunting-code-review/references/coderabbit-comment-calibration.json"
 )
@@ -41,15 +40,23 @@ def repo_root_from_script() -> Path:
 
 def resolve_path(repo_root: Path, requested: str) -> Path:
     candidate = Path(requested)
-    return candidate.resolve() if candidate.is_absolute() else (repo_root / candidate).resolve()
+    return (
+        candidate.resolve()
+        if candidate.is_absolute()
+        else (repo_root / candidate).resolve()
+    )
 
 
 def default_output_path(repo_root: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo_root / "artifacts" / "coderabbit-calibration" / f"{timestamp}-summary.json"
+    return (
+        repo_root / "artifacts" / "coderabbit-calibration" / f"{timestamp}-summary.json"
+    )
 
 
-def resolve_output_path(repo_root: Path, requested: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_output_path(
+    repo_root: Path, requested: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts").resolve()
     if requested is None:
         return default_output_path(repo_root)
@@ -85,7 +92,9 @@ def require_entries(payload: Any) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for index, entry in enumerate(payload):
         if not isinstance(entry, dict):
-            raise ValueError(f"Calibration entry at index {index} is not a JSON object.")
+            raise ValueError(
+                f"Calibration entry at index {index} is not a JSON object."
+            )
         verdict = entry.get("verdict")
         if verdict not in allowed_verdicts:
             raise ValueError(
@@ -94,16 +103,22 @@ def require_entries(payload: Any) -> list[dict[str, Any]]:
             )
         for field in ("id", "file", "summary", "severity", "reason", "use"):
             if not isinstance(entry.get(field), str) or not entry[field].strip():
-                raise ValueError(f"Calibration entry at index {index} is missing a non-empty '{field}' field.")
+                raise ValueError(
+                    f"Calibration entry at index {index} is missing a non-empty '{field}' field."
+                )
         entries.append(entry)
     return entries
 
 
 def top_counts(counter: Counter[str], limit: int = 5) -> list[dict[str, Any]]:
-    return [{"name": name, "count": count} for name, count in counter.most_common(limit)]
+    return [
+        {"name": name, "count": count} for name, count in counter.most_common(limit)
+    ]
 
 
-def compact_entries(entries: list[dict[str, Any]], verdict: str) -> list[dict[str, str]]:
+def compact_entries(
+    entries: list[dict[str, Any]], verdict: str
+) -> list[dict[str, str]]:
     filtered = [entry for entry in entries if entry.get("verdict") == verdict]
     return [
         {
@@ -119,8 +134,12 @@ def compact_entries(entries: list[dict[str, Any]], verdict: str) -> list[dict[st
 def build_summary(source_path: Path, entries: list[dict[str, Any]]) -> dict[str, Any]:
     verdict_counts = Counter(str(entry["verdict"]) for entry in entries)
     severity_counts = Counter(str(entry["severity"]) for entry in entries)
-    accepted_use_counts = Counter(str(entry["use"]) for entry in entries if entry["verdict"] == "accept")
-    accepted_file_counts = Counter(str(entry["file"]) for entry in entries if entry["verdict"] == "accept")
+    accepted_use_counts = Counter(
+        str(entry["use"]) for entry in entries if entry["verdict"] == "accept"
+    )
+    accepted_file_counts = Counter(
+        str(entry["file"]) for entry in entries if entry["verdict"] == "accept"
+    )
 
     return {
         "schema_version": "codex-review.coderabbit-calibration.v1",
@@ -153,7 +172,9 @@ def main() -> int:
     args = parse_args()
     repo_root = repo_root_from_script()
     input_path = resolve_path(repo_root, args.input)
-    output_path = resolve_output_path(repo_root, args.output, args.allow_outside_artifacts)
+    output_path = resolve_output_path(
+        repo_root, args.output, args.allow_outside_artifacts
+    )
 
     entries = require_entries(load_json(input_path))
     summary = build_summary(input_path, entries)

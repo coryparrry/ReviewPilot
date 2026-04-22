@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 ALLOWED_SEVERITIES = {"critical", "high", "medium", "low"}
 DEFAULT_CORPUS_PATH = Path(
     "plugins/codex-review/skills/bug-hunting-code-review/references/review-corpus-cases.json"
@@ -17,7 +16,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Apply corpus-candidate artifacts into the curated review corpus."
     )
-    parser.add_argument("--input", required=True, help="Path to a corpus-candidate JSON file.")
+    parser.add_argument(
+        "--input", required=True, help="Path to a corpus-candidate JSON file."
+    )
     parser.add_argument(
         "--mode",
         default="auto",
@@ -54,7 +55,9 @@ def default_result_output_path(repo_root: Path) -> Path:
     return repo_root / "artifacts" / "github-intake" / f"{timestamp}-apply-result.json"
 
 
-def resolve_result_output_path(repo_root: Path, output_path: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_result_output_path(
+    repo_root: Path, output_path: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
     if output_path is None:
         return default_result_output_path(repo_root)
@@ -82,7 +85,9 @@ def resolve_corpus_path(repo_root: Path, requested_path: str | None) -> Path:
 def require_candidate_list(payload: dict[str, Any]) -> list[dict[str, Any]]:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
-        raise ValueError("Corpus-candidate artifact must contain a top-level 'candidates' list.")
+        raise ValueError(
+            "Corpus-candidate artifact must contain a top-level 'candidates' list."
+        )
     return [candidate for candidate in candidates if isinstance(candidate, dict)]
 
 
@@ -117,7 +122,9 @@ def normalize_expected_groups(expected_groups: Any) -> list[list[str]]:
     for group in expected_groups:
         if not isinstance(group, list):
             continue
-        cleaned = [token.strip() for token in group if isinstance(token, str) and token.strip()]
+        cleaned = [
+            token.strip() for token in group if isinstance(token, str) and token.strip()
+        ]
         if cleaned:
             normalized.append(cleaned)
     return normalized
@@ -129,7 +136,10 @@ def corpus_fingerprint(entry: dict[str, Any]) -> tuple[Any, ...]:
         entry.get("severity"),
         entry.get("category"),
         entry.get("source"),
-        tuple(tuple(group) for group in normalize_expected_groups(entry.get("expected_groups"))),
+        tuple(
+            tuple(group)
+            for group in normalize_expected_groups(entry.get("expected_groups"))
+        ),
     )
 
 
@@ -147,7 +157,9 @@ def expectation_tokens(expected_groups: Any) -> set[str]:
         for token in group:
             if not isinstance(token, str):
                 continue
-            for word in "".join(ch if ch.isalnum() else " " for ch in token.lower()).split():
+            for word in "".join(
+                ch if ch.isalnum() else " " for ch in token.lower()
+            ).split():
                 if len(word) >= 4:
                     tokens.add(word)
     return tokens
@@ -170,19 +182,28 @@ def has_near_duplicate(candidate: dict[str, Any], corpus: list[dict[str, Any]]) 
         title_similarity = SequenceMatcher(
             None, candidate_title, normalize_title(str(entry.get("title", "")))
         ).ratio()
-        overlap = token_overlap(candidate_tokens, expectation_tokens(entry.get("expected_groups")))
+        overlap = token_overlap(
+            candidate_tokens, expectation_tokens(entry.get("expected_groups"))
+        )
         if title_similarity >= 0.88 or overlap >= 0.75:
             return True
     return False
 
 
-def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str, str]], corpus: list[dict[str, Any]]) -> list[str]:
+def soft_warnings(
+    candidate: dict[str, Any],
+    existing_title_keys: set[tuple[str, str]],
+    corpus: list[dict[str, Any]],
+) -> list[str]:
     warnings: list[str] = []
     review_notes = candidate.get("review_notes")
     approved_for_auto = False
     if isinstance(review_notes, dict):
         approved_for_auto = review_notes.get("approved_for_auto") is True
-        if review_notes.get("needs_human_review") is not False and not approved_for_auto:
+        if (
+            review_notes.get("needs_human_review") is not False
+            and not approved_for_auto
+        ):
             warnings.append("needs-human-review")
         confidence = review_notes.get("confidence")
         if confidence != "high" and not approved_for_auto:
@@ -190,13 +211,10 @@ def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str,
         file_path = review_notes.get("file_path")
         if isinstance(file_path, str):
             normalized_path = file_path.replace("\\", "/").lower()
-            if (
-                not approved_for_auto
-                and (
-                    normalized_path.endswith(".test.ts")
-                    or normalized_path.endswith(".test.tsx")
-                    or "/test/" in normalized_path
-                )
+            if not approved_for_auto and (
+                normalized_path.endswith(".test.ts")
+                or normalized_path.endswith(".test.tsx")
+                or "/test/" in normalized_path
             ):
                 warnings.append("test-only-surface")
         body = review_notes.get("body")
@@ -218,7 +236,9 @@ def soft_warnings(candidate: dict[str, Any], existing_title_keys: set[tuple[str,
     return warnings
 
 
-def hard_blockers(candidate: dict[str, Any], existing_ids: set[str], batch_ids: set[str]) -> list[str]:
+def hard_blockers(
+    candidate: dict[str, Any], existing_ids: set[str], batch_ids: set[str]
+) -> list[str]:
     blockers: list[str] = []
     candidate_id = candidate.get("id")
     if not isinstance(candidate_id, str) or not candidate_id.strip():
@@ -233,7 +253,11 @@ def hard_blockers(candidate: dict[str, Any], existing_ids: set[str], batch_ids: 
     if candidate.get("severity") not in ALLOWED_SEVERITIES:
         blockers.append("invalid-severity")
     category = candidate.get("category")
-    if not isinstance(category, str) or not category.strip() or category == "uncategorized":
+    if (
+        not isinstance(category, str)
+        or not category.strip()
+        or category == "uncategorized"
+    ):
         blockers.append("invalid-category")
     source = candidate.get("source")
     if not isinstance(source, str) or not source.strip():
@@ -280,21 +304,26 @@ def main() -> int:
     repo_root = script_path.parents[3]
     input_path = Path(args.input).resolve()
     corpus_path = resolve_corpus_path(repo_root, args.corpus)
-    result_output_path = resolve_result_output_path(repo_root, args.result_output, args.allow_outside_artifacts)
+    result_output_path = resolve_result_output_path(
+        repo_root, args.result_output, args.allow_outside_artifacts
+    )
 
     candidate_payload = load_json(input_path)
     candidates = require_candidate_list(candidate_payload)
     corpus = require_corpus_list(load_json(corpus_path))
 
-    existing_ids = {entry.get("id") for entry in corpus if isinstance(entry.get("id"), str)}
+    existing_ids: set[str] = {
+        str(entry["id"]) for entry in corpus if isinstance(entry.get("id"), str)
+    }
     existing_by_id = {
         entry["id"]: entry for entry in corpus if isinstance(entry.get("id"), str)
     }
     existing_fingerprints = {corpus_fingerprint(entry) for entry in corpus}
-    existing_title_keys = {
-        (entry.get("category"), str(entry.get("title", "")).strip().lower())
+    existing_title_keys: set[tuple[str, str]] = {
+        (str(entry["category"]), str(entry.get("title", "")).strip().lower())
         for entry in corpus
-        if isinstance(entry.get("category"), str) and isinstance(entry.get("title"), str)
+        if isinstance(entry.get("category"), str)
+        and isinstance(entry.get("title"), str)
     }
 
     batch_ids: set[str] = set()
@@ -304,9 +333,15 @@ def main() -> int:
     blocked: list[dict[str, Any]] = []
 
     for candidate in candidates:
-        candidate_entry = to_corpus_entry(candidate) if not hard_blockers(candidate, set(), set()) else None
-        candidate_fingerprint = corpus_fingerprint(candidate_entry) if candidate_entry is not None else None
-        summary = {
+        candidate_entry = (
+            to_corpus_entry(candidate)
+            if not hard_blockers(candidate, set(), set())
+            else None
+        )
+        candidate_fingerprint = (
+            corpus_fingerprint(candidate_entry) if candidate_entry is not None else None
+        )
+        summary: dict[str, Any] = {
             "id": candidate.get("id"),
             "title": candidate.get("title"),
             "severity": candidate.get("severity"),
@@ -314,19 +349,26 @@ def main() -> int:
             "warnings": [],
         }
 
-        if candidate_entry is not None and candidate_fingerprint in existing_fingerprints:
+        if (
+            candidate_entry is not None
+            and candidate_fingerprint in existing_fingerprints
+        ):
             pending_review.append({**summary, "reasons": ["already-present"]})
             continue
 
         blockers = hard_blockers(candidate, existing_ids, batch_ids)
         warnings = soft_warnings(candidate, existing_title_keys, corpus)
         candidate_id = candidate.get("id")
-        existing_entry = existing_by_id.get(candidate_id) if isinstance(candidate_id, str) else None
+        existing_entry = (
+            existing_by_id.get(candidate_id) if isinstance(candidate_id, str) else None
+        )
         if existing_entry is not None:
             if corpus_fingerprint(existing_entry) == candidate_fingerprint:
                 pending_review.append({**summary, "reasons": ["already-present"]})
                 continue
-            blockers = [reason for reason in blockers if reason != "duplicate-id-in-corpus"]
+            blockers = [
+                reason for reason in blockers if reason != "duplicate-id-in-corpus"
+            ]
             blockers.append("conflicting-id-in-corpus")
 
         if isinstance(candidate_id, str) and candidate_id not in existing_ids:
@@ -352,13 +394,20 @@ def main() -> int:
         existing_ids.add(candidate["id"])
         existing_by_id[candidate["id"]] = new_entry
         existing_fingerprints.add(corpus_fingerprint(new_entry))
-        existing_title_keys.add((candidate["category"], candidate["title"].strip().lower()))
+        candidate_category = candidate.get("category")
+        candidate_title = candidate.get("title")
+        if isinstance(candidate_category, str) and isinstance(candidate_title, str):
+            existing_title_keys.add(
+                (candidate_category, candidate_title.strip().lower())
+            )
 
     if args.mode != "review" and new_entries:
         corpus.extend(new_entries)
         write_json(corpus_path, corpus)
 
-    result = build_result(input_path, corpus_path, args.mode, applied, pending_review, blocked)
+    result = build_result(
+        input_path, corpus_path, args.mode, applied, pending_review, blocked
+    )
     write_json(result_output_path, result)
 
     print(f"Mode: {args.mode}")

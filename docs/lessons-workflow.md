@@ -1,6 +1,6 @@
 # Lessons Workflow
 
-This project can learn from a private lessons log, but it does that through a review step, not by copying private notes straight into the committed prompt files.
+This project can learn from an optional local lessons log, but it does that through a review step, not by copying raw notes straight into the committed prompt files.
 
 ## Why This Exists
 
@@ -54,7 +54,7 @@ python .\plugins\codex-review\skills\bug-hunting-code-review\scripts\refresh_les
 
 That writes:
 
-- `plugins/codex-review/skills/bug-hunting-code-review/references/knowledge-hub-codex-lessons.md`
+- `plugins/codex-review/skills/bug-hunting-code-review/references/local-lessons-snapshot.md`
 
 This file is intentionally git-ignored. It is a local staging file, not the final public prompt source.
 
@@ -85,4 +85,4 @@ Refresh the lessons snapshot when:
 
 - the reviewer misses the same bug class more than once
 - a repeated correction changes how the review should be done
-- you want to turn private operational learning into a durable public prompt improvement
+- you want to turn local review learning into a durable public prompt improvement

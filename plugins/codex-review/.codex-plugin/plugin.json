@@ -32,9 +32,9 @@
     "privacyPolicyURL": "",
     "termsOfServiceURL": "",
     "defaultPrompt": [
-      "Review my current changes for release-blocking bugs",
+      "Review my current changes inline for release-blocking bugs",
       "Prepare a deep pre-PR review for this repo",
-      "Score this review against the corpus and benchmark lanes"
+      "Set up a recurring ReviewPilot GitHub learning automation"
     ],
     "brandColor": "#27272A",
     "composerIcon": "./assets/composer-icon.svg",

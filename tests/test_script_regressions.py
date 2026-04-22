@@ -1,0 +1,237 @@
+from __future__ import annotations
+
+import importlib.util
+from argparse import Namespace
+from pathlib import Path
+from types import ModuleType
+from typing import Any, Callable, cast
+
+import pytest  # type: ignore[import-not-found]
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_module(module_name: str, relative_path: str) -> ModuleType:
+    module_path = REPO_ROOT / relative_path
+    spec = importlib.util.spec_from_file_location(module_name, module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load module spec for {module_path}.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+approve_quality_learning_candidates = load_module(
+    "approve_quality_learning_candidates_test",
+    "plugins/codex-review/scripts/approve_quality_learning_candidates.py",
+)
+propose_review_repairs = load_module(
+    "propose_review_repairs_test",
+    "plugins/codex-review/scripts/propose_review_repairs.py",
+)
+compare_review_quality = load_module(
+    "compare_review_quality_test",
+    "plugins/codex-review/scripts/compare_review_quality.py",
+)
+run_pre_pr_review = load_module(
+    "run_pre_pr_review_test",
+    "plugins/codex-review/skills/bug-hunting-code-review/scripts/run_pre_pr_review.py",
+)
+run_public_pr_quality_cycle = load_module(
+    "run_public_pr_quality_cycle_test",
+    "plugins/codex-review/scripts/run_public_pr_quality_cycle.py",
+)
+
+
+def test_finding_is_auto_approvable_skips_non_dict_review_match() -> None:
+    finding_is_auto_approvable = cast(
+        Callable[[dict[str, Any]], bool],
+        getattr(approve_quality_learning_candidates, "finding_is_auto_approvable"),
+    )
+    finding: dict[str, Any] = {
+        "gap_classification": "corpus-gap",
+        "represented_in_corpus": False,
+        "represented_in_calibration": False,
+        "review_match": "bad-shape",
+    }
+
+    assert finding_is_auto_approvable(finding) is False
+
+
+def test_finding_is_auto_approvable_skips_malformed_overlap_values() -> None:
+    finding_is_auto_approvable = cast(
+        Callable[[dict[str, Any]], bool],
+        getattr(approve_quality_learning_candidates, "finding_is_auto_approvable"),
+    )
+    finding: dict[str, Any] = {
+        "gap_classification": "corpus-gap",
+        "represented_in_corpus": False,
+        "represented_in_calibration": False,
+        "review_match": {
+            "matched": False,
+            "expectation_overlap": "not-a-number",
+            "title_overlap": 0.1,
+        },
+    }
+
+    assert finding_is_auto_approvable(finding) is False
+
+
+def test_parse_link_target_accepts_angle_bracket_paths_with_spaces() -> None:
+    parse_link_target = cast(
+        Callable[[str], dict[str, Any] | None],
+        getattr(propose_review_repairs, "parse_link_target"),
+    )
+
+    parsed = parse_link_target("</tmp/Some Dir/file.py:12>")
+
+    assert parsed == {
+        "file": "/tmp/Some Dir/file.py",
+        "start": 12,
+        "end": 12,
+    }
+
+
+def test_parse_link_target_skips_url_style_colon_targets() -> None:
+    parse_link_target = cast(
+        Callable[[str], dict[str, Any] | None],
+        getattr(propose_review_repairs, "parse_link_target"),
+    )
+
+    assert parse_link_target("http://localhost:3000") is None
+
+
+def test_compare_review_quality_resolves_relative_output_dir_from_repo_root() -> None:
+    resolve_output_dir = cast(
+        Callable[[Path, str | None, Path, bool], Path],
+        getattr(compare_review_quality, "resolve_output_dir"),
+    )
+    repo_root = REPO_ROOT
+    proposal_path = repo_root / "artifacts" / "example-proposal.json"
+
+    resolved = resolve_output_dir(
+        repo_root, "artifacts/review-quality/custom-run", proposal_path, False
+    )
+
+    assert (
+        resolved
+        == (repo_root / "artifacts" / "review-quality" / "custom-run").resolve()
+    )
+
+
+def test_candidate_map_drops_ambiguous_file_and_title_pairs() -> None:
+    candidate_map = cast(
+        Callable[[dict[str, Any]], dict[tuple[str, str], dict[str, Any]]],
+        getattr(compare_review_quality, "candidate_map"),
+    )
+    payload: dict[str, Any] = {
+        "candidates": [
+            {
+                "id": "cand-1",
+                "title": "Same title",
+                "review_notes": {"file_path": "src/app.py"},
+            },
+            {
+                "id": "cand-2",
+                "title": "Same title",
+                "review_notes": {"file_path": "src/app.py"},
+            },
+        ]
+    }
+
+    assert candidate_map(payload) == {}
+
+
+def test_record_key_matches_truncated_candidate_titles() -> None:
+    record_key = cast(
+        Callable[[dict[str, Any]], tuple[str, str]],
+        getattr(compare_review_quality, "record_key"),
+    )
+    candidate_map = cast(
+        Callable[[dict[str, Any]], dict[tuple[str, str], dict[str, Any]]],
+        getattr(compare_review_quality, "candidate_map"),
+    )
+    long_title = "X" * 120
+    record = {"file_path": "src/app.py", "candidate_title": long_title}
+    payload: dict[str, Any] = {
+        "candidates": [
+            {
+                "id": "cand-1",
+                "title": long_title[:100],
+                "review_notes": {"file_path": "src/app.py"},
+            }
+        ]
+    }
+
+    assert candidate_map(payload)[record_key(record)]["id"] == "cand-1"
+
+
+def test_calibration_matches_requires_semantic_overlap_not_same_file_alone() -> None:
+    calibration_matches = cast(
+        Callable[[dict[str, Any], list[dict[str, Any]]], bool],
+        getattr(compare_review_quality, "calibration_matches"),
+    )
+    record: dict[str, Any] = {
+        "file_path": "src/service.ts",
+        "candidate_title": "Handle inactive owner records",
+        "candidate_summary": "Bootstrap should reactivate the local owner account.",
+    }
+    calibration_entries = [
+        {
+            "verdict": "accept",
+            "file": "src/service.ts",
+            "summary": "Rename the helper for readability.",
+        }
+    ]
+
+    assert calibration_matches(record, calibration_entries) is False
+
+
+def test_run_pre_pr_review_resolves_quality_comparison_from_repo_root() -> None:
+    resolve_repo_path = cast(
+        Callable[[Path, str | None], Path | None],
+        getattr(run_pre_pr_review, "resolve_repo_path"),
+    )
+
+    resolved = resolve_repo_path(
+        REPO_ROOT, "artifacts/review-quality/run/quality-comparison.json"
+    )
+
+    assert (
+        resolved
+        == (
+            REPO_ROOT
+            / "artifacts"
+            / "review-quality"
+            / "run"
+            / "quality-comparison.json"
+        ).resolve()
+    )
+
+
+def test_public_pr_quality_cycle_requires_review_artifact_for_auto_learning(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    main = cast(Callable[[], int], getattr(run_public_pr_quality_cycle, "main"))
+
+    monkeypatch.setattr(
+        run_public_pr_quality_cycle,
+        "parse_args",
+        lambda: Namespace(
+            repo="owner/name",
+            pr=123,
+            source="rest",
+            review_file=None,
+            review_artifacts=None,
+            output_dir=str(tmp_path / "out"),
+            auto_learn_probationary=True,
+            quality_apply_mode="auto",
+        ),
+    )
+    monkeypatch.setattr(run_public_pr_quality_cycle, "repo_root", lambda _cwd: tmp_path)
+
+    with pytest.raises(
+        ValueError,
+        match="--auto-learn-probationary requires --review-file or --review-artifacts.",
+    ):
+        main()

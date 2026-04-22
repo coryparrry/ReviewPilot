@@ -46,7 +46,7 @@
 - make MCP-shaped GitHub raw artifacts a first-class wrapper input and keep `gh` fetch as an explicit fallback only
 - define the normalized schema and apply safety checks before broader automation
 - gate GitHub-derived candidates into a probationary corpus before they can influence the primary GitHub corpus
-- use the curated SWE-bench lane as external hardening pressure so the skill can improve without relying only on your own buggy PRs
+- use the curated SWE-bench lane as external hardening pressure so the skill can improve without relying only on one team's historical PR misses
 - keep strict benchmark scoring separate from softer probationary admission evidence so learning stays safer than raw regex matching alone
 - expose one plugin-owned review runner so the review brain can actually author `review.md` and benchmark it in one command
 - let the review runner self-repair only obvious review-output failures with one automatic read-only retry, not broad auto-editing

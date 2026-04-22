@@ -322,7 +322,7 @@ $pluginEntry = [ordered]@{
         path = "./plugins/$pluginName"
     }
     policy = @{
-        installation = "AVAILABLE"
+        installation = "INSTALLED_BY_DEFAULT"
         authentication = "ON_INSTALL"
     }
     category = if ($pluginManifest.interface.category) { [string]$pluginManifest.interface.category } else { "Coding" }
@@ -362,8 +362,8 @@ if ($DryRun) {
     if (-not $writtenPlugin) {
         throw "Marketplace manifest verification failed: plugin entry for $pluginName was not written."
     }
-    if ([string]$writtenPlugin.policy.installation -ne "AVAILABLE") {
-        $writtenPlugin.policy.installation = "AVAILABLE"
+    if ([string]$writtenPlugin.policy.installation -ne "INSTALLED_BY_DEFAULT") {
+        $writtenPlugin.policy.installation = "INSTALLED_BY_DEFAULT"
         $rewrittenJson = $writtenMarketplace | ConvertTo-Json -Depth 6
         Write-Utf8NoBom -Path $marketplaceJsonPath -Value $rewrittenJson
     }

@@ -21,6 +21,16 @@ This skill exists so a Codex automation can:
 5. run a small external hardening batch from Hugging Face
 6. leave a compact summary artifact for follow-up
 
+This should be the main skill Codex uses when the user asks for:
+
+- a recurring ReviewPilot automation
+- hourly or scheduled GitHub learning
+- "keep learning from my PR reviews"
+- "run the full ReviewPilot loop"
+
+The other skill, `$bug-hunting-code-review`, should stay the main one-off review brain.
+This skill is the automation and orchestration front door.
+
 ## Safety Boundary
 
 - The review standard stays in `$bug-hunting-code-review`.
@@ -80,6 +90,42 @@ That wrapper:
 - can run GitHub intake if `--github-repo`, `--github-pr`, and `--github-raw-input` are provided
 - runs a small Hugging Face hardening batch unless you skip it
 - writes `automation-summary.json` under `artifacts/automation-runs/`
+
+## Product Model
+
+Use the plugin in two modes:
+
+1. One-off review mode
+   - load `$bug-hunting-code-review`
+   - run `run_codex_review.py`
+   - if the user wants inline review cards in Codex, use the generated `inline-findings.json` next to the review artifact as the source of truth for code comments, or render them with `emit_inline_review_comments.py`
+
+2. Recurring learning mode
+   - load `$autonomous-review-cycle`
+   - create a Codex automation
+   - have the automation inspect GitHub review comments on the user's PRs, compare them against ReviewPilot output, and auto-learn only gated probationary cases
+
+Do not force users to pick individual scripts unless they are debugging the plugin itself.
+Prefer the wrapper entrypoints and skill names in user-facing explanations.
+
+## Codex Automation Shape
+
+When the user wants Codex to keep learning on a timer, the automation should say in plain language that it must:
+
+- load `$autonomous-review-cycle`
+- use the plugin's GitHub access in read-only mode
+- inspect recent PR review comments for the user's repos or PRs
+- compare those comments against ReviewPilot review artifacts when available
+- auto-learn only gated probationary misses
+- summarize what was learned and what still needs human review
+
+For example, the intended automation brief is closer to:
+
+- "Every hour, inspect my recent GitHub PR review comments, compare them against ReviewPilot review artifacts, and safely ingest new gated misses into the probationary corpus."
+
+Not:
+
+- "Run these five scripts manually in order."
 
 ## For Codex Automations
 

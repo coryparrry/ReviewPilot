@@ -1,0 +1,26 @@
+[
+  {
+    "repo": "kkzakaria/dbs-store",
+    "pr": 17,
+    "source": "rest",
+    "label": "dbs-store-17"
+  },
+  {
+    "repo": "cesarnml/Pirate-Claw",
+    "pr": 94,
+    "source": "rest",
+    "label": "pirate-claw-94"
+  },
+  {
+    "repo": "threeld/pgin",
+    "pr": 6,
+    "source": "rest",
+    "label": "pgin-6"
+  },
+  {
+    "repo": "ichbinder/openmedia-api",
+    "pr": 24,
+    "source": "rest",
+    "label": "openmedia-api-24"
+  }
+]

@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 SEVERITY_WEIGHTS = {
     "critical": 5,
     "high": 3,
@@ -43,13 +42,17 @@ def load_corpus(path: Path) -> list[dict[str, Any]]:
 def read_review_text(args: argparse.Namespace) -> str:
     if args.review_file:
         return Path(args.review_file).read_text(encoding="utf-8")
-    if args.review_text is not None:
-        return args.review_text
+    review_text = args.review_text
+    if isinstance(review_text, str):
+        return review_text
     return sys.stdin.read()
 
 
 def match_group(text: str, group: list[str]) -> bool:
-    return all(re.search(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL) for pattern in group)
+    return all(
+        re.search(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+        for pattern in group
+    )
 
 
 def score_case(text: str, case: dict[str, Any]) -> CaseResult:
@@ -106,16 +109,22 @@ def summarize(results: list[CaseResult]) -> dict[str, Any]:
         "by_severity": by_severity,
         "by_category": by_category,
         "critical_or_high_misses": [
-            item.case_id for item in results if not item.matched and item.severity in {"critical", "high"}
+            item.case_id
+            for item in results
+            if not item.matched and item.severity in {"critical", "high"}
         ],
     }
 
 
-def print_text(summary: dict[str, Any], results: list[CaseResult], show_all: bool) -> None:
+def print_text(
+    summary: dict[str, Any], results: list[CaseResult], show_all: bool
+) -> None:
     print("Review corpus score")
     print()
     print(f"Cases matched: {summary['matched_cases']}/{summary['total_cases']}")
-    print(f"Weighted recall: {summary['matched_weight']}/{summary['total_weight']} ({summary['weighted_recall']:.1%})")
+    print(
+        f"Weighted recall: {summary['matched_weight']}/{summary['total_weight']} ({summary['weighted_recall']:.1%})"
+    )
     print()
     print("By severity:")
     for severity in ("critical", "high", "medium", "low"):
@@ -152,13 +161,24 @@ def parse_args() -> argparse.Namespace:
     skill_dir = Path(__file__).resolve().parent.parent
     default_corpus = skill_dir / "references" / "review-corpus-cases.json"
 
-    parser = argparse.ArgumentParser(description="Score a review output against the bug-hunting review corpus.")
-    parser.add_argument("--review-file", help="Path to a markdown or text file containing the review output.")
+    parser = argparse.ArgumentParser(
+        description="Score a review output against the bug-hunting review corpus."
+    )
+    parser.add_argument(
+        "--review-file",
+        help="Path to a markdown or text file containing the review output.",
+    )
     parser.add_argument("--review-text", help="Inline review text to score.")
-    parser.add_argument("--corpus", default=str(default_corpus), help="Path to the corpus JSON file.")
+    parser.add_argument(
+        "--corpus", default=str(default_corpus), help="Path to the corpus JSON file."
+    )
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
-    parser.add_argument("--show-all", action="store_true", help="Include matched cases in text output.")
-    parser.add_argument("--list-cases", action="store_true", help="List corpus cases and exit.")
+    parser.add_argument(
+        "--show-all", action="store_true", help="Include matched cases in text output."
+    )
+    parser.add_argument(
+        "--list-cases", action="store_true", help="List corpus cases and exit."
+    )
     return parser.parse_args()
 
 

@@ -7,7 +7,6 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_PRIMARY_CORPUS = Path(
     "plugins/codex-review/skills/bug-hunting-code-review/references/review-corpus-cases.json"
 )
@@ -25,7 +24,11 @@ class EvidenceMatch:
 
     @property
     def matched(self) -> bool:
-        return self.strict_match or self.title_overlap >= 0.6 or self.expectation_overlap >= 0.45
+        return (
+            self.strict_match
+            or self.title_overlap >= 0.6
+            or self.expectation_overlap >= 0.45
+        )
 
 
 def parse_args() -> argparse.Namespace:
@@ -116,15 +119,23 @@ def repo_root_from_script() -> Path:
 
 def resolve_path(repo_root: Path, requested: str) -> Path:
     candidate = Path(requested)
-    return candidate.resolve() if candidate.is_absolute() else (repo_root / candidate).resolve()
+    return (
+        candidate.resolve()
+        if candidate.is_absolute()
+        else (repo_root / candidate).resolve()
+    )
 
 
 def default_result_output_path(repo_root: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return repo_root / "artifacts" / "github-intake" / f"{timestamp}-promotion-result.json"
+    return (
+        repo_root / "artifacts" / "github-intake" / f"{timestamp}-promotion-result.json"
+    )
 
 
-def resolve_result_output_path(repo_root: Path, output_path: str | None, allow_outside_artifacts: bool) -> Path:
+def resolve_result_output_path(
+    repo_root: Path, output_path: str | None, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
     if output_path is None:
         return default_result_output_path(repo_root)
@@ -156,7 +167,9 @@ def normalize_expected_groups(expected_groups: Any) -> list[list[str]]:
     for group in expected_groups:
         if not isinstance(group, list):
             continue
-        cleaned = [token.strip() for token in group if isinstance(token, str) and token.strip()]
+        cleaned = [
+            token.strip() for token in group if isinstance(token, str) and token.strip()
+        ]
         if cleaned:
             normalized.append(cleaned)
     return normalized
@@ -167,7 +180,10 @@ def corpus_fingerprint(entry: dict[str, Any]) -> tuple[Any, ...]:
         entry.get("title"),
         entry.get("severity"),
         entry.get("category"),
-        tuple(tuple(group) for group in normalize_expected_groups(entry.get("expected_groups"))),
+        tuple(
+            tuple(group)
+            for group in normalize_expected_groups(entry.get("expected_groups"))
+        ),
     )
 
 
@@ -199,14 +215,22 @@ def token_overlap(left: set[str], right: set[str]) -> float:
 
 
 def match_group(text: str, group: list[str]) -> bool:
-    return all(re.search(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL) for pattern in group)
+    return all(
+        re.search(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL)
+        for pattern in group
+    )
 
 
 def strict_match(text: str, case: dict[str, Any]) -> bool:
-    return any(match_group(text, group) for group in normalize_expected_groups(case.get("expected_groups")))
+    return any(
+        match_group(text, group)
+        for group in normalize_expected_groups(case.get("expected_groups"))
+    )
 
 
-def has_near_duplicate(candidate: dict[str, Any], primary_corpus: list[dict[str, Any]]) -> bool:
+def has_near_duplicate(
+    candidate: dict[str, Any], primary_corpus: list[dict[str, Any]]
+) -> bool:
     candidate_title = normalize_title(str(candidate.get("title", "")))
     candidate_tokens = expectation_tokens(candidate)
     candidate_category = candidate.get("category")
@@ -214,14 +238,18 @@ def has_near_duplicate(candidate: dict[str, Any], primary_corpus: list[dict[str,
     for entry in primary_corpus:
         if entry.get("category") != candidate_category:
             continue
-        title_similarity = SequenceMatcher(None, candidate_title, normalize_title(str(entry.get("title", "")))).ratio()
+        title_similarity = SequenceMatcher(
+            None, candidate_title, normalize_title(str(entry.get("title", "")))
+        ).ratio()
         overlap = token_overlap(candidate_tokens, expectation_tokens(entry))
         if title_similarity >= 0.88 or overlap >= 0.75:
             return True
     return False
 
 
-def collect_review_files(review_files: list[str], review_artifacts: list[str]) -> list[Path]:
+def collect_review_files(
+    review_files: list[str], review_artifacts: list[str]
+) -> list[Path]:
     collected: dict[str, Path] = {}
     for review_file in review_files:
         path = Path(review_file).resolve()
@@ -250,7 +278,9 @@ def collect_review_files(review_files: list[str], review_artifacts: list[str]) -
     return list(collected.values())
 
 
-def evaluate_case_against_reviews(case: dict[str, Any], review_files: list[Path]) -> list[EvidenceMatch]:
+def evaluate_case_against_reviews(
+    case: dict[str, Any], review_files: list[Path]
+) -> list[EvidenceMatch]:
     matches: list[EvidenceMatch] = []
     case_title_tokens = title_tokens(str(case.get("title", "")))
     case_expectation_tokens = expectation_tokens(case)
@@ -258,7 +288,9 @@ def evaluate_case_against_reviews(case: dict[str, Any], review_files: list[Path]
         text = review_file.read_text(encoding="utf-8")
         review_token_set = review_tokens(text)
         title_overlap = round(token_overlap(case_title_tokens, review_token_set), 3)
-        expectation_overlap = round(token_overlap(case_expectation_tokens, review_token_set), 3)
+        expectation_overlap = round(
+            token_overlap(case_expectation_tokens, review_token_set), 3
+        )
         matches.append(
             EvidenceMatch(
                 file=review_file.name,
@@ -298,21 +330,31 @@ def main() -> int:
     repo_root = repo_root_from_script()
     primary_corpus_path = resolve_path(repo_root, args.primary_corpus)
     probationary_corpus_path = resolve_path(repo_root, args.probationary_corpus)
-    result_output_path = resolve_result_output_path(repo_root, args.result_output, args.allow_outside_artifacts)
+    result_output_path = resolve_result_output_path(
+        repo_root, args.result_output, args.allow_outside_artifacts
+    )
     review_files = collect_review_files(args.review_file, args.review_artifacts)
 
     primary_corpus = require_corpus_list(load_json(primary_corpus_path))
     probationary_corpus = require_corpus_list(load_json(probationary_corpus_path))
 
     probationary_by_id = {
-        entry["id"]: entry for entry in probationary_corpus if isinstance(entry.get("id"), str)
+        entry["id"]: entry
+        for entry in probationary_corpus
+        if isinstance(entry.get("id"), str)
     }
     primary_by_id = {
-        entry["id"]: entry for entry in primary_corpus if isinstance(entry.get("id"), str)
+        entry["id"]: entry
+        for entry in primary_corpus
+        if isinstance(entry.get("id"), str)
     }
     primary_fingerprints = {corpus_fingerprint(entry) for entry in primary_corpus}
 
-    selected_ids = sorted(probationary_by_id) if args.all else [case_id for case_id in args.ids if case_id.strip()]
+    selected_ids = (
+        sorted(probationary_by_id)
+        if args.all
+        else [case_id for case_id in args.ids if case_id.strip()]
+    )
 
     promoted: list[dict[str, Any]] = []
     pending_review: list[dict[str, Any]] = []
@@ -342,7 +384,9 @@ def main() -> int:
         evidence = evaluate_case_against_reviews(case, review_files)
         strict_matches = sum(1 for item in evidence if item.strict_match)
         matched_reviews = sum(1 for item in evidence if item.matched)
-        summary["evidence"] = [item.__dict__ | {"matched": item.matched} for item in evidence]
+        summary["evidence"] = [
+            item.__dict__ | {"matched": item.matched} for item in evidence
+        ]
 
         warnings: list[str] = []
         if matched_reviews < args.min_matches:
@@ -375,7 +419,9 @@ def main() -> int:
 
     if args.mode != "review" and promoted_ids:
         remaining_probationary = [
-            entry for entry in probationary_corpus if str(entry.get("id", "")) not in set(promoted_ids)
+            entry
+            for entry in probationary_corpus
+            if str(entry.get("id", "")) not in set(promoted_ids)
         ]
         promoted_entries = [probationary_by_id[case_id] for case_id in promoted_ids]
         primary_corpus.extend(promoted_entries)

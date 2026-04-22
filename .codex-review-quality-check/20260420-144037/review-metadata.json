@@ -1,0 +1,7 @@
+{
+  "head": "codex/review-modes-and-quality",
+  "review_mode": "changes",
+  "mode": "local-branch",
+  "base": "origin/main",
+  "diff_basis": "origin/main...HEAD"
+}

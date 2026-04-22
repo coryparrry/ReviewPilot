@@ -1,7 +1,9 @@
 import json
 import py_compile
 from pathlib import Path
+from typing import Any
 
+JsonDict = dict[str, Any]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = REPO_ROOT / "package.json"
@@ -12,11 +14,14 @@ README_FILE = REPO_ROOT / "README.md"
 GITHUB_MCP_SETUP_DOC = REPO_ROOT / "docs" / "github-mcp-setup.md"
 
 
-def load_json(path: Path) -> dict:
+def load_json(path: Path) -> JsonDict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Invalid JSON in {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"Expected JSON object in {path}")
+    return payload
 
 
 def require_file(path: Path) -> None:
@@ -32,7 +37,9 @@ def validate_metadata() -> None:
     plugin_license = plugin_data.get("license")
 
     if package_license != "MIT":
-        raise SystemExit(f"package.json license must be MIT, found: {package_license!r}")
+        raise SystemExit(
+            f"package.json license must be MIT, found: {package_license!r}"
+        )
     if plugin_license != "MIT":
         raise SystemExit(f"plugin.json license must be MIT, found: {plugin_license!r}")
 
@@ -47,10 +54,14 @@ def validate_metadata() -> None:
         raise SystemExit("package.json homepage must point at the public GitHub repo")
     repository = package_data.get("repository", {})
     if repository.get("url") != expected_repo_git_url:
-        raise SystemExit("package.json repository.url must point at the public GitHub git URL")
+        raise SystemExit(
+            "package.json repository.url must point at the public GitHub git URL"
+        )
     bugs = package_data.get("bugs", {})
     if bugs.get("url") != f"{expected_repo_url}/issues":
-        raise SystemExit("package.json bugs.url must point at the public GitHub issues URL")
+        raise SystemExit(
+            "package.json bugs.url must point at the public GitHub issues URL"
+        )
 
     plugin_interface = plugin_data.get("interface", {})
     if not plugin_interface.get("displayName"):
@@ -62,7 +73,9 @@ def validate_metadata() -> None:
     if plugin_data.get("repository") != expected_repo_url:
         raise SystemExit("plugin.json repository must point at the public GitHub repo")
     if plugin_interface.get("websiteURL") != expected_repo_url:
-        raise SystemExit("plugin.json interface.websiteURL must point at the public GitHub repo")
+        raise SystemExit(
+            "plugin.json interface.websiteURL must point at the public GitHub repo"
+        )
 
 
 def validate_readme() -> None:
@@ -84,7 +97,12 @@ def validate_python_scripts() -> None:
     script_roots = [
         REPO_ROOT / "scripts",
         REPO_ROOT / "plugins" / "codex-review" / "scripts",
-        REPO_ROOT / "plugins" / "codex-review" / "skills" / "bug-hunting-code-review" / "scripts",
+        REPO_ROOT
+        / "plugins"
+        / "codex-review"
+        / "skills"
+        / "bug-hunting-code-review"
+        / "scripts",
     ]
     for root in script_roots:
         for path in root.glob("*.py"):
@@ -97,17 +115,30 @@ def validate_mcp_config() -> None:
     if github.get("type") != "http":
         raise SystemExit("plugins/codex-review/.mcp.json github.type must be 'http'")
     if github.get("url") != "https://api.githubcopilot.com/mcp/":
-        raise SystemExit("plugins/codex-review/.mcp.json github.url must point at the GitHub MCP endpoint")
+        raise SystemExit(
+            "plugins/codex-review/.mcp.json github.url must point at the GitHub MCP endpoint"
+        )
 
     headers = github.get("headers", {})
     if headers.get("X-MCP-Readonly") != "true":
-        raise SystemExit("plugins/codex-review/.mcp.json must keep GitHub MCP read-only")
+        raise SystemExit(
+            "plugins/codex-review/.mcp.json must keep GitHub MCP read-only"
+        )
     if headers.get("X-MCP-Toolsets") != "pull_requests":
-        raise SystemExit("plugins/codex-review/.mcp.json must limit the GitHub MCP toolset to pull_requests")
+        raise SystemExit(
+            "plugins/codex-review/.mcp.json must limit the GitHub MCP toolset to pull_requests"
+        )
 
 
 def main() -> int:
-    for path in [PACKAGE_JSON, PLUGIN_JSON, PLUGIN_MCP_JSON, LICENSE_FILE, README_FILE, GITHUB_MCP_SETUP_DOC]:
+    for path in [
+        PACKAGE_JSON,
+        PLUGIN_JSON,
+        PLUGIN_MCP_JSON,
+        LICENSE_FILE,
+        README_FILE,
+        GITHUB_MCP_SETUP_DOC,
+    ]:
         require_file(path)
 
     validate_metadata()

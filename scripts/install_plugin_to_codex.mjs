@@ -274,7 +274,7 @@ async function main() {
           path: `./plugins/${pluginName}`,
         },
         policy: {
-          installation: "AVAILABLE",
+          installation: "INSTALLED_BY_DEFAULT",
           authentication: "ON_INSTALL",
         },
         category: String(pluginManifest?.interface?.category || "Coding"),
@@ -293,10 +293,10 @@ async function main() {
     if (!writtenPlugin) {
       throw new Error(`Marketplace manifest verification failed: plugin entry for ${pluginName} was not written.`);
     }
-    if (String(writtenPlugin?.policy?.installation || "") !== "AVAILABLE") {
+    if (String(writtenPlugin?.policy?.installation || "") !== "INSTALLED_BY_DEFAULT") {
       writtenPlugin.policy = {
         ...(writtenPlugin.policy || {}),
-        installation: "AVAILABLE",
+        installation: "INSTALLED_BY_DEFAULT",
       };
       await fs.writeFile(marketplaceJsonPath, `${JSON.stringify(writtenMarketplace, null, 2)}\n`, "utf8");
     }

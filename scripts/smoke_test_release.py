@@ -6,7 +6,6 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_NAME = "codex-review"
 
@@ -39,7 +38,9 @@ def resolve_powershell() -> str:
         resolved = shutil.which(candidate)
         if resolved:
             return resolved
-    raise SystemExit("PowerShell is required for the release smoke test. Install `pwsh` or `powershell` and retry.")
+    raise SystemExit(
+        "PowerShell is required for the release smoke test. Install `pwsh` or `powershell` and retry."
+    )
 
 
 def verify_install_tree(codex_home: Path, marketplace_name: str) -> None:
@@ -50,8 +51,12 @@ def verify_install_tree(codex_home: Path, marketplace_name: str) -> None:
     plugin_manifest = json.loads(plugin_manifest_path.read_text(encoding="utf-8"))
     plugin_version = plugin_manifest.get("version")
     if not plugin_version:
-        raise SystemExit(f"Installed plugin manifest did not include a version at {plugin_root}")
-    cache_plugin_root = codex_home / "plugins" / "cache" / marketplace_name / PLUGIN_NAME
+        raise SystemExit(
+            f"Installed plugin manifest did not include a version at {plugin_root}"
+        )
+    cache_plugin_root = (
+        codex_home / "plugins" / "cache" / marketplace_name / PLUGIN_NAME
+    )
     cache_root = cache_plugin_root / plugin_version
     marketplace_manifest = marketplace_root / ".agents" / "plugins" / "marketplace.json"
     config_toml = codex_home / "config.toml"
@@ -77,14 +82,23 @@ def verify_install_tree(codex_home: Path, marketplace_name: str) -> None:
     plugin_names = [plugin.get("name") for plugin in manifest.get("plugins", [])]
     if PLUGIN_NAME not in plugin_names:
         raise SystemExit(f"Marketplace manifest did not include {PLUGIN_NAME}")
-    plugin_entries = [plugin for plugin in manifest.get("plugins", []) if plugin.get("name") == PLUGIN_NAME]
-    installation_policy = plugin_entries[0].get("policy", {}).get("installation") if plugin_entries else None
-    if installation_policy != "AVAILABLE":
+    plugin_entries = [
+        plugin
+        for plugin in manifest.get("plugins", [])
+        if plugin.get("name") == PLUGIN_NAME
+    ]
+    installation_policy = (
+        plugin_entries[0].get("policy", {}).get("installation")
+        if plugin_entries
+        else None
+    )
+    if installation_policy != "INSTALLED_BY_DEFAULT":
         raise SystemExit(
-            f"Marketplace manifest must keep installation policy AVAILABLE for {PLUGIN_NAME}, found {installation_policy!r}"
+            "Marketplace manifest must keep installation policy "
+            f"INSTALLED_BY_DEFAULT for {PLUGIN_NAME}, found {installation_policy!r}"
         )
 
-    require_text(config_toml, f'[marketplaces.{marketplace_name}]')
+    require_text(config_toml, f"[marketplaces.{marketplace_name}]")
     require_text(config_toml, f'[plugins."{PLUGIN_NAME}@{marketplace_name}"]')
 
 
@@ -147,9 +161,15 @@ def run_release_bundle_smoke(temp_root: Path) -> None:
     if not tgz_files:
         raise SystemExit("Release bundle smoke test did not produce an npm tarball")
 
-    bundle_root_dirs = [path for path in output_root.iterdir() if path.is_dir() and path.name.startswith("codex-review-")]
+    bundle_root_dirs = [
+        path
+        for path in output_root.iterdir()
+        if path.is_dir() and path.name.startswith("codex-review-")
+    ]
     if not bundle_root_dirs:
-        raise SystemExit("Release bundle smoke test did not produce an expanded bundle folder")
+        raise SystemExit(
+            "Release bundle smoke test did not produce an expanded bundle folder"
+        )
 
     bundle_root = bundle_root_dirs[0]
     require_file(bundle_root / "README-INSTALL.md")

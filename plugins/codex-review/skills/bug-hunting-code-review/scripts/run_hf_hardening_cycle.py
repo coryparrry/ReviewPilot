@@ -15,8 +15,8 @@ from urllib.parse import urlencode
 from urllib.error import URLError
 from urllib.request import urlopen
 
-
 DATASET_ROWS_URL = "https://datasets-server.huggingface.co/rows"
+JsonDict = dict[str, Any]
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,12 +29,20 @@ def parse_args() -> argparse.Namespace:
             "and score the results against the external SWE-bench lane."
         )
     )
-    parser.add_argument("--dataset", default="SWE-bench/SWE-bench_Verified", help="Dataset repo id.")
+    parser.add_argument(
+        "--dataset", default="SWE-bench/SWE-bench_Verified", help="Dataset repo id."
+    )
     parser.add_argument("--config", default="default", help="Dataset config name.")
     parser.add_argument("--split", default="test", help="Dataset split.")
     parser.add_argument("--offset", type=int, default=0, help="0-based row offset.")
-    parser.add_argument("--length", type=int, default=5, help="Number of rows to fetch.")
-    parser.add_argument("--repo", default=".", help="Repo root used for Codex execution. Defaults to current dir.")
+    parser.add_argument(
+        "--length", type=int, default=5, help="Number of rows to fetch."
+    )
+    parser.add_argument(
+        "--repo",
+        default=".",
+        help="Repo root used for Codex execution. Defaults to current dir.",
+    )
     parser.add_argument(
         "--output-dir",
         default="artifacts/hf-hardening",
@@ -59,7 +67,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) -> dict[str, Any]:
+def fetch_rows(
+    dataset: str, config: str, split: str, offset: int, length: int
+) -> JsonDict:
     query = urlencode(
         {
             "dataset": dataset,
@@ -71,11 +81,14 @@ def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) 
     )
     try:
         with urlopen(f"{DATASET_ROWS_URL}?{query}", timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+            payload = json.loads(response.read().decode("utf-8"))
     except TimeoutError as exc:
         raise RuntimeError("Timed out fetching Hugging Face dataset rows.") from exc
     except URLError as exc:
         raise RuntimeError(f"Failed to fetch Hugging Face dataset rows: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Dataset rows response must be a JSON object.")
+    return payload
 
 
 def resolve_codex_base_command() -> list[str]:
@@ -97,7 +110,9 @@ def resolve_codex_base_command() -> list[str]:
     npx_cmd = shutil.which("npx.cmd") or shutil.which("npx")
     if npx_cmd:
         return [npx_cmd, "-y", "@openai/codex"]
-    raise FileNotFoundError("Could not find a working Codex transport. Neither codex nor npx.cmd was usable.")
+    raise FileNotFoundError(
+        "Could not find a working Codex transport. Neither codex nor npx.cmd was usable."
+    )
 
 
 def write_text(path: Path, text: str) -> None:
@@ -105,7 +120,7 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def write_json(path: Path, payload: dict[str, Any]) -> None:
+def write_json(path: Path, payload: JsonDict) -> None:
     write_text(path, json.dumps(payload, indent=2) + "\n")
 
 
@@ -121,7 +136,9 @@ def load_external_case_map(corpus_path: Path) -> dict[str, list[dict[str, Any]]]
     return case_map
 
 
-def summarize_target_case(score: dict[str, Any], expected_cases: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize_target_case(
+    score: dict[str, Any], expected_cases: list[dict[str, Any]]
+) -> dict[str, Any]:
     results = {entry.get("case_id"): entry for entry in score.get("results", [])}
     target_results = []
     for case in expected_cases:
@@ -147,7 +164,11 @@ def summarize_target_case(score: dict[str, Any], expected_cases: list[dict[str, 
 
 def build_run_aggregate(case_results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(case_results)
-    target_match_count = sum(1 for case in case_results if case.get("target_summary", {}).get("target_matches", 0) > 0)
+    target_match_count = sum(
+        1
+        for case in case_results
+        if case.get("target_summary", {}).get("target_matches", 0) > 0
+    )
     total_target_cases = 0
     matched_target_cases = 0
     missed_categories: dict[str, int] = {}
@@ -166,7 +187,9 @@ def build_run_aggregate(case_results: list[dict[str, Any]]) -> dict[str, Any]:
         "cases_with_target_match": target_match_count,
         "target_cases_total": total_target_cases,
         "target_cases_matched": matched_target_cases,
-        "target_case_recall": (matched_target_cases / total_target_cases) if total_target_cases else 0.0,
+        "target_case_recall": (
+            (matched_target_cases / total_target_cases) if total_target_cases else 0.0
+        ),
         "missed_target_categories": missed_categories,
     }
 
@@ -200,7 +223,9 @@ def build_prompt(row: dict[str, Any], include_hints: bool) -> str:
     return "\n".join(parts).strip() + "\n"
 
 
-def run_codex_review(repo: Path, prompt: str, review_file: Path, model: str | None) -> str:
+def run_codex_review(
+    repo: Path, prompt: str, review_file: Path, model: str | None
+) -> str:
     codex_base_cmd = resolve_codex_base_command()
     cmd = [
         *codex_base_cmd,
@@ -234,16 +259,27 @@ def run_codex_review(repo: Path, prompt: str, review_file: Path, model: str | No
     return " ".join(codex_base_cmd)
 
 
-def run_external_score(scorer: Path, corpus: Path, review_file: Path) -> dict[str, Any]:
+def run_external_score(scorer: Path, corpus: Path, review_file: Path) -> JsonDict:
     completed = subprocess.run(
-        [sys.executable, str(scorer), "--corpus", str(corpus), "--review-file", str(review_file), "--json"],
+        [
+            sys.executable,
+            str(scorer),
+            "--corpus",
+            str(corpus),
+            "--review-file",
+            str(review_file),
+            "--json",
+        ],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
         check=True,
     )
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("External score runner must emit a JSON object.")
+    return payload
 
 
 def evaluate_case(
@@ -305,7 +341,9 @@ def main() -> int:
     corpus_path = Path(args.external_corpus).resolve()
     scorer = Path(__file__).resolve().parent / "review_corpus_score.py"
 
-    dataset_payload = fetch_rows(args.dataset, args.config, args.split, args.offset, args.length)
+    dataset_payload = fetch_rows(
+        args.dataset, args.config, args.split, args.offset, args.length
+    )
     write_json(run_dir / "fetched-rows.json", dataset_payload)
 
     case_map = load_external_case_map(corpus_path)

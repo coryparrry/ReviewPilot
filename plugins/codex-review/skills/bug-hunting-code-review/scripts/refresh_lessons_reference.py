@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-
 DEFAULT_OUTPUT = (
-    Path(__file__).resolve().parent.parent / "references" / "knowledge-hub-codex-lessons.md"
+    Path(__file__).resolve().parent.parent / "references" / "local-lessons-snapshot.md"
 )
 
 ENTRY_RE = re.compile(r"^### (\d{4}-\d{2}-\d{2})\s*$", re.MULTILINE)
@@ -28,11 +27,13 @@ class LessonEntry:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Build a repo-local snapshot of Codex Lessons so maintainers can refresh "
-            "review prompts from a private Knowledge-Hub log without copying the full hub into the repo."
+            "Build a repo-local lessons snapshot so maintainers can refresh "
+            "review prompts from a local notes file without copying the full source into the repo."
         )
     )
-    parser.add_argument("--source", required=True, help="Path to the source codex-lessons.md file.")
+    parser.add_argument(
+        "--source", required=True, help="Path to the source codex-lessons.md file."
+    )
     parser.add_argument(
         "--output",
         default=str(DEFAULT_OUTPUT),
@@ -74,9 +75,9 @@ def parse_entries(text: str) -> list[LessonEntry]:
 def render_output(entries: list[LessonEntry], source: Path) -> str:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ")
     lines = [
-        "# Knowledge-Hub Codex Lessons Snapshot",
+        "# Local Lessons Snapshot",
         "",
-        "This file is generated from a private Codex lessons log.",
+        "This file is generated from a local lessons log.",
         "",
         "Use it as review-training input when refreshing the bundled review prompts.",
         "Do not treat it as the durable public source of truth for the skill.",
@@ -126,7 +127,9 @@ def main() -> int:
     if not entries:
         raise SystemExit(f"No lessons entries found in {source}")
 
-    selected_entries = sorted(entries, key=lambda item: item.date, reverse=True)[: args.limit]
+    selected_entries = sorted(entries, key=lambda item: item.date, reverse=True)[
+        : args.limit
+    ]
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(render_output(selected_entries, source), encoding="utf-8")
 

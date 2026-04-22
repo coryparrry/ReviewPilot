@@ -26,15 +26,16 @@ def run_score(
         raise ValueError("Either review_file or review_text must be provided.")
 
     completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("Benchmark scorer returned a non-object JSON payload.")
+    return payload
 
 
 def print_lane(name: str, payload: dict[str, Any]) -> None:
     summary = payload["summary"]
     print(f"{name}:")
-    print(
-        f"- Cases matched: {summary['matched_cases']}/{summary['total_cases']}"
-    )
+    print(f"- Cases matched: {summary['matched_cases']}/{summary['total_cases']}")
     print(
         f"- Weighted recall: {summary['matched_weight']}/{summary['total_weight']} "
         f"({summary['weighted_recall']:.1%})"
@@ -53,7 +54,10 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run all configured review benchmark lanes for bug-hunting-code-review."
     )
-    parser.add_argument("--review-file", help="Path to a markdown or text file containing the review output.")
+    parser.add_argument(
+        "--review-file",
+        help="Path to a markdown or text file containing the review output.",
+    )
     parser.add_argument("--review-text", help="Inline review text to score.")
     parser.add_argument("--json", action="store_true", help="Emit combined JSON.")
     parser.add_argument(
@@ -86,7 +90,9 @@ def main() -> int:
     review_text = args.review_text
 
     primary = run_score(scorer, Path(args.primary_corpus), review_file, review_text)
-    probationary = run_score(scorer, Path(args.probationary_corpus), review_file, review_text)
+    probationary = run_score(
+        scorer, Path(args.probationary_corpus), review_file, review_text
+    )
     external = run_score(scorer, Path(args.external_corpus), review_file, review_text)
 
     combined = {

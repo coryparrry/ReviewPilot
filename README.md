@@ -19,7 +19,7 @@ It is designed to improve over time from:
 
 - real GitHub PR review misses
 - curated external benchmark lanes like SWE-bench
-- reviewed lessons from a private Knowledge-Hub log
+- reviewed lessons from an optional local lessons log
 
 ## Why It Stands Out ✨
 
@@ -32,11 +32,14 @@ It is designed to improve over time from:
 
 ## Feature Highlights 🚀
 
-- `run_codex_review.py`: one-command local review with artifacts, benchmarks, and repair-plan output
+- `run_codex_review.py`: one-command local review with explicit `changes`, `dirty`, `full`, `quick`, and `deep` review modes
 - `run_review_fix.py`: one-finding repair handoff instead of loose "go fix things" prompts
 - `run_github_intake_pipeline.py`: safer learning intake with gating and corpus controls
+- `compare_review_quality.py`: compares a review artifact against fresh GitHub review intake and explains what the plugin still missed
+- `run_public_pr_quality_cycle.py`: fetches a public PR's review comments and compares them against a local review artifact without writing to the corpus lanes
+- `approve_quality_learning_candidates.py`: turns comparison-approved corpus-gap misses into tightly gated probationary learning candidates
 - `run_automation_cycle.py`: end-to-end wrapper for review, lessons refresh, GitHub intake, repair handoff, calibration, and hardening
-- `refresh_lessons_reference.py`: bridges private lessons into a repo-local training snapshot without committing raw private notes
+- `refresh_lessons_reference.py`: stages local lessons into a repo-local training snapshot without committing raw notes
 
 ## Docs At A Glance 📚
 
@@ -70,6 +73,8 @@ Run a local review:
 ```powershell
 python .\plugins\codex-review\scripts\run_codex_review.py `
   --repo . `
+  --mode changes `
+  --depth deep `
   --base origin/main
 ```
 
@@ -78,6 +83,35 @@ That gives you:
 - a review artifact
 - benchmark output
 - a repair plan
+- inline review findings for Codex review cards
+
+Review modes:
+
+- `changes`: reviews the committed `base...HEAD` diff
+- `dirty`: reviews local uncommitted edits
+- `full`: uses a broader repo scan and treats the diff as only one clue
+- `quick`: skips the benchmark step
+- `deep`: keeps the fuller prompt package and benchmark step
+
+The review run now also writes `inline-findings.json` next to `review.md`.
+It also writes `codex-inline-comments.txt`.
+Those are the intended sources for native Codex inline review cards inside Codex.
+
+If Codex needs the actual inline review directives from that artifact, use:
+
+```powershell
+python .\plugins\codex-review\scripts\emit_inline_review_comments.py `
+  --review-dir .\.codex-review\<run>
+```
+
+Quick local dirty-worktree review:
+
+```powershell
+python .\plugins\codex-review\scripts\run_codex_review.py `
+  --repo . `
+  --mode dirty `
+  --depth quick
+```
 
 Prepare a bounded repair handoff:
 
@@ -98,6 +132,13 @@ python .\plugins\codex-review\scripts\run_automation_cycle.py `
   --hardening-length 1
 ```
 
+The intended product surface is:
+
+- use `$bug-hunting-code-review` when you want Codex to review code now
+- use `$autonomous-review-cycle` when you want Codex automations to keep learning from GitHub review feedback over time
+
+The scripts are still there, but they should sit behind those two skills instead of being the main thing a user has to memorize.
+
 ## GitHub Learning Setup 🔌
 
 If you want to use the GitHub learning flow, connect GitHub in Codex Desktop and then follow:
@@ -111,9 +152,41 @@ That guide explains:
 - how to capture GitHub MCP output
 - how to feed that output into the learning pipeline
 
+The fresh GitHub path is also the recommended quality-tuning loop. After you capture and normalize live review threads, compare them against a review artifact with:
+
+```powershell
+python .\plugins\codex-review\scripts\compare_review_quality.py `
+  --review-file .\artifacts\github-intake\pipeline\<run>\review.md `
+  --proposal .\artifacts\github-intake\pipeline\<run>\graphql-proposal.json `
+  --candidates .\artifacts\github-intake\pipeline\<run>\graphql-candidates.json
+```
+
+That writes a plain-English summary plus a machine-readable comparison artifact you can feed back into later `run_codex_review.py --quality-comparison ...` runs.
+
+For public-repo calibration work, you can also use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_public_pr_quality_cycle.py `
+  --repo owner/name `
+  --pr 123 `
+  --review-artifacts .\.codex-review
+```
+
+That path is comparison-only by default. It fetches public PR review feedback, normalizes it through the existing pipeline, and compares it against your local review artifact without writing directly into the learning corpus.
+
+If you want the same public path to auto-learn safe misses into the probationary lane, use:
+
+```powershell
+python .\plugins\codex-review\scripts\run_public_pr_quality_cycle.py `
+  --repo owner/name `
+  --pr 123 `
+  --review-artifacts .\.codex-review `
+  --auto-learn-probationary
+```
+
 ## Lessons Workflow 🧠
 
-If you keep review lessons in a private Knowledge-Hub, turn them into repo-local training input with:
+If you keep review lessons in an optional local lessons file, turn them into repo-local training input with:
 
 ```powershell
 python .\plugins\codex-review\skills\bug-hunting-code-review\scripts\refresh_lessons_reference.py `

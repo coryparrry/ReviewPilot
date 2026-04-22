@@ -5,16 +5,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-
 BASE_URL = "https://datasets-server.huggingface.co/rows"
+JsonDict = dict[str, Any]
 
 
-def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) -> dict:
+def fetch_rows(
+    dataset: str, config: str, split: str, offset: int, length: int
+) -> JsonDict:
     query = urlencode(
         {
             "dataset": dataset,
@@ -26,12 +28,21 @@ def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) 
     )
     url = f"{BASE_URL}?{query}"
     with urlopen(url) as response:
-        return json.loads(response.read().decode("utf-8"))
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Dataset Viewer response must be a JSON object.")
+    return payload
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Fetch rows from a Hugging Face dataset via the Dataset Viewer API.")
-    parser.add_argument("--dataset", required=True, help="Dataset repo id, e.g. SWE-bench/SWE-bench_Verified")
+    parser = argparse.ArgumentParser(
+        description="Fetch rows from a Hugging Face dataset via the Dataset Viewer API."
+    )
+    parser.add_argument(
+        "--dataset",
+        required=True,
+        help="Dataset repo id, e.g. SWE-bench/SWE-bench_Verified",
+    )
     parser.add_argument("--config", default="default", help="Dataset config name")
     parser.add_argument("--split", default="test", help="Dataset split")
     parser.add_argument("--offset", type=int, default=0, help="0-based row offset")
@@ -42,7 +53,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    payload = fetch_rows(args.dataset, args.config, args.split, args.offset, args.length)
+    payload = fetch_rows(
+        args.dataset, args.config, args.split, args.offset, args.length
+    )
     rendered = json.dumps(payload, indent=2)
     if args.output:
         Path(args.output).write_text(rendered, encoding="utf-8")

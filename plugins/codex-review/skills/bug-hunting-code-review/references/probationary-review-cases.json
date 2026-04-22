@@ -24,5 +24,61 @@
         "If\\ the\\ seeded\\ local\\ user\\ or\\ its\\ workspace\\ membership\\ is\\ present\\ but\\ inactive,\\ bootstrap\\ stops\\ self\\-healing\\ and\\ the\\ defau"
       ]
     ]
+  },
+  {
+    "id": "source-of-truth-drift-keep-listuserprofilesbyids-immutable-like-the-other-read-path-3",
+    "title": "Keep listUserProfilesByIds() immutable like the other read path",
+    "severity": "medium",
+    "category": "source-of-truth-drift",
+    "source": "coryparrry/Binder:20260420Tfresh-mcp-pr-comments.json",
+    "expected_groups": [
+      [
+        "listAllUserProfiles\\(\\)\\ returns\\ cloned\\ users,\\ but\\ this\\ method\\ currently\\ forwards\\ packages/core\\-service/src/workspace/user\\-",
+        "ts:35\\-38,\\ which\\ returns\\ the\\ original\\ store",
+        "users\\ entries"
+      ]
+    ]
+  },
+  {
+    "id": "request-contract-potential-race-condition-in-throttle-mechanism-with-concurrent-requests-2",
+    "title": "Potential race condition in throttle mechanism with concurrent requests",
+    "severity": "high",
+    "category": "request-contract",
+    "source": "cesarnml/Pirate-Claw#PR94/review-4076783212/comment-3052882227",
+    "expected_groups": [
+      [
+        "The\\ throttle\\(\\)\\ method\\ reads\\ lastRequestAt,\\ awaits\\ a\\ delay\\ if\\ needed,\\ but\\ doesn't\\ update\\ lastRequestAt\\ until\\ after\\ the\\ fe",
+        "If\\ multiple\\ concurrent\\ calls\\ invoke\\ throttle\\(\\)\\ before\\ any\\ completes,\\ they\\ could\\ all\\ pass\\ the\\ check\\ and\\ fire\\ requests\\ sim",
+        "Consider\\ updating\\ lastRequestAt\\ at\\ the\\ start\\ of\\ the\\ request\\ or\\ using\\ a\\ mutex/queue\\ for\\ sequential\\ execution"
+      ]
+    ]
+  },
+  {
+    "id": "request-contract-der-self-cleanup-h-ngt-unn-tig-am-metadata-endpoint-2",
+    "title": "Der Self-Cleanup h\u00e4ngt unn\u00f6tig am Metadata-Endpoint",
+    "severity": "high",
+    "category": "request-contract",
+    "source": "ichbinder/openmedia-api#PR24/review-4054563786/comment-3031732116",
+    "expected_groups": [
+      [
+        "SERVER_ID\\ wird\\ hier\\ nur\\ geloggt\\ und\\ gar\\ nicht\\ an\\ /cleanup\\ \u00fcbertragen",
+        "Wenn\\ 169",
+        "254\\ kurz\\ nicht\\ antwortet,\\ \u00fcberspringt\\ ihr\\ den\\ Cleanup\\-Call\\ komplett,\\ obwohl\\ der\\ API\\-Request\\ selbst\\ nur\\ jobId\\ und\\ Token\\ b"
+      ]
+    ]
+  },
+  {
+    "id": "request-contract-die-bucket-unterst-tzung-ist-hier-noch-unvollst-ndig-5",
+    "title": "Die Bucket-Unterst\u00fctzung ist hier noch unvollst\u00e4ndig",
+    "severity": "high",
+    "category": "request-contract",
+    "source": "ichbinder/openmedia-api#PR24/review-4054651756/comment-3031822632",
+    "expected_groups": [
+      [
+        "getFileMetadata\\(\\)\\ kann\\ jetzt\\ gegen\\ einen\\ persistierten\\ Bucket\\ pr\u00fcfen,\\ generatePresignedUrl\\(\\)\\ signiert\\ aber\\ weiter\\ immer",
+        "F\u00fcr\\ /downloads/jobs/:id/link\\ hei\u00dft\\ das:\\ Der\\ HEAD\\ kann\\ auf\\ Bucket\\ A\\ erfolgreich\\ sein,\\ w\u00e4hrend\\ der\\ ausgegebene\\ Link\\ Bucket",
+        "Bitte\\ die\\ optionale\\ Bucket\\-\u00dcbergabe\\ auch\\ f\u00fcr\\ die\\ Signatur\\-Erzeugung\\ erg\u00e4nzen\\ und\\ im\\ Handler\\ durchreichen"
+      ]
+    ]
   }
 ]

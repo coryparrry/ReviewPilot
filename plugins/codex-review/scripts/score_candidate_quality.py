@@ -8,13 +8,16 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-
-SKILL_SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "skills" / "bug-hunting-code-review" / "scripts"
+SKILL_SCRIPTS_DIR = (
+    Path(__file__).resolve().parent.parent
+    / "skills"
+    / "bug-hunting-code-review"
+    / "scripts"
+)
 if str(SKILL_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SKILL_SCRIPTS_DIR))
 
-from review_corpus_score import SEVERITY_WEIGHTS, score_case, summarize
-
+from review_corpus_score import SEVERITY_WEIGHTS, score_case, summarize  # noqa: E402
 
 DEFAULT_PRIMARY_CORPUS = Path(
     "plugins/codex-review/skills/bug-hunting-code-review/references/review-corpus-cases.json"
@@ -50,7 +53,9 @@ def parse_args() -> argparse.Namespace:
             "and review-artifact benchmark evidence."
         )
     )
-    parser.add_argument("--input", required=True, help="Path to a corpus-candidate JSON file.")
+    parser.add_argument(
+        "--input", required=True, help="Path to a corpus-candidate JSON file."
+    )
     parser.add_argument("--review-file", help="Path to a review output file.")
     parser.add_argument("--review-text", help="Inline review text.")
     parser.add_argument(
@@ -99,7 +104,11 @@ def repo_root_from_script() -> Path:
 
 def resolve_path(repo_root: Path, requested: str) -> Path:
     candidate = Path(requested)
-    return candidate.resolve() if candidate.is_absolute() else (repo_root / candidate).resolve()
+    return (
+        candidate.resolve()
+        if candidate.is_absolute()
+        else (repo_root / candidate).resolve()
+    )
 
 
 def default_output_path(repo_root: Path, suffix: str) -> Path:
@@ -107,7 +116,9 @@ def default_output_path(repo_root: Path, suffix: str) -> Path:
     return repo_root / "artifacts" / "github-intake" / f"{timestamp}-{suffix}.json"
 
 
-def resolve_output_path(repo_root: Path, output_path: str | None, suffix: str, allow_outside_artifacts: bool) -> Path:
+def resolve_output_path(
+    repo_root: Path, output_path: str | None, suffix: str, allow_outside_artifacts: bool
+) -> Path:
     artifacts_root = (repo_root / "artifacts" / "github-intake").resolve()
     if output_path is None:
         return default_output_path(repo_root, suffix)
@@ -129,15 +140,18 @@ def resolve_output_path(repo_root: Path, output_path: str | None, suffix: str, a
 def read_review_text(args: argparse.Namespace) -> str:
     if args.review_file:
         return Path(args.review_file).read_text(encoding="utf-8")
-    if args.review_text is not None:
-        return args.review_text
+    review_text = args.review_text
+    if isinstance(review_text, str):
+        return review_text
     raise ValueError("Pass --review-file or --review-text.")
 
 
 def require_candidate_list(payload: dict[str, Any]) -> list[dict[str, Any]]:
     candidates = payload.get("candidates")
     if not isinstance(candidates, list):
-        raise ValueError("Corpus-candidate artifact must contain a top-level 'candidates' list.")
+        raise ValueError(
+            "Corpus-candidate artifact must contain a top-level 'candidates' list."
+        )
     for index, candidate in enumerate(candidates):
         if not isinstance(candidate, dict):
             raise ValueError(f"Candidate at index {index} is not a JSON object.")
@@ -160,7 +174,9 @@ def normalize_expected_groups(expected_groups: Any) -> list[list[str]]:
     for group in expected_groups:
         if not isinstance(group, list):
             continue
-        cleaned = [token.strip() for token in group if isinstance(token, str) and token.strip()]
+        cleaned = [
+            token.strip() for token in group if isinstance(token, str) and token.strip()
+        ]
         if cleaned:
             normalized.append(cleaned)
     return normalized
@@ -171,7 +187,10 @@ def corpus_fingerprint(entry: dict[str, Any]) -> tuple[Any, ...]:
         entry.get("title"),
         entry.get("severity"),
         entry.get("category"),
-        tuple(tuple(group) for group in normalize_expected_groups(entry.get("expected_groups"))),
+        tuple(
+            tuple(group)
+            for group in normalize_expected_groups(entry.get("expected_groups"))
+        ),
     )
 
 
@@ -202,14 +221,18 @@ def title_tokens(title: str) -> set[str]:
     return set(normalize_title(title).split())
 
 
-def admission_match(review_text: str, candidate_entry: dict[str, Any]) -> AdmissionMatch:
+def admission_match(
+    review_text: str, candidate_entry: dict[str, Any]
+) -> AdmissionMatch:
     strict_result = score_case(review_text, candidate_entry)
     candidate_title_tokens = title_tokens(str(candidate_entry.get("title", "")))
     candidate_expectation_tokens = expectation_tokens(candidate_entry)
     review_token_set = review_tokens(review_text)
     title_overlap = token_overlap(candidate_title_tokens, review_token_set)
     expectation_overlap = token_overlap(candidate_expectation_tokens, review_token_set)
-    matched = strict_result.matched or title_overlap >= 0.6 or expectation_overlap >= 0.45
+    matched = (
+        strict_result.matched or title_overlap >= 0.6 or expectation_overlap >= 0.45
+    )
     return AdmissionMatch(
         matched=matched,
         strict_match=strict_result.matched,
@@ -239,7 +262,9 @@ def admission_summary(review_text: str, cases: list[dict[str, Any]]) -> dict[str
     }
 
 
-def near_duplicates(candidate_entry: dict[str, Any], corpus_name: str, corpus: list[dict[str, Any]]) -> list[NearDuplicate]:
+def near_duplicates(
+    candidate_entry: dict[str, Any], corpus_name: str, corpus: list[dict[str, Any]]
+) -> list[NearDuplicate]:
     duplicates: list[NearDuplicate] = []
     candidate_title = normalize_title(str(candidate_entry.get("title", "")))
     candidate_tokens = expectation_tokens(candidate_entry)
@@ -248,7 +273,9 @@ def near_duplicates(candidate_entry: dict[str, Any], corpus_name: str, corpus: l
     for entry in corpus:
         if entry.get("category") != candidate_category:
             continue
-        title_similarity = SequenceMatcher(None, candidate_title, normalize_title(str(entry.get("title", "")))).ratio()
+        title_similarity = SequenceMatcher(
+            None, candidate_title, normalize_title(str(entry.get("title", "")))
+        ).ratio()
         overlap = token_overlap(candidate_tokens, expectation_tokens(entry))
         if title_similarity >= 0.88 or overlap >= 0.75:
             duplicates.append(
@@ -277,7 +304,9 @@ def to_corpus_entry(candidate: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def append_gate_metadata(candidate: dict[str, Any], evaluation: dict[str, Any]) -> dict[str, Any]:
+def append_gate_metadata(
+    candidate: dict[str, Any], evaluation: dict[str, Any]
+) -> dict[str, Any]:
     updated = dict(candidate)
     review_notes = dict(candidate.get("review_notes") or {})
     review_notes["needs_human_review"] = False
@@ -300,9 +329,16 @@ def main() -> int:
     review_text = read_review_text(args)
 
     input_path = Path(args.input).resolve()
-    output_path = resolve_output_path(repo_root, args.output, "candidate-quality", args.allow_outside_artifacts)
+    output_path = resolve_output_path(
+        repo_root, args.output, "candidate-quality", args.allow_outside_artifacts
+    )
     filtered_output_path = (
-        resolve_output_path(repo_root, args.filtered_output, "gate-approved-candidates", args.allow_outside_artifacts)
+        resolve_output_path(
+            repo_root,
+            args.filtered_output,
+            "gate-approved-candidates",
+            args.allow_outside_artifacts,
+        )
         if args.filtered_output or args.output is not None
         else default_output_path(repo_root, "gate-approved-candidates")
     )
@@ -310,13 +346,28 @@ def main() -> int:
     candidate_payload = load_json(input_path)
     candidates = require_candidate_list(candidate_payload)
 
-    primary_corpus = require_corpus_list(load_json(resolve_path(repo_root, args.primary_corpus)))
-    probationary_corpus = require_corpus_list(load_json(resolve_path(repo_root, args.probationary_corpus)))
-    external_corpus = require_corpus_list(load_json(resolve_path(repo_root, args.external_corpus)))
+    primary_corpus = require_corpus_list(
+        load_json(resolve_path(repo_root, args.primary_corpus))
+    )
+    probationary_corpus = require_corpus_list(
+        load_json(resolve_path(repo_root, args.probationary_corpus))
+    )
+    external_corpus = require_corpus_list(
+        load_json(resolve_path(repo_root, args.external_corpus))
+    )
 
-    baseline_combined = summarize([score_case(review_text, case) for case in [*primary_corpus, *probationary_corpus]])
-    baseline_admission = admission_summary(review_text, [*primary_corpus, *probationary_corpus])
-    baseline_external = summarize([score_case(review_text, case) for case in external_corpus])
+    baseline_combined = summarize(
+        [
+            score_case(review_text, case)
+            for case in [*primary_corpus, *probationary_corpus]
+        ]
+    )
+    baseline_admission = admission_summary(
+        review_text, [*primary_corpus, *probationary_corpus]
+    )
+    baseline_external = summarize(
+        [score_case(review_text, case) for case in external_corpus]
+    )
 
     existing_fingerprints = {
         *(corpus_fingerprint(entry) for entry in primary_corpus),
@@ -352,19 +403,30 @@ def main() -> int:
             reasons.append("review-artifact-does-not-hit-candidate")
 
         combined_after = summarize(
-            [score_case(review_text, case) for case in [*primary_corpus, *probationary_corpus, candidate_entry]]
+            [
+                score_case(review_text, case)
+                for case in [*primary_corpus, *probationary_corpus, candidate_entry]
+            ]
         )
-        admission_after = admission_summary(review_text, [*primary_corpus, *probationary_corpus, candidate_entry])
+        admission_after = admission_summary(
+            review_text, [*primary_corpus, *probationary_corpus, candidate_entry]
+        )
         benchmark_delta = {
             "strict": {
-                "matched_cases_delta": combined_after["matched_cases"] - baseline_combined["matched_cases"],
-                "matched_weight_delta": combined_after["matched_weight"] - baseline_combined["matched_weight"],
-                "weighted_recall_delta": combined_after["weighted_recall"] - baseline_combined["weighted_recall"],
+                "matched_cases_delta": combined_after["matched_cases"]
+                - baseline_combined["matched_cases"],
+                "matched_weight_delta": combined_after["matched_weight"]
+                - baseline_combined["matched_weight"],
+                "weighted_recall_delta": combined_after["weighted_recall"]
+                - baseline_combined["weighted_recall"],
             },
             "admission": {
-                "matched_cases_delta": admission_after["matched_cases"] - baseline_admission["matched_cases"],
-                "matched_weight_delta": admission_after["matched_weight"] - baseline_admission["matched_weight"],
-                "weighted_recall_delta": admission_after["weighted_recall"] - baseline_admission["weighted_recall"],
+                "matched_cases_delta": admission_after["matched_cases"]
+                - baseline_admission["matched_cases"],
+                "matched_weight_delta": admission_after["matched_weight"]
+                - baseline_admission["matched_weight"],
+                "weighted_recall_delta": admission_after["weighted_recall"]
+                - baseline_admission["weighted_recall"],
             },
         }
         if benchmark_delta["admission"]["matched_cases_delta"] <= 0:
@@ -379,7 +441,9 @@ def main() -> int:
             "matched_group": strict_candidate_result.matched_group,
             "admission_match": admission_candidate_result.__dict__,
             "benchmark_delta": benchmark_delta,
-            "duplicate_matches": [duplicate.__dict__ for duplicate in duplicate_matches],
+            "duplicate_matches": [
+                duplicate.__dict__ for duplicate in duplicate_matches
+            ],
         }
         evaluations.append(evaluation)
 
@@ -396,7 +460,11 @@ def main() -> int:
             "external_swebench_verified": baseline_external,
         },
         "approved_ids": [candidate.get("id") for candidate in approved_candidates],
-        "held_ids": [evaluation["id"] for evaluation in evaluations if evaluation["recommendation"] != "probationary"],
+        "held_ids": [
+            evaluation["id"]
+            for evaluation in evaluations
+            if evaluation["recommendation"] != "probationary"
+        ],
         "evaluations": evaluations,
     }
     write_json(output_path, output)

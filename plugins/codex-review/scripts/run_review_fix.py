@@ -4,10 +4,11 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-
+from typing import Any
 
 SUPPORTED_SCHEMA = "codex-review.repair-plan.v1"
 LINE_SUFFIX_RE = re.compile(r"^(?P<path>.+?):(?P<line>\d+)$")
+JsonDict = dict[str, Any]
 
 
 def parse_args() -> argparse.Namespace:
@@ -16,10 +17,18 @@ def parse_args() -> argparse.Namespace:
             "Select one finding from a repair plan and prepare or execute a bounded Codex fix pass."
         )
     )
-    parser.add_argument("--repo", default=".", help="Repository path. Defaults to the current directory.")
-    parser.add_argument("--repair-plan", required=True, help="Path to repair-plan.json.")
+    parser.add_argument(
+        "--repo",
+        default=".",
+        help="Repository path. Defaults to the current directory.",
+    )
+    parser.add_argument(
+        "--repair-plan", required=True, help="Path to repair-plan.json."
+    )
     parser.add_argument("--finding-id", help="Repair finding id to execute.")
-    parser.add_argument("--finding-index", type=int, help="1-based repair finding index to execute.")
+    parser.add_argument(
+        "--finding-index", type=int, help="1-based repair finding index to execute."
+    )
     parser.add_argument(
         "--output-dir",
         help="Optional output directory. Defaults to the repair plan directory.",
@@ -33,8 +42,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8", errors="replace"))
+def read_json(path: Path) -> JsonDict:
+    payload = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}.")
+    return payload
 
 
 def write_text(path: Path, text: str) -> None:
@@ -42,7 +54,7 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def write_json(path: Path, payload: dict) -> None:
+def write_json(path: Path, payload: JsonDict) -> None:
     write_text(path, json.dumps(payload, indent=2) + "\n")
 
 
@@ -53,11 +65,24 @@ def resolve_codex_base_command() -> list[str]:
     npx_cmd = shutil.which("npx.cmd") or shutil.which("npx")
     if npx_cmd:
         return [npx_cmd, "-y", "@openai/codex"]
-    raise FileNotFoundError("Could not find a working Codex transport. Neither codex nor npx.cmd was usable.")
+    raise FileNotFoundError(
+        "Could not find a working Codex transport. Neither codex nor npx.cmd was usable."
+    )
 
 
-def select_finding(plan: dict, finding_id: str | None, finding_index: int | None) -> tuple[dict, int]:
-    findings = plan.get("findings", [])
+def select_finding(
+    plan: JsonDict, finding_id: str | None, finding_index: int | None
+) -> tuple[JsonDict, int]:
+    findings_raw = plan.get("findings", [])
+    if not isinstance(findings_raw, list):
+        raise ValueError("The repair plan does not contain a valid findings list.")
+
+    findings: list[JsonDict] = []
+    for index, finding in enumerate(findings_raw, start=1):
+        if not isinstance(finding, dict):
+            raise ValueError(f"Repair finding {index} is not a JSON object.")
+        findings.append(finding)
+
     if not findings:
         raise ValueError("The repair plan does not contain any findings.")
 
@@ -78,7 +103,7 @@ def select_finding(plan: dict, finding_id: str | None, finding_index: int | None
     return findings[0], 1
 
 
-def validate_plan(plan: dict) -> None:
+def validate_plan(plan: JsonDict) -> None:
     schema_version = plan.get("schema_version")
     if schema_version != SUPPORTED_SCHEMA:
         raise ValueError(
@@ -89,16 +114,20 @@ def validate_plan(plan: dict) -> None:
         raise ValueError("Repair plan is missing a valid findings list.")
 
 
-def collect_repo_targets(repo: Path, finding: dict) -> list[Path]:
+def collect_repo_targets(repo: Path, finding: JsonDict) -> list[Path]:
     refs = finding.get("file_references", [])
+    if not isinstance(refs, list):
+        return []
     targets: list[Path] = []
     seen: set[str] = set()
 
     for ref in refs:
-        raw_target = ref.get("target", "")
+        if not isinstance(ref, dict):
+            continue
+        raw_target = str(ref.get("target", "")).strip()
         if not raw_target:
             continue
-        normalized_target = raw_target.strip()
+        normalized_target = raw_target
         if normalized_target.startswith("<") and normalized_target.endswith(">"):
             normalized_target = normalized_target[1:-1]
         line_match = LINE_SUFFIX_RE.match(normalized_target)
@@ -112,7 +141,9 @@ def collect_repo_targets(repo: Path, finding: dict) -> list[Path]:
         try:
             candidate.relative_to(repo)
         except ValueError as exc:
-            raise ValueError(f"Repair target {candidate} is outside the repo and cannot be used.") from exc
+            raise ValueError(
+                f"Repair target {candidate} is outside the repo and cannot be used."
+            ) from exc
 
         key = str(candidate)
         if key not in seen:
@@ -122,7 +153,11 @@ def collect_repo_targets(repo: Path, finding: dict) -> list[Path]:
     return targets
 
 
-def build_fix_prompt(finding: dict, repo_targets: list[Path], repo: Path) -> str:
+def build_fix_prompt(finding: JsonDict, repo_targets: list[Path], repo: Path) -> str:
+    evidence = finding.get("evidence")
+    evidence_text = (
+        evidence.strip() if isinstance(evidence, str) else str(evidence or "")
+    )
     lines = [
         "You are fixing exactly one review finding.",
         "",
@@ -139,7 +174,7 @@ def build_fix_prompt(finding: dict, repo_targets: list[Path], repo: Path) -> str
         f"Repair goal: {finding.get('repair_goal', '')}",
         "",
         "Evidence:",
-        finding.get("evidence", "").strip(),
+        evidence_text.strip(),
         "",
     ]
 
@@ -153,7 +188,8 @@ def build_fix_prompt(finding: dict, repo_targets: list[Path], repo: Path) -> str
     if hints:
         lines.append("Validation hints:")
         for hint in hints:
-            lines.append(f"- {hint}")
+            if isinstance(hint, str):
+                lines.append(f"- {hint}")
         lines.append("")
 
     lines.append("Fix this single finding now.")
@@ -206,7 +242,9 @@ def main() -> int:
     args = parse_args()
     repo = Path(args.repo).resolve()
     repair_plan = Path(args.repair_plan).resolve()
-    output_dir = Path(args.output_dir).resolve() if args.output_dir else repair_plan.parent
+    output_dir = (
+        Path(args.output_dir).resolve() if args.output_dir else repair_plan.parent
+    )
 
     plan = read_json(repair_plan)
     validate_plan(plan)
@@ -218,7 +256,8 @@ def main() -> int:
     write_text(output_dir / "fix-prompt.txt", prompt)
     write_text(
         output_dir / "fix-targets.txt",
-        "\n".join(str(target.relative_to(repo)) for target in repo_targets) + ("\n" if repo_targets else ""),
+        "\n".join(str(target.relative_to(repo)) for target in repo_targets)
+        + ("\n" if repo_targets else ""),
     )
 
     print(f"Selected finding: {finding.get('id', f'index-{ordinal}')}")
@@ -231,7 +270,9 @@ def main() -> int:
         return 0
 
     if not repo_targets:
-        raise ValueError("Refusing to apply a fix without at least one repo-local file target.")
+        raise ValueError(
+            "Refusing to apply a fix without at least one repo-local file target."
+        )
 
     raise ValueError(
         "Refusing --apply because Codex workspace-write cannot enforce the selected file-target boundary yet. "

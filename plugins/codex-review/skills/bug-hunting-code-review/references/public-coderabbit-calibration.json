@@ -1,0 +1,38 @@
+[
+  {
+    "use": "concurrency-atomicity",
+    "summary": "When a guard checks counts, timing, or active-item limits before a write, look for TOCTOU or race-condition bugs and say whether the check must move into the same transaction, mutex, or serialized path as the write."
+  },
+  {
+    "use": "rollback-on-throw",
+    "summary": "When optimistic state is updated before an async action, verify rollback happens on thrown exceptions as well as returned error objects, or stale UI and durable state can drift apart."
+  },
+  {
+    "use": "low-level-input-validation",
+    "summary": "For low-level helpers and C or systems-style code, check for NULL or invalid parameter guards before dereference or use, and call out inconsistent return-value handling."
+  },
+  {
+    "use": "stale-status-after-reset",
+    "summary": "After reset, cleanup, or external-storage failure paths, verify durable status and error fields no longer claim success or completion when the resource is actually gone or failed."
+  },
+  {
+    "use": "persisted-source-of-truth",
+    "summary": "When code consults a transient existence check or derived field, compare it against the persisted source of truth and call out mismatches that can ignore real stored state."
+  },
+  {
+    "use": "metadata-gated-cleanup",
+    "summary": "When cleanup or teardown depends on best-effort metadata that is only logged and not actually required by the API contract, call out the bug if a temporary metadata failure can skip the real cleanup request."
+  },
+  {
+    "use": "verify-after-dispatch",
+    "summary": "When code launches a detached process or async helper and then verifies startup once after a fixed sleep, check for false-failure races where slow startup is treated as a hard failure without retries or a durable readiness signal."
+  },
+  {
+    "use": "persisted-bucket-vs-live-default",
+    "summary": "When file metadata or object existence checks accept a persisted bucket or storage location, verify later reads and signed URLs use that same persisted location instead of silently falling back to the current default bucket."
+  },
+  {
+    "use": "retry-throttle-shared-state",
+    "summary": "For shared async rate-limit or throttle helpers, check whether the last-request timestamp or similar coordination state is only updated after await or fetch completes, which allows concurrent callers to bypass the intended serialization."
+  }
+]

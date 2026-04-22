@@ -29,7 +29,9 @@ When improving this skill itself, regression-check it against the corpus:
 - To prepare and score a pre-PR review in one command with an existing Codex review artifact, use `python "<skill-path>\scripts\run_pre_pr_review.py" --base origin/main --review-file ".\draft-review.md"`
 - To prepare artifacts only, use `python "<skill-path>\scripts\run_pre_pr_review.py" --base origin/main --prepare-only`
 - To let the plugin prepare artifacts, invoke Codex, write `review.md`, and benchmark it in one command, use `python ".\plugins\codex-review\scripts\run_codex_review.py" --repo . --base origin/main`
-- To stage a private Knowledge-Hub lessons log into a repo-local review snapshot, use `python "<skill-path>\scripts\refresh_lessons_reference.py" --source "<path-to-codex-lessons.md>"`
+- To render native Codex inline review comments from a completed review run, use `python ".\plugins\codex-review\scripts\emit_inline_review_comments.py" --review-dir "<review-run-dir>"`
+- The normal preferred Codex output is native inline review comments, not just `review.md`. Treat `inline-findings.json` and `codex-inline-comments.txt` as the first-class review presentation artifacts.
+- To stage an optional local lessons log into a repo-local review snapshot, use `python "<skill-path>\scripts\refresh_lessons_reference.py" --source "<path-to-codex-lessons.md>"`
 - The direct OpenAI API path is legacy-only and should be treated as optional rather than required
 
 ## Review Posture
@@ -245,6 +247,8 @@ If no findings survive scrutiny, say so explicitly and mention the residual risk
 - Separate confirmed bugs from lower-confidence risks or open questions.
 - Treat "this feature still does not actually work for a user" as a valid review finding even if the code shape looks reasonable.
 - Treat high-confidence security concerns as release blockers, not optional hardening.
+- When the user wants review findings to appear as inline Codex review cards instead of only a markdown artifact, use the generated `inline-findings.json` or `emit_inline_review_comments.py` helper as the source of truth for those inline comments.
+- Prefer emitting native Codex inline review comments by default when the task is an actual code review. Use the markdown review artifact as the secondary detail surface, not the primary UX.
 
 ## Strong Review Habits
 
