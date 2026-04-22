@@ -1,0 +1,65 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to write into package.json and plugin.json
+        required: true
+        type: string
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Update release versions
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          version = "${{ inputs.version }}".strip()
+          if not version:
+              raise SystemExit("Release version input is required.")
+
+          paths = [
+              Path("package.json"),
+              Path("plugins/codex-review/.codex-plugin/plugin.json"),
+          ]
+
+          for path in paths:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              if not isinstance(payload, dict):
+                  raise SystemExit(f"Expected JSON object in {path}")
+              payload["version"] = version
+              path.write_text(
+                  json.dumps(payload, indent=2, ensure_ascii=True) + "\n",
+                  encoding="utf-8",
+              )
+          PY
+
+      - name: Validate release metadata
+        run: python ./scripts/validate_public_release.py
+
+      - name: Commit version update
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json plugins/codex-review/.codex-plugin/plugin.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Prepare release ${{ inputs.version }}"
+          git push
