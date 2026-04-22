@@ -26,7 +26,10 @@ def run_score(
         raise ValueError("Either review_file or review_text must be provided.")
 
     completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("Benchmark scorer returned a non-object JSON payload.")
+    return payload
 
 
 def print_lane(name: str, payload: dict[str, Any]) -> None:

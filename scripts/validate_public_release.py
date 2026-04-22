@@ -1,6 +1,9 @@
 import json
 import py_compile
 from pathlib import Path
+from typing import Any
+
+JsonDict = dict[str, Any]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = REPO_ROOT / "package.json"
@@ -11,11 +14,14 @@ README_FILE = REPO_ROOT / "README.md"
 GITHUB_MCP_SETUP_DOC = REPO_ROOT / "docs" / "github-mcp-setup.md"
 
 
-def load_json(path: Path) -> dict:
+def load_json(path: Path) -> JsonDict:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Invalid JSON in {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise SystemExit(f"Expected JSON object in {path}")
+    return payload
 
 
 def require_file(path: Path) -> None:

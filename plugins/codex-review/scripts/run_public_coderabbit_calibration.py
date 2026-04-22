@@ -114,7 +114,10 @@ def pr_metadata(repo_dir: Path, github_repo: str, pr_number: int) -> dict[str, A
         ],
         repo_dir,
     )
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("gh pr view returned a non-object JSON payload.")
+    return payload
 
 
 def checkout_pr(repo_dir: Path, pr_number: int) -> None:

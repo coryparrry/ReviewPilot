@@ -4,6 +4,9 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+JsonDict = dict[str, Any]
 
 
 def parse_args() -> argparse.Namespace:
@@ -102,7 +105,7 @@ def default_intake_dir(repo: Path, github_repo: str, pr_number: int) -> Path:
     )
 
 
-def write_json(path: Path, payload: dict) -> None:
+def write_json(path: Path, payload: JsonDict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -147,8 +150,11 @@ def artifact_prefix_for_source(source: str) -> str:
     return "rest" if source == "rest" else "graphql"
 
 
-def read_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8", errors="replace"))
+def read_json(path: Path) -> JsonDict:
+    payload = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"Expected JSON object in {path}")
+    return payload
 
 
 def main() -> int:
@@ -188,19 +194,20 @@ def main() -> int:
     ]
     pipeline = run_cmd(pipeline_cmd, repo)
 
-    summary: dict[str, object] = {
+    steps: JsonDict = {
+        "github_intake": {
+            "stdout": pipeline.stdout,
+            "stderr": pipeline.stderr,
+        }
+    }
+    summary: JsonDict = {
         "schema_version": "codex-review.public-pr-quality-cycle.v1",
         "repo": args.repo,
         "pr": args.pr,
         "output_dir": str(output_dir),
         "intake_dir": str(intake_dir),
         "review_file": str(review_file) if review_file else None,
-        "steps": {
-            "github_intake": {
-                "stdout": pipeline.stdout,
-                "stderr": pipeline.stderr,
-            }
-        },
+        "steps": steps,
     }
 
     if review_file is not None:
@@ -225,7 +232,7 @@ def main() -> int:
             "--bugs-only",
         ]
         comparison = run_cmd(compare_cmd, repo)
-        summary["steps"]["quality_comparison"] = {
+        steps["quality_comparison"] = {
             "stdout": comparison.stdout,
             "stderr": comparison.stderr,
             "comparison_file": str(comparison_dir / "quality-comparison.json"),
@@ -286,7 +293,7 @@ def main() -> int:
                 ]
                 try:
                     apply_completed = run_cmd(apply_cmd, repo)
-                    summary["steps"]["quality_learning"] = {
+                    steps["quality_learning"] = {
                         "stdout": approval.stdout + apply_completed.stdout,
                         "stderr": approval.stderr + apply_completed.stderr,
                         "approved_candidates_file": str(approved_candidates_file),
@@ -294,7 +301,7 @@ def main() -> int:
                         "approved_ids": approved_ids,
                     }
                 except subprocess.CalledProcessError as exc:
-                    summary["steps"]["quality_learning"] = {
+                    steps["quality_learning"] = {
                         "stdout": approval.stdout + exc.stdout,
                         "stderr": approval.stderr + exc.stderr,
                         "approved_candidates_file": str(approved_candidates_file),
@@ -304,7 +311,7 @@ def main() -> int:
                         "reason": "apply_corpus_updates.py rejected the approved public candidate batch.",
                     }
             else:
-                summary["steps"]["quality_learning"] = {
+                steps["quality_learning"] = {
                     "stdout": approval.stdout,
                     "stderr": approval.stderr,
                     "approved_candidates_file": str(approved_candidates_file),
