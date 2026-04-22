@@ -1,25 +1,71 @@
 ---
 name: autonomous-review-cycle
-description: Run the ReviewPilot automation loop for this repo: local review, bounded repair handoff, optional GitHub miss intake, and small hardening batches.
+description: Orchestrate ReviewPilot workflows by routing Codex to the right entrypoint for local review, bounded repair handoff, GitHub miss intake, probationary learning, public comparison, or hardening.
 ---
 
 # Autonomous Review Cycle
 
-Use this skill when Codex should run ReviewPilot as an automation workflow instead of a one-off review.
+Use this skill when Codex should run ReviewPilot as a workflow, not just a one-off review.
 
-This skill is the orchestration layer.
+This skill is the router.
 The review standard still comes from `$bug-hunting-code-review`.
 
-## What This Skill Does
+## Router
 
-Use it when Codex should:
+Choose the smallest entrypoint that matches the task.
 
-1. run a local review
-2. prepare a bounded repair handoff
-3. ingest GitHub review misses through the plugin's read-only boundary
-4. learn safely into the probationary lane
-5. run a small external hardening batch
-6. leave a compact automation summary
+### 1. Full Local Automation
+
+Use when Codex should run the normal end-to-end loop for the repo.
+
+Route to:
+- `references/automation-entrypoints.md`
+
+Preferred entrypoint:
+- `run_automation_cycle.py`
+
+### 2. GitHub Intake And Learning
+
+Use when the task is about:
+- captured GitHub review feedback
+- comparison against review artifacts
+- probationary learning
+
+Route to:
+- `references/automation-entrypoints.md`
+
+Preferred entrypoint:
+- `run_github_intake_pipeline.py`
+
+### 3. Public PR Comparison
+
+Use when the task is:
+- compare a public PR’s review comments against a local review artifact
+- optionally auto-learn only the safe misses
+
+Route to:
+- `references/automation-entrypoints.md`
+
+Preferred entrypoint:
+- `run_public_pr_quality_cycle.py`
+
+### 4. Bounded Repair Handoff
+
+Use when the task is:
+- take one review finding
+- prepare the next repair step safely
+
+Preferred entrypoint:
+- `run_review_fix.py`
+
+### 5. Hardening Only
+
+Use when the task is:
+- external benchmark pressure
+- Hugging Face or SWE-bench style hardening
+
+Preferred entrypoint:
+- `run_hf_hardening_cycle.py`
 
 ## Safety Rules
 
@@ -27,59 +73,13 @@ Use it when Codex should:
 - Default to repair handoff, not automatic repo edits.
 - Default GitHub learning into the probationary lane only.
 - Do not auto-promote into the primary corpus by default.
-- Do not widen the review standard here; reuse `$bug-hunting-code-review`.
 - Treat Hugging Face as benchmark pressure, not direct corpus-writing automation.
 
-## Preferred Entry Point
+## Entry Points
 
-Use the wrapper when possible:
+For script selection and command examples, read:
 
-```sh
-python "./plugins/codex-review/scripts/run_automation_cycle.py" --repo .
-```
-
-That wrapper can:
-- run the local review
-- prepare the bounded repair handoff
-- optionally run GitHub intake
-- optionally compare against live GitHub misses
-- optionally auto-learn approved probationary cases
-- run a small Hugging Face hardening batch
-- write `automation-summary.json`
-
-## Default Automation Sequence
-
-When you need the steps explicitly, use this order:
-
-1. Local review
-
-```sh
-python "./plugins/codex-review/scripts/run_codex_review.py" --repo . --base origin/main
-```
-
-2. Bounded repair handoff
-
-```sh
-python "./plugins/codex-review/scripts/run_review_fix.py" --repo . --repair-plan "<repair-plan.json>" --finding-index 1
-```
-
-3. Capture GitHub MCP feedback when PR context exists
-
-```sh
-python "./plugins/codex-review/scripts/capture_github_mcp_feedback.py" --repo owner/name --pr 123 --kind review_threads --input "<tool-output.json>"
-```
-
-4. Run intake and gated learning
-
-```sh
-python "./plugins/codex-review/scripts/run_github_intake_pipeline.py" --repo owner/name --pr 123 --raw-input "<captured-artifact.json>" --raw-format github_mcp_review_threads --score-review-artifacts "<review-run-dir>" --gate-candidates --apply-target probationary --apply-mode auto
-```
-
-5. Run a small hardening batch
-
-```sh
-python "./plugins/codex-review/skills/bug-hunting-code-review/scripts/run_hf_hardening_cycle.py" --repo . --offset 0 --length 3
-```
+- `references/automation-entrypoints.md`
 
 ## User-Facing Language
 
@@ -90,14 +90,7 @@ Use:
 - `$autonomous-review-cycle` for recurring review and learning workflows
 
 If a user wants a recurring automation, describe it in plain language:
-
 - inspect recent PR review comments
 - compare them against ReviewPilot review artifacts
 - auto-learn only gated probationary misses
 - summarize what was learned and what still needs human review
-
-## Non-Goals
-
-- do not auto-apply multi-finding repair passes by default
-- do not make GitHub writes part of the normal automation path
-- do not treat this skill as a replacement for the review posture itself

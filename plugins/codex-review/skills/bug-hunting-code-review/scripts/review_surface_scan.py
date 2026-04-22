@@ -124,6 +124,53 @@ RISK_RULES: tuple[RiskRule, ...] = (
         check="Trace validation and parse failures to the route boundary and confirm they still map to the intended 4xx response.",
     ),
     RiskRule(
+        key="fail-open-fallback",
+        title="Fail-open fallback or synthetic-state risk",
+        severity="high",
+        patterns=(
+            re.compile(
+                r"\b(fallback|default|synthetic|inherit|borrow|copy|spread|hydrate)\w*\b",
+                re.I,
+            ),
+            re.compile(
+                r"\b(owner|agent|session|token|policy|instruction|config|metadata|adapter)\w*\b",
+                re.I,
+            ),
+        ),
+        why="Fallback code can quietly invent owner or runtime context from unrelated records instead of failing closed.",
+        check="Trace every fallback source and confirm missing persisted state reloads canonical data or fails closed instead of borrowing sibling fields.",
+    ),
+    RiskRule(
+        key="explicit-null-drift",
+        title="Explicit-null or cleared-state drift risk",
+        severity="high",
+        patterns=(
+            re.compile(r"(\?\?|nullish|fallback|default)", re.I),
+            re.compile(r"\b(null|undefined|cleared?|empty)\b", re.I),
+            re.compile(
+                r"\b(status|state|session|token|owner|adapter|runtime)\w*\b", re.I
+            ),
+        ),
+        why="Null-cleared state is easy to overwrite with a fallback, bringing back values that were intentionally removed.",
+        check="Verify explicit null or cleared values survive normalization and reload instead of falling through to a default or prior runtime value.",
+    ),
+    RiskRule(
+        key="queue-claim",
+        title="Queue-claim or duplicate-dispatch risk",
+        severity="high",
+        patterns=(
+            re.compile(
+                r"\b(queue|queued|enqueue|dequeue|claim|lease|heartbeat|wake|poll)\w*\b",
+                re.I,
+            ),
+            re.compile(
+                r"\b(await|async|retry|interval|processDue|last[a-zA-Z]+At)\b", re.I
+            ),
+        ),
+        why="Queued work can be observed twice when claim state is written after awaits, retries, or a later mutation boundary.",
+        check="Verify the work item is claimed atomically before releasing control, so a second poll or retry cannot enqueue or process it again.",
+    ),
+    RiskRule(
         key="security-boundary",
         title="Security or trust-boundary risk",
         severity="high",
@@ -484,8 +531,10 @@ def build_report(repo: Path, base: str | None, head: str | None, mode: str) -> J
             "Which companion state surfaces must stay aligned with the primary state change?",
             "Which central registry, allowlist, or classifier must stay in sync with this patch?",
             "Which mirrored create/update/delete or sibling write paths could bypass the same invariant?",
+            "Which fallback, default, or ?? path could invent owner/runtime state or overwrite an explicit cleared value?",
             "Could any test helper or fixture be broadening permissions or feature gates so the regression would still pass?",
             "Does the real route or UI contract match the shape the tests currently assert?",
+            "If this is queued, scheduled, or wake-driven work, where is the claim written relative to awaits, retries, or re-polls?",
             "Which negative path, retry path, and stale-state path did I actually trace?",
             "What proof do I have that imports, docs paths, and claimed validation commands still resolve?",
         ],

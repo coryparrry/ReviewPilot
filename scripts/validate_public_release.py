@@ -33,8 +33,20 @@ def validate_metadata() -> None:
     package_data = load_json(PACKAGE_JSON)
     plugin_data = load_json(PLUGIN_JSON)
 
+    package_version = str(package_data.get("version") or "").strip()
+    plugin_version = str(plugin_data.get("version") or "").strip()
     package_license = package_data.get("license")
     plugin_license = plugin_data.get("license")
+
+    if not package_version:
+        raise SystemExit("package.json version is required")
+    if not plugin_version:
+        raise SystemExit("plugin.json version is required")
+    if package_version != plugin_version:
+        raise SystemExit(
+            "package.json and plugin.json versions must match, found "
+            f"{package_version!r} and {plugin_version!r}"
+        )
 
     if package_license != "MIT":
         raise SystemExit(

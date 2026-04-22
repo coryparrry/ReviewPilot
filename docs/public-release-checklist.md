@@ -2,6 +2,19 @@
 
 Use this checklist before pushing a public release or publishing the npm installer.
 
+If you want GitHub to prepare the release for you, run the **Prepare release** workflow first. It takes one version input and:
+
+- `package.json`
+- `plugins/codex-review/.codex-plugin/plugin.json`
+
+Then it:
+
+- commits the version update back to the branch
+- creates the matching git tag
+- creates the matching GitHub Release
+
+That GitHub Release then triggers the npm publish workflow.
+
 ## Required
 
 1. Run:
@@ -20,6 +33,7 @@ python .\scripts\smoke_test_release.py
 
 - `package.json`
 - `plugins/codex-review/.codex-plugin/plugin.json`
+- those two version fields must match exactly
 
 3. Confirm the public URLs are correct:
 
@@ -75,6 +89,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_plugin_release_bundle.p
 ## Current Automation Boundary
 
 This repo now automates the main local workflow more cleanly, including optional lessons refresh and same-run GitHub promotion flags in the automation wrapper.
+
+The GitHub publish workflow does not choose versions for you by itself. It publishes the versions already committed in:
+
+- `package.json`
+- `plugins/codex-review/.codex-plugin/plugin.json`
+
+So before cutting a release, make sure those committed version numbers are already the ones you intend to publish.
 
 Remaining early-beta edges:
 

@@ -3,7 +3,7 @@
     "id": "reviewpilot-coderabbit-001",
     "source": "validated-coderabbit-review-comments",
     "file": "docs/roadmap.md",
-    "summary": "Mirror the active execution-plan rewrite into docs/exec-plans/active/current.md.",
+    "summary": "Mirror the active execution-plan rewrite into the current planning document.",
     "severity": "minor",
     "verdict": "accept",
     "reason": "The roadmap changed the active execution plan and the companion execution-plan file was missing, so the docs drift was real.",
