@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from argparse import Namespace
 from pathlib import Path
@@ -46,6 +47,10 @@ review_surface_scan = load_module(
 run_public_pr_quality_cycle = load_module(
     "run_public_pr_quality_cycle_test",
     "plugins/codex-review/scripts/run_public_pr_quality_cycle.py",
+)
+triage_pr_queue = load_module(
+    "triage_pr_queue_test",
+    "plugins/codex-review/scripts/triage_pr_queue.py",
 )
 
 
@@ -298,3 +303,68 @@ def test_public_pr_quality_cycle_requires_review_artifact_for_auto_learning(
         match="--auto-learn-probationary requires --review-file or --review-artifacts.",
     ):
         main()
+
+
+def test_parse_pr_spec_accepts_repo_hash_number_and_url() -> None:
+    parse_pr_spec = cast(
+        Callable[[str], tuple[str, int]],
+        getattr(triage_pr_queue, "parse_pr_spec"),
+    )
+
+    assert parse_pr_spec("owner/name#123") == ("owner/name", 123)
+    assert parse_pr_spec("https://github.com/owner/name/pull/456") == (
+        "owner/name",
+        456,
+    )
+
+
+def test_load_pr_queue_accepts_json_entries_and_dedupes(tmp_path: Path) -> None:
+    load_pr_queue = cast(
+        Callable[[list[str], str | None], list[tuple[str, int]]],
+        getattr(triage_pr_queue, "load_pr_queue"),
+    )
+    payload = {
+        "prs": [
+            {"repo": "owner/name", "pr": 10},
+            "owner/name#10",
+            "another/repo#12",
+        ]
+    }
+    queue_path = tmp_path / "prs.json"
+    queue_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    queue = load_pr_queue(["owner/name#10"], str(queue_path))
+
+    assert queue == [("owner/name", 10), ("another/repo", 12)]
+
+
+def test_recommend_review_depth_prefers_deep_for_high_signal_workflow_changes() -> None:
+    recommend_review_depth = cast(
+        Callable[..., str],
+        getattr(triage_pr_queue, "recommend_review_depth"),
+    )
+
+    depth = recommend_review_depth(
+        total_score=9,
+        risk_hits=[{"severity": "high"}],
+        layer_counts={"workflow-runtime": 1},
+        code_files_changed=1,
+    )
+
+    assert depth == "deep"
+
+
+def test_recommend_review_depth_skips_docs_only_low_score_changes() -> None:
+    recommend_review_depth = cast(
+        Callable[..., str],
+        getattr(triage_pr_queue, "recommend_review_depth"),
+    )
+
+    depth = recommend_review_depth(
+        total_score=2,
+        risk_hits=[],
+        layer_counts={"docs": 1},
+        code_files_changed=0,
+    )
+
+    assert depth == "skip"

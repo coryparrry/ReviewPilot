@@ -123,6 +123,7 @@ The plugin-owned review runner now lives at:
 
 - `plugins/codex-review/scripts/run_automation_cycle.py`
 - `plugins/codex-review/scripts/run_codex_review.py`
+- `plugins/codex-review/scripts/triage_pr_queue.py`
 - `plugins/codex-review/scripts/compare_review_quality.py`
 - `plugins/codex-review/scripts/run_public_pr_quality_cycle.py`
 - `plugins/codex-review/scripts/approve_quality_learning_candidates.py`
@@ -377,6 +378,21 @@ That wrapper:
 - writes a compact summary plus comparison artifacts under `artifacts/public-pr-quality/`
 
 Use only public repos for this path unless you have explicit permission to use a private repo's review content for calibration.
+
+If you have many PRs and need to spend review budget selectively first, use:
+
+```powershell
+python .\plugins\codex-review\scripts\triage_pr_queue.py `
+  --pr owner/name#123 `
+  --pr owner/name#124
+```
+
+That wrapper:
+
+- fetches only PR metadata and patch text through `gh`
+- scores the PRs cheaply for review risk
+- recommends `deep`, `quick`, or `skip`
+- writes a ranked queue under `artifacts/pr-triage/`
 
 For Codex automations, the recommended skill entrypoint is:
 

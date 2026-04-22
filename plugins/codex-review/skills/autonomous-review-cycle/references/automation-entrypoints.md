@@ -50,6 +50,14 @@ Use when you want comparison-only behavior against a public PR, with optional pr
 python "./plugins/codex-review/scripts/run_public_pr_quality_cycle.py" --repo owner/name --pr 123 --review-artifacts ".codex-review"
 ```
 
+## Batch PR Triage
+
+Use when you have many PRs and want a cheap ranked queue before spending Codex review budget.
+
+```sh
+python "./plugins/codex-review/scripts/triage_pr_queue.py" --pr owner/name#123 --pr owner/name#124
+```
+
 ## Hardening Batch
 
 Use when you want a small external hardening batch only.
