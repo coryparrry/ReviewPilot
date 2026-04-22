@@ -264,7 +264,11 @@ def main() -> int:
     )
     if not isinstance(calibration_set, list):
         raise ValueError("Calibration set must be a JSON list.")
-    entries = calibration_set[: args.limit] if args.limit else calibration_set
+    if args.limit is not None and args.limit < 0:
+        raise ValueError("--limit must be >= 0.")
+    entries = (
+        calibration_set[: args.limit] if args.limit is not None else calibration_set
+    )
 
     clones_root = output_dir / "repos"
     reviews_root = output_dir / "reviews"

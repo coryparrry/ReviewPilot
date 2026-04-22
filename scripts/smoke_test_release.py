@@ -92,9 +92,10 @@ def verify_install_tree(codex_home: Path, marketplace_name: str) -> None:
         if plugin_entries
         else None
     )
-    if installation_policy != "AVAILABLE":
+    if installation_policy != "INSTALLED_BY_DEFAULT":
         raise SystemExit(
-            f"Marketplace manifest must keep installation policy AVAILABLE for {PLUGIN_NAME}, found {installation_policy!r}"
+            "Marketplace manifest must keep installation policy "
+            f"INSTALLED_BY_DEFAULT for {PLUGIN_NAME}, found {installation_policy!r}"
         )
 
     require_text(config_toml, f"[marketplaces.{marketplace_name}]")

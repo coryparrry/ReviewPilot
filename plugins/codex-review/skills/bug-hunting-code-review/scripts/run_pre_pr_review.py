@@ -65,6 +65,15 @@ def load_default_prompt(skill_dir: Path) -> str:
     return text[start:end]
 
 
+def resolve_repo_path(repo: Path, requested: str | None) -> Path | None:
+    if not requested:
+        return None
+    candidate = Path(requested)
+    return (
+        candidate.resolve() if candidate.is_absolute() else (repo / candidate).resolve()
+    )
+
+
 def is_probably_text_file(path: Path) -> bool:
     try:
         sample = path.read_bytes()[:2048]
@@ -434,7 +443,7 @@ def prepare_review_artifacts(
     scan = run_surface_scan(skill_dir, repo, base if not pr else None, mode)
     calibration_section = render_miss_calibration_section(
         skill_dir,
-        Path(quality_comparison).resolve() if quality_comparison else None,
+        resolve_repo_path(repo, quality_comparison),
     )
     prompt = build_prompt(
         default_prompt, metadata, scan, diff, mode, depth, calibration_section

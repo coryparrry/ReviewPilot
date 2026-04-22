@@ -114,7 +114,7 @@ def resolve_output_dir(
     if requested is None:
         return default_output_dir(repo_root, proposal_path)
 
-    candidate = Path(requested).resolve()
+    candidate = resolve_path(repo_root, requested)
     if allow_outside_artifacts:
         return candidate
 
@@ -266,10 +266,14 @@ def dedupe_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deduped
 
 
+def stable_title_key(value: Any) -> str:
+    return str(value or "").strip()[:100]
+
+
 def record_key(record: dict[str, Any]) -> tuple[str, str]:
     return (
         str(record.get("file_path") or ""),
-        str(record.get("candidate_title") or ""),
+        stable_title_key(record.get("candidate_title")),
     )
 
 
@@ -277,13 +281,21 @@ def candidate_map(
     candidate_payload: dict[str, Any],
 ) -> dict[tuple[str, str], dict[str, Any]]:
     mapped: dict[tuple[str, str], dict[str, Any]] = {}
+    ambiguous: set[tuple[str, str]] = set()
     for candidate in candidate_payload.get("candidates", []):
-        notes = candidate.get("review_notes") or {}
+        notes = candidate.get("review_notes") if isinstance(candidate, dict) else {}
+        if not isinstance(notes, dict):
+            notes = {}
         key = (
             str(notes.get("file_path") or ""),
-            str(candidate.get("title") or ""),
+            stable_title_key(candidate.get("title")),
         )
-        mapped[key] = candidate
+        if key in mapped:
+            ambiguous.add(key)
+            mapped.pop(key, None)
+            continue
+        if key not in ambiguous:
+            mapped[key] = candidate
     return mapped
 
 
@@ -333,15 +345,11 @@ def near_duplicate(record: dict[str, Any], corpus: list[dict[str, Any]]) -> bool
 def calibration_matches(
     record: dict[str, Any], calibration_entries: list[dict[str, Any]]
 ) -> bool:
-    record_file = str(record.get("file_path") or "").lower()
     record_title_tokens = title_tokens(str(record.get("candidate_title", "")))
     record_summary_tokens = title_tokens(str(record.get("candidate_summary", "")))
     for entry in calibration_entries:
         if str(entry.get("verdict")) != "accept":
             continue
-        entry_file = str(entry.get("file", "")).lower()
-        if entry_file and record_file and entry_file == record_file:
-            return True
         entry_tokens = title_tokens(str(entry.get("summary", "")))
         if token_overlap(record_title_tokens, entry_tokens) >= 0.6:
             return True
@@ -442,10 +450,11 @@ def main() -> int:
     args = parse_args()
     repo_root = repo_root_from_script()
     proposal_path = resolve_path(repo_root, args.proposal)
+    review_path = resolve_path(repo_root, args.review_file)
     output_dir = resolve_output_dir(
         repo_root, args.output_dir, proposal_path, args.allow_outside_artifacts
     )
-    review_text = Path(args.review_file).read_text(encoding="utf-8")
+    review_text = review_path.read_text(encoding="utf-8")
     proposal = load_json(proposal_path)
     records = proposal.get("records") or []
     if not isinstance(records, list):
@@ -522,7 +531,7 @@ def main() -> int:
     output = {
         "schema_version": "codex-review.quality-comparison.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "review_file": str(Path(args.review_file).resolve()),
+        "review_file": str(review_path),
         "proposal_file": str(proposal_path),
         "summary": summary,
         "findings": findings,

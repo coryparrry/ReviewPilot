@@ -148,6 +148,8 @@ def parse_link_target(target: str) -> JsonDict | None:
 
     colon_match = COLON_LINE_RE.match(cleaned)
     if colon_match:
+        if "://" in cleaned:
+            return None
         line = int(colon_match.group("line"))
         return {
             "file": colon_match.group("path"),

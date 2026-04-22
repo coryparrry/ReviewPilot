@@ -168,6 +168,10 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     review_file = resolve_review_file(args.review_file, args.review_artifacts)
+    if args.auto_learn_probationary and review_file is None:
+        raise ValueError(
+            "--auto-learn-probationary requires --review-file or --review-artifacts."
+        )
     intake_dir = default_intake_dir(repo, args.repo, args.pr)
     comparison_dir = output_dir / "quality-comparison"
 
