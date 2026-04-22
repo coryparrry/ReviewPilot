@@ -1,5 +1,6 @@
 import argparse
 import json
+from collections.abc import Mapping
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -123,6 +124,14 @@ def main() -> int:
 
     candidate_payload = load_json(candidates_path)
     comparison_payload = load_json(comparison_path)
+    if not isinstance(candidate_payload, dict):
+        raise ValueError(
+            "Candidate artifact must be a JSON object with a top-level candidates list."
+        )
+    if not isinstance(comparison_payload, dict):
+        raise ValueError(
+            "Quality comparison artifact must be a JSON object with a top-level findings list."
+        )
 
     candidates = candidate_payload.get("candidates")
     findings = comparison_payload.get("findings")
@@ -168,7 +177,17 @@ def main() -> int:
             continue
 
         updated = dict(candidate)
-        review_notes = dict(candidate.get("review_notes") or {})
+        raw_review_notes = candidate.get("review_notes")
+        if raw_review_notes is None:
+            review_notes: dict[str, Any] = {}
+        elif isinstance(raw_review_notes, Mapping):
+            review_notes = dict(raw_review_notes)
+        else:
+            raise ValueError(
+                "Invalid review_notes for candidate "
+                f"{candidate.get('id') or candidate.get('name') or index}: "
+                f"expected mapping, got {type(raw_review_notes).__name__}."
+            )
         review_notes["needs_human_review"] = False
         review_notes["confidence"] = "high"
         review_notes["approved_for_auto"] = True
