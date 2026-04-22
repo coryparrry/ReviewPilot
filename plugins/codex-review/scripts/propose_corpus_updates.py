@@ -30,7 +30,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_input(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8-sig"))
+    payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(payload, dict):
+        raise ValueError("Proposal artifact must contain a top-level JSON object.")
+    return payload
 
 
 def default_output_path(repo_root: Path) -> Path:

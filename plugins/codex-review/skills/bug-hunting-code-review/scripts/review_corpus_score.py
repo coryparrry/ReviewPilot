@@ -42,8 +42,9 @@ def load_corpus(path: Path) -> list[dict[str, Any]]:
 def read_review_text(args: argparse.Namespace) -> str:
     if args.review_file:
         return Path(args.review_file).read_text(encoding="utf-8")
-    if args.review_text is not None:
-        return args.review_text
+    review_text = args.review_text
+    if isinstance(review_text, str):
+        return review_text
     return sys.stdin.read()
 
 

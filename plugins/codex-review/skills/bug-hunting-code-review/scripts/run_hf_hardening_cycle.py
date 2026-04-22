@@ -16,6 +16,7 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 DATASET_ROWS_URL = "https://datasets-server.huggingface.co/rows"
+JsonDict = dict[str, Any]
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,7 +69,7 @@ def parse_args() -> argparse.Namespace:
 
 def fetch_rows(
     dataset: str, config: str, split: str, offset: int, length: int
-) -> dict[str, Any]:
+) -> JsonDict:
     query = urlencode(
         {
             "dataset": dataset,
@@ -80,11 +81,14 @@ def fetch_rows(
     )
     try:
         with urlopen(f"{DATASET_ROWS_URL}?{query}", timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+            payload = json.loads(response.read().decode("utf-8"))
     except TimeoutError as exc:
         raise RuntimeError("Timed out fetching Hugging Face dataset rows.") from exc
     except URLError as exc:
         raise RuntimeError(f"Failed to fetch Hugging Face dataset rows: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Dataset rows response must be a JSON object.")
+    return payload
 
 
 def resolve_codex_base_command() -> list[str]:
@@ -116,7 +120,7 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def write_json(path: Path, payload: dict[str, Any]) -> None:
+def write_json(path: Path, payload: JsonDict) -> None:
     write_text(path, json.dumps(payload, indent=2) + "\n")
 
 
@@ -255,7 +259,7 @@ def run_codex_review(
     return " ".join(codex_base_cmd)
 
 
-def run_external_score(scorer: Path, corpus: Path, review_file: Path) -> dict[str, Any]:
+def run_external_score(scorer: Path, corpus: Path, review_file: Path) -> JsonDict:
     completed = subprocess.run(
         [
             sys.executable,
@@ -272,7 +276,10 @@ def run_external_score(scorer: Path, corpus: Path, review_file: Path) -> dict[st
         errors="replace",
         check=True,
     )
-    return json.loads(completed.stdout)
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise ValueError("External score runner must emit a JSON object.")
+    return payload
 
 
 def evaluate_case(

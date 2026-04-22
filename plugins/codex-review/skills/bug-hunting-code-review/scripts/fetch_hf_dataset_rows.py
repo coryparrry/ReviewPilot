@@ -6,13 +6,17 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
 BASE_URL = "https://datasets-server.huggingface.co/rows"
+JsonDict = dict[str, Any]
 
 
-def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) -> dict:
+def fetch_rows(
+    dataset: str, config: str, split: str, offset: int, length: int
+) -> JsonDict:
     query = urlencode(
         {
             "dataset": dataset,
@@ -24,7 +28,10 @@ def fetch_rows(dataset: str, config: str, split: str, offset: int, length: int) 
     )
     url = f"{BASE_URL}?{query}"
     with urlopen(url) as response:
-        return json.loads(response.read().decode("utf-8"))
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Dataset Viewer response must be a JSON object.")
+    return payload
 
 
 def parse_args() -> argparse.Namespace:

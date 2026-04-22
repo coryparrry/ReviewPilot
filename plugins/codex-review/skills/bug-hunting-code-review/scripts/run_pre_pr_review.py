@@ -371,8 +371,11 @@ def call_openai(prompt: str, model: str) -> str:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"OpenAI API request failed: {exc.code} {detail}") from exc
 
+    if not isinstance(body, dict):
+        raise RuntimeError("OpenAI response body must be a JSON object.")
+
     output = body.get("output_text")
-    if output:
+    if isinstance(output, str) and output:
         return output
 
     pieces: list[str] = []
@@ -396,8 +399,9 @@ def write_file(path: Path, text: str) -> None:
 def read_review_text(args: argparse.Namespace) -> str | None:
     if args.review_file:
         return Path(args.review_file).read_text(encoding="utf-8")
-    if args.review_text is not None:
-        return args.review_text
+    review_text = args.review_text
+    if isinstance(review_text, str):
+        return review_text
     return None
 
 

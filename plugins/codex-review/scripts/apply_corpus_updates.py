@@ -312,15 +312,15 @@ def main() -> int:
     candidates = require_candidate_list(candidate_payload)
     corpus = require_corpus_list(load_json(corpus_path))
 
-    existing_ids = {
-        entry.get("id") for entry in corpus if isinstance(entry.get("id"), str)
+    existing_ids: set[str] = {
+        str(entry["id"]) for entry in corpus if isinstance(entry.get("id"), str)
     }
     existing_by_id = {
         entry["id"]: entry for entry in corpus if isinstance(entry.get("id"), str)
     }
     existing_fingerprints = {corpus_fingerprint(entry) for entry in corpus}
-    existing_title_keys = {
-        (entry.get("category"), str(entry.get("title", "")).strip().lower())
+    existing_title_keys: set[tuple[str, str]] = {
+        (str(entry["category"]), str(entry.get("title", "")).strip().lower())
         for entry in corpus
         if isinstance(entry.get("category"), str)
         and isinstance(entry.get("title"), str)
@@ -341,7 +341,7 @@ def main() -> int:
         candidate_fingerprint = (
             corpus_fingerprint(candidate_entry) if candidate_entry is not None else None
         )
-        summary = {
+        summary: dict[str, Any] = {
             "id": candidate.get("id"),
             "title": candidate.get("title"),
             "severity": candidate.get("severity"),
@@ -394,9 +394,12 @@ def main() -> int:
         existing_ids.add(candidate["id"])
         existing_by_id[candidate["id"]] = new_entry
         existing_fingerprints.add(corpus_fingerprint(new_entry))
-        existing_title_keys.add(
-            (candidate["category"], candidate["title"].strip().lower())
-        )
+        candidate_category = candidate.get("category")
+        candidate_title = candidate.get("title")
+        if isinstance(candidate_category, str) and isinstance(candidate_title, str):
+            existing_title_keys.add(
+                (candidate_category, candidate_title.strip().lower())
+            )
 
     if args.mode != "review" and new_entries:
         corpus.extend(new_entries)

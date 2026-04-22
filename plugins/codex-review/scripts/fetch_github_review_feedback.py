@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+JsonDict = dict[str, Any]
+JsonDictList = list[JsonDict]
+JsonPayload = JsonDict | JsonDictList | list[JsonDictList]
+
 GRAPHQL_THREADS_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   repository(owner: $owner, name: $name) {
@@ -88,6 +92,30 @@ query($threadId: ID!, $cursor: String) {
 GH_BIN = shutil.which("gh")
 if not GH_BIN:
     raise RuntimeError("GitHub CLI (`gh`) not found in PATH.")
+assert GH_BIN is not None
+GH_EXECUTABLE: str = GH_BIN
+
+
+def load_json_payload(text: str) -> JsonPayload:
+    payload = json.loads(text)
+    if isinstance(payload, dict):
+        return payload
+    if isinstance(payload, list) and all(isinstance(item, dict) for item in payload):
+        return payload
+    if (
+        isinstance(payload, list)
+        and all(isinstance(page, list) for page in payload)
+        and all(isinstance(item, dict) for page in payload for item in page)
+    ):
+        return payload
+    raise ValueError("Expected a JSON object or list of JSON objects from gh output.")
+
+
+def load_json_object(text: str) -> JsonDict:
+    payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise ValueError("Expected a top-level JSON object from gh output.")
+    return payload
 
 
 def parse_args() -> argparse.Namespace:
@@ -146,16 +174,14 @@ def encode_repo_path(repo: str) -> str:
 
 
 def ensure_gh_auth() -> None:
-    subprocess.run([GH_BIN, "auth", "status"], capture_output=True, check=True)
+    subprocess.run([GH_EXECUTABLE, "auth", "status"], capture_output=True, check=True)
 
 
-def gh_api_read_only(
-    path: str, paginate: bool = False
-) -> dict[str, Any] | list[dict[str, Any]]:
-    cmd = [GH_BIN, "api", path]
+def gh_api_read_only(path: str, paginate: bool = False) -> JsonDict | JsonDictList:
+    cmd = [GH_EXECUTABLE, "api", path]
     if paginate:
         cmd.extend(["--paginate", "--slurp"])
-    payload = json.loads(run_cmd(cmd))
+    payload = load_json_payload(run_cmd(cmd))
     if (
         paginate
         and isinstance(payload, list)
@@ -163,14 +189,30 @@ def gh_api_read_only(
     ):
         flattened: list[dict[str, Any]] = []
         for page in payload:
-            flattened.extend(page)
+            if not isinstance(page, list):
+                raise ValueError(
+                    "Expected paginated gh payload pages to be JSON arrays."
+                )
+            for item in page:
+                if not isinstance(item, dict):
+                    raise ValueError(
+                        "Expected paginated gh payload items to be JSON objects."
+                    )
+                flattened.append(item)
         return flattened
+    if isinstance(payload, list):
+        validated_items: JsonDictList = []
+        for payload_item in payload:
+            if not isinstance(payload_item, dict):
+                raise ValueError("Expected gh payload items to be JSON objects.")
+            validated_items.append(payload_item)
+        return validated_items
     return payload
 
 
 def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
     ensure_read_only_graphql_query(query)
-    cmd = [GH_BIN, "api", "graphql", "-f", f"query={query}"]
+    cmd = [GH_EXECUTABLE, "api", "graphql", "-f", f"query={query}"]
     for key, value in variables.items():
         if isinstance(value, int):
             cmd.extend(["-F", f"{key}={value}"])
@@ -178,7 +220,7 @@ def gh_graphql(query: str, variables: dict[str, Any]) -> dict[str, Any]:
             continue
         else:
             cmd.extend(["-f", f"{key}={value}"])
-    return json.loads(run_cmd(cmd))
+    return load_json_object(run_cmd(cmd))
 
 
 def fetch_rest_comments(repo: str, pr_number: int) -> dict[str, Any]:
@@ -199,6 +241,8 @@ def fetch_thread_comments(thread_id: str, after: str | None = None) -> dict[str,
         GRAPHQL_THREAD_COMMENTS_QUERY, {"threadId": thread_id, "cursor": after}
     )
     comments = payload["data"]["node"]["comments"]
+    if not isinstance(comments, dict):
+        raise ValueError("Expected GraphQL thread comments payload to be an object.")
     return comments
 
 

@@ -789,7 +789,7 @@ def classify_comment(body: str, file_path: str | None = None) -> tuple[str, str,
     if best_match[0] >= 3:
         confidence = "high"
 
-    return (rule["category"], rule["severity"], confidence)
+    return (str(rule["category"]), str(rule["severity"]), str(confidence))
 
 
 def build_expectations(body: str) -> list[str]:
@@ -903,7 +903,7 @@ def main() -> int:
         if not is_self_authored_comment(comment, ignored_author_patterns)
     ]
 
-    proposal = {
+    proposal: dict[str, Any] = {
         "schema_version": "codex-review.github-intake.v1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source_file": input_path.name,
