@@ -17,7 +17,9 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
+
+JsonDict = dict[str, Any]
 
 FULL_REPO_SCAN_LIMIT = 20
 UNTRACKED_TEXT_LIMIT = 8000
@@ -405,9 +407,7 @@ def find_adjacent(repo: Path, changed: Iterable[Path]) -> list[str]:
     return sorted(suggestions)[:20]
 
 
-def repo_hotspots(
-    repo: Path, limit: int = FULL_REPO_SCAN_LIMIT
-) -> list[dict[str, object]]:
+def repo_hotspots(repo: Path, limit: int = FULL_REPO_SCAN_LIMIT) -> list[JsonDict]:
     hotspot_patterns = (
         (
             re.compile(r"(auth|session|permission|policy|secret|token)", re.I),
@@ -449,9 +449,7 @@ def repo_hotspots(
     ]
 
 
-def build_report(
-    repo: Path, base: str | None, head: str | None, mode: str
-) -> dict[str, object]:
+def build_report(repo: Path, base: str | None, head: str | None, mode: str) -> JsonDict:
     files = changed_files(repo, base, head, mode)
     patch = diff_text(repo, base, head, mode)
     layer_counts: dict[str, int] = defaultdict(int)
@@ -495,28 +493,33 @@ def build_report(
     return report
 
 
-def print_text_report(report: dict[str, object]) -> None:
+def print_text_report(report: JsonDict) -> None:
     print(f"Repo root: {report['repo_root']}")
     print(f"Mode: {report['mode']}")
     print(f"Diff basis: {report['diff_basis']}")
     print(f"Changed files: {report['changed_file_count']}")
     print()
     print("Layers:")
-    for layer, payload in report["layers"].items():
+    layers = report["layers"]
+    assert isinstance(layers, dict)
+    for layer, payload in layers.items():
         assert isinstance(payload, dict)
         print(f"- {layer} ({payload['count']})")
         for file_name in payload["files"][:8]:
             print(f"  - {file_name}")
-    if report["repo_hotspots"]:
+    repo_hotspots_payload = report["repo_hotspots"]
+    assert isinstance(repo_hotspots_payload, list)
+    if repo_hotspots_payload:
         print()
         print("Repo hotspots:")
-        for hotspot in report["repo_hotspots"]:
+        for hotspot in repo_hotspots_payload:
             assert isinstance(hotspot, dict)
             tags = ", ".join(str(tag) for tag in hotspot["tags"])
             print(f"- {hotspot['path']} [{tags}]")
     print()
     print("Risk prompts:")
     risk_hits = report["risk_hits"]
+    assert isinstance(risk_hits, list)
     if risk_hits:
         for risk in risk_hits:
             assert isinstance(risk, dict)
@@ -530,6 +533,7 @@ def print_text_report(report: dict[str, object]) -> None:
     print()
     print("Adjacent paths to inspect:")
     paths = report["adjacent_paths_to_inspect"]
+    assert isinstance(paths, list)
     if paths:
         for path in paths:
             print(f"- {path}")
@@ -537,7 +541,9 @@ def print_text_report(report: dict[str, object]) -> None:
         print("- No adjacency hints found.")
     print()
     print("Required questions:")
-    for question in report["required_questions"]:
+    required_questions = report["required_questions"]
+    assert isinstance(required_questions, list)
+    for question in required_questions:
         print(f"- {question}")
 
 
