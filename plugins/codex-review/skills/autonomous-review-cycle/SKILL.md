@@ -1,6 +1,6 @@
 ---
 name: autonomous-review-cycle
-description: Run the full Codex Review automation loop for this repo: local review, repair handoff, optional GitHub miss intake, and external hardening. Use when Codex automation should drive the plugin end to end rather than invoking each script manually.
+description: Run the ReviewPilot automation loop for this repo: local review, bounded repair handoff, optional GitHub miss intake, and small hardening batches.
 ---
 
 # Autonomous Review Cycle
@@ -81,7 +81,7 @@ python "./plugins/codex-review/scripts/run_github_intake_pipeline.py" --repo own
 python "./plugins/codex-review/skills/bug-hunting-code-review/scripts/run_hf_hardening_cycle.py" --repo . --offset 0 --length 3
 ```
 
-## How To Explain It To Users
+## User-Facing Language
 
 Prefer skill names and wrapper entrypoints, not long script lists.
 
