@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from argparse import Namespace
 from pathlib import Path
 from types import ModuleType
@@ -17,6 +18,7 @@ def load_module(module_name: str, relative_path: str) -> ModuleType:
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Could not load module spec for {module_path}.")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -36,6 +38,10 @@ compare_review_quality = load_module(
 run_pre_pr_review = load_module(
     "run_pre_pr_review_test",
     "plugins/codex-review/skills/bug-hunting-code-review/scripts/run_pre_pr_review.py",
+)
+review_surface_scan = load_module(
+    "review_surface_scan_test",
+    "plugins/codex-review/skills/bug-hunting-code-review/scripts/review_surface_scan.py",
 )
 run_public_pr_quality_cycle = load_module(
     "run_public_pr_quality_cycle_test",
@@ -207,6 +213,63 @@ def test_run_pre_pr_review_resolves_quality_comparison_from_repo_root() -> None:
             / "quality-comparison.json"
         ).resolve()
     )
+
+
+def test_render_surface_scan_highlights_risk_prompts_and_questions() -> None:
+    render_surface_scan = cast(
+        Callable[[dict[str, Any], str], str],
+        getattr(run_pre_pr_review, "render_surface_scan"),
+    )
+
+    rendered = render_surface_scan(
+        {
+            "changed_file_count": 3,
+            "layers": {
+                "service": {"count": 1, "files": ["src/service.py"]},
+                "tests": {"count": 2, "files": ["tests/test_service.py"]},
+            },
+            "risk_hits": [
+                {
+                    "severity": "high",
+                    "title": "Queue-claim or duplicate-dispatch risk",
+                    "check": "Verify the work item is claimed atomically before releasing control.",
+                }
+            ],
+            "adjacent_paths_to_inspect": ["src/workflow/", "tests/"],
+            "required_questions": [
+                "Which fallback path could overwrite an explicit cleared value?"
+            ],
+        },
+        "deep",
+    )
+
+    assert "Surface scan summary:" in rendered
+    assert "Changed layers: service=1, tests=2" in rendered
+    assert "[high] Queue-claim or duplicate-dispatch risk" in rendered
+    assert "Adjacent paths worth opening:" in rendered
+    assert "Questions to explicitly answer before you stop:" in rendered
+
+
+def test_scan_risks_flags_fallback_null_and_queue_claim_patterns() -> None:
+    scan_risks = cast(
+        Callable[..., list[dict[str, str]]],
+        getattr(review_surface_scan, "scan_risks"),
+    )
+    text = """
+    const ownerAgent = fallbackOwner ?? null;
+    const runtimeSession = currentSession ?? lastSession;
+    if (queuedHeartbeat) {
+      await processDueHeartbeats();
+      enqueueWake(queueItem);
+    }
+    """
+
+    risks = scan_risks(text, code_like_change_present=True)
+    keys = {risk["key"] for risk in risks}
+
+    assert "fail-open-fallback" in keys
+    assert "explicit-null-drift" in keys
+    assert "queue-claim" in keys
 
 
 def test_public_pr_quality_cycle_requires_review_artifact_for_auto_learning(

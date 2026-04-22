@@ -28,6 +28,7 @@ DEFAULT_PUBLIC_CALIBRATION_PATH = (
 DEFAULT_FULL_REPO_SCAN_LIMIT = 20
 DEFAULT_UNTRACKED_FILE_LIMIT = 12
 DEFAULT_UNTRACKED_BYTES = 12000
+JsonDict = dict[str, Any]
 
 
 def run_cmd(cmd: list[str], cwd: Path) -> str:
@@ -195,9 +196,19 @@ def get_diff(
     raise ValueError(f"Unsupported review mode: {mode}")
 
 
-def run_surface_scan(skill_dir: Path, repo: Path, base: str | None, mode: str) -> str:
+def run_surface_scan(
+    skill_dir: Path, repo: Path, base: str | None, mode: str
+) -> JsonDict:
     scan_script = skill_dir / "scripts" / "review_surface_scan.py"
-    cmd = [sys.executable, str(scan_script), "--repo", str(repo), "--mode", mode]
+    cmd = [
+        sys.executable,
+        str(scan_script),
+        "--repo",
+        str(repo),
+        "--mode",
+        mode,
+        "--json",
+    ]
     if base and mode in {"changes", "full"}:
         cmd.extend(["--base", base])
     completed = subprocess.run(
@@ -209,7 +220,10 @@ def run_surface_scan(skill_dir: Path, repo: Path, base: str | None, mode: str) -
         errors="replace",
         check=True,
     )
-    return completed.stdout
+    payload = json.loads(completed.stdout)
+    if not isinstance(payload, dict):
+        raise RuntimeError("Surface scan output must be a JSON object.")
+    return payload
 
 
 def load_json(path: Path) -> Any:
@@ -267,6 +281,72 @@ def comparison_focus(quality_comparison_path: Path | None) -> list[str]:
     return [str(item).strip() for item in prompt_focus if str(item).strip()]
 
 
+def render_surface_scan(scan_report: JsonDict, depth: str) -> str:
+    lines = ["Surface scan summary:"]
+    lines.append(f"- Changed files: {scan_report.get('changed_file_count', 0)}")
+
+    layers = scan_report.get("layers")
+    if isinstance(layers, dict) and layers:
+        layer_parts: list[str] = []
+        for layer_name, payload in sorted(layers.items()):
+            if not isinstance(payload, dict):
+                continue
+            count = payload.get("count")
+            if isinstance(count, int):
+                layer_parts.append(f"{layer_name}={count}")
+        if layer_parts:
+            lines.append(f"- Changed layers: {', '.join(layer_parts[:6])}")
+
+    risk_hits = scan_report.get("risk_hits")
+    if isinstance(risk_hits, list) and risk_hits:
+        lines.append("Risk prompts to verify:")
+        limit = 4 if depth == "quick" else 7
+        for risk in risk_hits[:limit]:
+            if not isinstance(risk, dict):
+                continue
+            severity = str(risk.get("severity") or "unknown")
+            title = str(risk.get("title") or "").strip()
+            check = str(risk.get("check") or "").strip()
+            if title and check:
+                lines.append(f"- [{severity}] {title}: {check}")
+
+    adjacent = scan_report.get("adjacent_paths_to_inspect")
+    if isinstance(adjacent, list) and adjacent:
+        lines.append("Adjacent paths worth opening:")
+        limit = 6 if depth == "quick" else 10
+        for path in adjacent[:limit]:
+            value = str(path).strip()
+            if value:
+                lines.append(f"- {value}")
+
+    hotspots = scan_report.get("repo_hotspots")
+    if isinstance(hotspots, list) and hotspots:
+        lines.append("Repo hotspots worth pressure-testing:")
+        limit = 4 if depth == "quick" else 8
+        for hotspot in hotspots[:limit]:
+            if not isinstance(hotspot, dict):
+                continue
+            path = str(hotspot.get("path") or "").strip()
+            tags = hotspot.get("tags")
+            if not path:
+                continue
+            if isinstance(tags, list) and tags:
+                lines.append(f"- {path} [{', '.join(str(tag) for tag in tags)}]")
+            else:
+                lines.append(f"- {path}")
+
+    required_questions = scan_report.get("required_questions")
+    if isinstance(required_questions, list) and required_questions:
+        lines.append("Questions to explicitly answer before you stop:")
+        limit = 4 if depth == "quick" else 7
+        for question in required_questions[:limit]:
+            value = str(question).strip()
+            if value:
+                lines.append(f"- {value}")
+
+    return "\n".join(lines)
+
+
 def render_miss_calibration_section(
     skill_dir: Path, quality_comparison_path: Path | None
 ) -> str:
@@ -312,29 +392,23 @@ def build_prompt(
 
         Produce a release-blocking code review.
         Findings first. Prioritize correctness, security, AI-slop drift, stale state, broken paths, broken tests, and missing negative-path handling.
-        Use the scan hints, but verify them from the diff and surrounding behavior.
+        Treat the diff as the entry point, not the review boundary. Use the scan hints to choose where to dig next, but verify every claim from the code.
         If there are no findings, say so explicitly and mention residual risk or test gaps briefly.
 
         Output contract:
         - Use the exact headings: Findings, Open questions, Change summary.
-        - Every finding must start with a short title line, then one short "Why this is a bug:" sentence, then one short "Evidence:" sentence.
-        - Prioritize findings that are directly caused by the changed files, changed hunks, or the state transitions those hunks now control.
-        - Do not spend the first findings on unrelated pre-existing issues elsewhere in the repo unless the diff clearly routes through them.
-        - For each finding, name the concrete symbol, field, error type, or state surface that is wrong.
-        - Include one short "Why this is a bug:" sentence that explains the failing scenario and user or system impact.
-        - Include one short "Evidence:" sentence that uses concrete identifiers from the code surface rather than abstract paraphrase.
-        - When the bug is about stale state, source-of-truth drift, or contract mismatch, explicitly name both sides that disagree.
-        - Prefer concrete API names, field names, function names, enum names, and error names when they are visible in the diff or scan.
-        - If the issue is about concurrency, explicitly say race, TOCTOU, atomic, or concurrent when those words truly apply.
-        - If the issue is about rollback or stale UI state, explicitly say whether thrown exceptions and returned error objects are handled differently.
-        - If the issue is about low-level validation, explicitly name the missing NULL, parameter, bounds, or return-value guard.
-        - Before looking for broader repo drift, first pressure-test the changed code for: guard-then-write races, optimistic updates without throw rollback, reset/cleanup paths that leave stale status, and source-of-truth mismatches between read and write paths.
-        - Mandatory bug-hunt checklist before you stop:
-          1. Re-scan every touched function and its immediate helper/caller pair for missing NULL, parameter, bounds, or return-value guards.
-          2. Re-scan async or shared-state helpers for state written only after await, retry, backoff, throttle, or detached-process verification gaps.
-          3. Re-scan reset, cleanup, rollback, and refresh paths to confirm the user-visible status stays durable on the next read, not just the first one.
-          4. Re-scan read vs write paths for live-default versus persisted-source mismatches such as stored bucket, stored slug, stored status, or stored token fields.
-          5. If you find one real bug in a touched area, check the neighboring branch or sibling function for the same failure class before ending the review.
+        - Each finding needs a short title line, one short "Why this is a bug:" sentence, and one short "Evidence:" sentence.
+        - Prioritize findings that are directly caused by the changed files, changed hunks, or the state transitions they now control.
+        - Do not spend the first findings on unrelated pre-existing issues unless the diff clearly routes through them.
+        - Name the concrete symbol, field, error type, or state surface that is wrong.
+        - When the issue is stale state, source-of-truth drift, or contract mismatch, name both sides that disagree.
+        - Prefer concrete API names, field names, functions, enums, and error names over abstract paraphrase.
+
+        Review loop:
+        1. Pressure-test the changed code first for missing guards, guard-then-write races, rollback gaps, stale-status cleanup, and read-vs-write drift.
+        2. Use the scan section below to inspect the highest-risk adjacent paths.
+        3. If you find one real bug in a touched area, check the sibling branch or mirrored path for the same failure class before stopping.
+        4. Only then spend time on broader repo drift.
 
         Review mode guidance:
         - Mode: {mode}
@@ -440,7 +514,8 @@ def prepare_review_artifacts(
 ) -> dict[str, str]:
     default_prompt = load_default_prompt(skill_dir)
     diff, metadata = get_diff(repo, base, pr, mode)
-    scan = run_surface_scan(skill_dir, repo, base if not pr else None, mode)
+    scan_report = run_surface_scan(skill_dir, repo, base if not pr else None, mode)
+    scan = render_surface_scan(scan_report, depth)
     calibration_section = render_miss_calibration_section(
         skill_dir,
         resolve_repo_path(repo, quality_comparison),
