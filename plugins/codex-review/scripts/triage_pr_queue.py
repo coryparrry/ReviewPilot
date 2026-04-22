@@ -89,7 +89,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_cmd(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+def run_cmd(
+    cmd: list[str], cwd: Path, timeout: float | None = 120.0
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         cmd,
         cwd=cwd,
@@ -98,6 +100,7 @@ def run_cmd(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=True,
+        timeout=timeout,
     )
 
 
@@ -466,9 +469,13 @@ def load_cached_triage_result(
         for item in prs:
             if not isinstance(item, dict):
                 continue
+            try:
+                cached_pr = int(item.get("pr") or 0)
+            except (TypeError, ValueError):
+                continue
             if (
                 str(item.get("repo") or "") == repo_name
-                and int(item.get("pr") or 0) == pr_number
+                and cached_pr == pr_number
                 and str(item.get("head_oid") or "") == head_oid
             ):
                 cached = dict(item)

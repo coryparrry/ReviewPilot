@@ -156,6 +156,7 @@ def review_cache_key(args: argparse.Namespace, head_sha: str) -> JsonDict:
         "quality_comparison": str(args.quality_comparison or ""),
         "max_deep_passes": args.max_deep_passes,
         "pass_timeout_seconds": args.pass_timeout_seconds,
+        "benchmark_enabled": not args.no_benchmark and args.depth != "quick",
     }
 
 
@@ -585,7 +586,7 @@ def main() -> int:
     head_sha = current_head_sha(repo)
     cache_key = review_cache_key(args, head_sha)
     review_root = repo / args.output_dir
-    if not args.no_cache:
+    if not args.no_cache and args.mode != "dirty":
         reusable_run = find_reusable_review_run(review_root, cache_key)
         if reusable_run is not None:
             print(f"Reused review artifacts: {reusable_run}")

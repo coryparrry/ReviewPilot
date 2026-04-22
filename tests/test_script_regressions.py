@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from argparse import Namespace
 from pathlib import Path
@@ -226,8 +227,7 @@ def test_run_pre_pr_review_resolves_quality_comparison_from_repo_root() -> None:
 
 def test_render_surface_scan_highlights_risk_prompts_and_questions() -> None:
     render_surface_scan = cast(
-        Callable[[dict[str, Any], str], str],
-        getattr(run_pre_pr_review, "render_surface_scan"),
+        Callable[[dict[str, Any], str], str], run_pre_pr_review.render_surface_scan
     )
 
     rendered = render_surface_scan(
@@ -259,10 +259,48 @@ def test_render_surface_scan_highlights_risk_prompts_and_questions() -> None:
     assert "Questions to explicitly answer before you stop:" in rendered
 
 
+def test_run_surface_scan_invokes_expected_json_cli(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[dict[str, Any]] = []
+    skill_dir = tmp_path / "skill"
+    repo = tmp_path / "repo"
+    (skill_dir / "scripts").mkdir(parents=True)
+    repo.mkdir()
+
+    def fake_run(
+        cmd: list[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append({"cmd": cmd, **kwargs})
+        return subprocess.CompletedProcess(cmd, 0, stdout='{"risk_hits": []}')
+
+    monkeypatch.setattr(run_pre_pr_review.subprocess, "run", fake_run)
+
+    payload = run_pre_pr_review.run_surface_scan(
+        skill_dir, repo, "origin/main", "changes"
+    )
+
+    assert payload == {"risk_hits": []}
+    assert len(calls) == 1
+    assert calls[0]["cmd"] == [
+        sys.executable,
+        str(skill_dir / "scripts" / "review_surface_scan.py"),
+        "--repo",
+        str(repo),
+        "--mode",
+        "changes",
+        "--json",
+        "--base",
+        "origin/main",
+    ]
+    assert calls[0]["cwd"] == repo
+    assert calls[0]["check"] is True
+
+
 def test_render_miss_calibration_section_is_compact_without_live_focus() -> None:
     render_miss_calibration_section = cast(
         Callable[[Path, Path | None], str],
-        getattr(run_pre_pr_review, "render_miss_calibration_section"),
+        run_pre_pr_review.render_miss_calibration_section,
     )
     skill_dir = (
         REPO_ROOT / "plugins" / "codex-review" / "skills" / "bug-hunting-code-review"
@@ -416,7 +454,7 @@ def test_recommend_review_settings_match_depth_and_score() -> None:
 def test_load_cached_triage_result_matches_head_oid(tmp_path: Path) -> None:
     load_cached_triage_result = cast(
         Callable[[Path, str, int, str], dict[str, Any] | None],
-        getattr(triage_pr_queue, "load_cached_triage_result"),
+        triage_pr_queue.load_cached_triage_result,
     )
     summary_path = tmp_path / "artifacts" / "pr-triage" / "run" / "triage-summary.json"
     summary_path.parent.mkdir(parents=True)
@@ -441,6 +479,34 @@ def test_load_cached_triage_result_matches_head_oid(tmp_path: Path) -> None:
     assert cached is not None
     assert cached["cache_hit"] is True
     assert str(cached["cache_source"]).endswith("triage-summary.json")
+
+
+def test_load_cached_triage_result_skips_malformed_cached_pr(tmp_path: Path) -> None:
+    summary_path = tmp_path / "artifacts" / "pr-triage" / "run" / "triage-summary.json"
+    summary_path.parent.mkdir(parents=True)
+    summary_path.write_text(
+        json.dumps(
+            {
+                "prs": [
+                    {"repo": "owner/name", "pr": "not-a-number", "head_oid": "abc123"},
+                    {
+                        "repo": "owner/name",
+                        "pr": 123,
+                        "head_oid": "abc123",
+                        "recommended_depth": "quick",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cached = triage_pr_queue.load_cached_triage_result(
+        tmp_path, "owner/name", 123, "abc123"
+    )
+
+    assert cached is not None
+    assert cached["recommended_depth"] == "quick"
 
 
 def test_should_abort_remaining_passes_on_timeout_after_success() -> None:
@@ -667,3 +733,23 @@ def test_find_reusable_review_run_matches_cache_key(tmp_path: Path) -> None:
     )
 
     assert reusable == run_dir
+
+
+def test_review_cache_key_tracks_effective_benchmark_mode() -> None:
+    args = Namespace(
+        base="origin/main",
+        mode="changes",
+        depth="deep",
+        model="gpt-5",
+        quality_comparison=None,
+        max_deep_passes=3,
+        pass_timeout_seconds=180,
+        no_benchmark=False,
+    )
+
+    enabled = run_codex_review.review_cache_key(args, "abc123")
+    args.no_benchmark = True
+    disabled = run_codex_review.review_cache_key(args, "abc123")
+
+    assert enabled["benchmark_enabled"] is True
+    assert disabled["benchmark_enabled"] is False
