@@ -81,6 +81,11 @@ def parse_args() -> argparse.Namespace:
         default=40000,
         help="Maximum diff characters to scan per PR. Keeps triage cheap.",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable reuse of earlier triage results for unchanged PR head SHAs.",
+    )
     return parser.parse_args()
 
 
@@ -104,6 +109,10 @@ def repo_root(cwd: Path) -> Path:
 def default_output_dir(repo: Path) -> Path:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return repo / "artifacts" / "pr-triage" / timestamp
+
+
+def triage_root(repo: Path) -> Path:
+    return repo / "artifacts" / "pr-triage"
 
 
 def write_json(path: Path, payload: JsonDict) -> None:
@@ -209,6 +218,7 @@ def fetch_pr_view(repo_name: str, pr_number: int, cwd: Path) -> JsonDict:
                     "isDraft",
                     "baseRefName",
                     "headRefName",
+                    "headRefOid",
                 ]
             ),
         ],
@@ -295,6 +305,26 @@ def recommend_review_depth(
     return "skip"
 
 
+def recommend_review_settings(recommended_depth: str, triage_score: int) -> JsonDict:
+    if recommended_depth == "deep":
+        return {
+            "depth": "deep",
+            "max_deep_passes": 2 if triage_score < 20 else 3,
+            "pass_timeout_seconds": 180,
+        }
+    if recommended_depth == "quick":
+        return {
+            "depth": "quick",
+            "max_deep_passes": 1,
+            "pass_timeout_seconds": 120,
+        }
+    return {
+        "depth": "quick",
+        "max_deep_passes": 1,
+        "pass_timeout_seconds": 90,
+    }
+
+
 def analyze_pr(
     repo_name: str,
     pr_number: int,
@@ -302,8 +332,10 @@ def analyze_pr(
     cwd: Path,
     scan_module: types.ModuleType,
     max_diff_chars: int,
+    view: JsonDict | None = None,
 ) -> JsonDict:
-    view = fetch_pr_view(repo_name, pr_number, cwd)
+    if view is None:
+        view = fetch_pr_view(repo_name, pr_number, cwd)
     diff = fetch_pr_diff(repo_name, pr_number, cwd)
     scan_risks = cast(Any, getattr(scan_module, "scan_risks"))
 
@@ -358,6 +390,7 @@ def analyze_pr(
         layer_counts=layer_counts,
         code_files_changed=code_files_changed,
     )
+    review_settings = recommend_review_settings(depth, score)
 
     reasons: list[str] = []
     if risk_hits:
@@ -383,6 +416,7 @@ def analyze_pr(
         "is_draft": bool(view.get("isDraft")),
         "base_ref": str(view.get("baseRefName") or ""),
         "head_ref": str(view.get("headRefName") or ""),
+        "head_oid": str(view.get("headRefOid") or ""),
         "changed_files": int(view.get("changedFiles") or 0),
         "additions": int(view.get("additions") or 0),
         "deletions": int(view.get("deletions") or 0),
@@ -391,13 +425,57 @@ def analyze_pr(
         "risk_hits": risk_hits,
         "triage_score": score,
         "recommended_depth": depth,
+        "recommended_review_settings": review_settings,
         "reasons": reasons,
         "checkout_hint": f"gh pr checkout {pr_number} --repo {repo_name}",
+        "recommended_review_command": (
+            'python "/Users/coryparry/Documents/codex-review-skill/plugins/codex-review/scripts/run_codex_review.py" '
+            '--repo "<checked-out-repo>" '
+            "--base "
+            f'{str(view.get("baseRefName") or "origin/main")} '
+            f'--depth {review_settings["depth"]} '
+            f'--max-deep-passes {review_settings["max_deep_passes"]} '
+            f'--pass-timeout-seconds {review_settings["pass_timeout_seconds"]}'
+        ),
         "public_compare_hint": (
             'python "./plugins/codex-review/scripts/run_public_pr_quality_cycle.py" '
             f'--repo {repo_name} --pr {pr_number} --review-artifacts "<review-run-dir>"'
         ),
     }
+
+
+def load_cached_triage_result(
+    repo: Path, repo_name: str, pr_number: int, head_oid: str
+) -> JsonDict | None:
+    if not head_oid:
+        return None
+    root = triage_root(repo)
+    if not root.is_dir():
+        return None
+    summaries = sorted(root.glob("*/triage-summary.json"), reverse=True)
+    for summary_path in summaries:
+        try:
+            payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        prs = payload.get("prs")
+        if not isinstance(prs, list):
+            continue
+        for item in prs:
+            if not isinstance(item, dict):
+                continue
+            if (
+                str(item.get("repo") or "") == repo_name
+                and int(item.get("pr") or 0) == pr_number
+                and str(item.get("head_oid") or "") == head_oid
+            ):
+                cached = dict(item)
+                cached["cache_hit"] = True
+                cached["cache_source"] = str(summary_path)
+                return cached
+    return None
 
 
 def build_markdown(queue: list[JsonDict], top_n: int) -> str:
@@ -440,6 +518,7 @@ def build_markdown(queue: list[JsonDict], top_n: int) -> str:
         if item["reasons"]:
             lines.append(f"  Reasons: {'; '.join(item['reasons'][:3])}")
         lines.append(f"  Checkout: `{item['checkout_hint']}`")
+        lines.append(f"  Review: `{item['recommended_review_command']}`")
     lines.append("")
     return "\n".join(lines)
 
@@ -454,16 +533,26 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     scan_module = load_surface_scan_module(repo)
-    analyzed = [
-        analyze_pr(
-            repo_name,
-            pr_number,
-            cwd=repo,
-            scan_module=scan_module,
-            max_diff_chars=args.max_diff_chars,
+    analyzed: list[JsonDict] = []
+    for repo_name, pr_number in queue_specs:
+        view = fetch_pr_view(repo_name, pr_number, repo)
+        head_oid = str(view.get("headRefOid") or "")
+        cached = None
+        if not args.no_cache:
+            cached = load_cached_triage_result(repo, repo_name, pr_number, head_oid)
+        if cached is not None:
+            analyzed.append(cached)
+            continue
+        analyzed.append(
+            analyze_pr(
+                repo_name,
+                pr_number,
+                cwd=repo,
+                scan_module=scan_module,
+                max_diff_chars=args.max_diff_chars,
+                view=view,
+            )
         )
-        for repo_name, pr_number in queue_specs
-    ]
     analyzed.sort(
         key=lambda item: (
             -int(item["triage_score"]),

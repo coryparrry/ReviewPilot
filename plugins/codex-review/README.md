@@ -392,6 +392,7 @@ That wrapper:
 - fetches only PR metadata and patch text through `gh`
 - scores the PRs cheaply for review risk
 - recommends `deep`, `quick`, or `skip`
+- emits a suggested `run_codex_review.py` command with token-aware defaults for that PR
 - writes a ranked queue under `artifacts/pr-triage/`
 
 For Codex automations, the recommended skill entrypoint is:

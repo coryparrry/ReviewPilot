@@ -1,6 +1,7 @@
 import argparse
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any, Tuple
 
 JsonDict = dict[str, Any]
+DEFAULT_PASS_TIMEOUT_SECONDS = 420
+DEFAULT_MAX_DEEP_PASSES = 3
 
 SECTION_HEADING_RE = re.compile(r"^\*\*(.+?)\*\*$")
 MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
@@ -75,6 +78,29 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip benchmark scoring after the review is written.",
     )
+    parser.add_argument(
+        "--pass-timeout-seconds",
+        type=int,
+        default=int(os.environ.get("CODEX_REVIEW_PASS_TIMEOUT_SECONDS", "420")),
+        help=(
+            "Maximum seconds per Codex review pass before the pass is treated as stalled. "
+            "Defaults to CODEX_REVIEW_PASS_TIMEOUT_SECONDS or 420."
+        ),
+    )
+    parser.add_argument(
+        "--max-deep-passes",
+        type=int,
+        default=int(os.environ.get("CODEX_REVIEW_MAX_DEEP_PASSES", "3")),
+        help=(
+            "Maximum number of deep-review passes to run after adaptive pass selection. "
+            "Defaults to CODEX_REVIEW_MAX_DEEP_PASSES or 3."
+        ),
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable reuse of a prior completed review run for the same repo head and settings.",
+    )
     return parser.parse_args()
 
 
@@ -97,6 +123,73 @@ def read_text_if_present(path: Path) -> str:
     if not path.is_file():
         return ""
     return path.read_text(encoding="utf-8", errors="replace")
+
+
+def current_head_sha(repo: Path) -> str:
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=True,
+    )
+    return completed.stdout.strip()
+
+
+def coerce_completed_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def review_cache_key(args: argparse.Namespace, head_sha: str) -> JsonDict:
+    return {
+        "head_sha": head_sha,
+        "base": args.base,
+        "mode": args.mode,
+        "depth": args.depth,
+        "model": args.model,
+        "quality_comparison": str(args.quality_comparison or ""),
+        "max_deep_passes": args.max_deep_passes,
+        "pass_timeout_seconds": args.pass_timeout_seconds,
+    }
+
+
+def write_cache_key(path: Path, payload: JsonDict) -> None:
+    write_file(path, json.dumps(payload, indent=2) + "\n")
+
+
+def load_cache_key(path: Path) -> JsonDict | None:
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def find_reusable_review_run(review_root: Path, cache_key: JsonDict) -> Path | None:
+    if not review_root.is_dir():
+        return None
+    candidates = sorted(
+        (child for child in review_root.iterdir() if child.is_dir()),
+        key=lambda item: item.name,
+        reverse=True,
+    )
+    for candidate in candidates:
+        if not (candidate / "review.md").is_file():
+            continue
+        existing_key = load_cache_key(candidate / "review-cache-key.json")
+        if existing_key == cache_key:
+            return candidate
+    return None
 
 
 def resolve_codex_base_command() -> list[str]:
@@ -222,55 +315,138 @@ def extract_findings_items(review_text: str) -> list[str]:
     return split_numbered_items(findings_block)
 
 
-def build_pass_prompts(prompt: str, depth: str) -> list[tuple[str, str]]:
+PASS_FOCUS_SUFFIXES: dict[str, str] = {
+    "changed-hunks": (
+        "\n\nFocus pass:\n"
+        "- Report only bugs directly caused by changed files, changed hunks, or the state transitions those hunks now control.\n"
+        "- Ignore unrelated pre-existing issues elsewhere unless the diff clearly routes through them.\n"
+    ),
+    "concurrency-state": (
+        "\n\nFocus pass:\n"
+        "- Prioritize race conditions, TOCTOU bugs, rollback-on-throw gaps, stale status after reset, and source-of-truth drift.\n"
+        "- Re-check shared async helpers for state that is only updated after await, fetch, retry, delay, throttle, or detached-process dispatch.\n"
+        "- Re-check optimistic UI or workflow state for paths where thrown exceptions bypass rollback while returned error objects do not.\n"
+        "- Prefer findings in the touched functions and their immediate callers/callees.\n"
+    ),
+    "validation-contract": (
+        "\n\nFocus pass:\n"
+        "- Prioritize missing input validation, NULL or bounds guards, return-value handling, cleanup failures, and changed contract mismatches.\n"
+        "- Re-scan sibling touched functions for the same low-level guard pattern once one missing NULL, parameter, bounds, or return-value check is found.\n"
+        "- Prefer mismatches where the write path stores one source of truth but the read path still uses a live default or fallback value.\n"
+        "- Prefer findings in the touched functions and their immediate callers/callees.\n"
+    ),
+    "workflow-lifecycle": (
+        "\n\nFocus pass:\n"
+        "- Prioritize reset, cleanup, teardown, retry, process-launch, timeout, and refresh behavior.\n"
+        "- Check whether the first successful or failing request leaves behind durable state that the next request still interprets correctly.\n"
+        "- Check shell or external-process paths for verification-after-dispatch gaps, missing timeouts, or cleanup steps that depend on unrelated metadata.\n"
+        "- Prefer findings in the touched functions and their immediate callers/callees.\n"
+    ),
+    "async-helpers": (
+        "\n\nFocus pass:\n"
+        "- Prioritize shared async helpers such as throttle, retry, backoff, queue, cache, and client wrappers.\n"
+        "- Check whether coordination state is read before await and only written after await, which lets concurrent callers bypass the intended guard.\n"
+        "- Check whether helper fallbacks, retries, and Retry-After handling preserve the intended delay semantics when headers or metadata are absent.\n"
+        "- Prefer findings in the touched helper and the immediate call site that depends on its coordination behavior.\n"
+    ),
+}
+
+
+def select_deep_pass_names(
+    scan_report: JsonDict, max_deep_passes: int = DEFAULT_MAX_DEEP_PASSES
+) -> list[str]:
+    selected = ["changed-hunks"]
+    risk_keys: set[str] = set()
+    risk_hits = scan_report.get("risk_hits")
+    if isinstance(risk_hits, list):
+        for hit in risk_hits:
+            if not isinstance(hit, dict):
+                continue
+            key = str(hit.get("key") or "").strip()
+            if key:
+                risk_keys.add(key)
+
+    layers = scan_report.get("layers")
+    layer_names = set(layers.keys()) if isinstance(layers, dict) else set()
+
+    if risk_keys & {
+        "state-machine",
+        "parity-drift",
+        "explicit-null-drift",
+        "queue-claim",
+    }:
+        selected.append("concurrency-state")
+    if risk_keys & {
+        "request-contract",
+        "error-shaping",
+        "security-boundary",
+        "path-reachability",
+    } or layer_names & {"route-controller", "contracts-types"}:
+        selected.append("validation-contract")
+    if (
+        risk_keys & {"state-machine", "queue-claim", "fail-open-fallback"}
+        or "workflow-runtime" in layer_names
+    ):
+        selected.append("workflow-lifecycle")
+    if risk_keys & {"queue-claim"}:
+        selected.append("async-helpers")
+
+    deduped: list[str] = []
+    for pass_name in selected:
+        if pass_name not in deduped:
+            deduped.append(pass_name)
+    return deduped[: max(1, max_deep_passes)]
+
+
+def build_pass_prompts(
+    prompt: str,
+    depth: str,
+    scan_report: JsonDict,
+    max_deep_passes: int = DEFAULT_MAX_DEEP_PASSES,
+) -> list[tuple[str, str]]:
     if depth != "deep":
         return [("single", prompt)]
 
+    pass_names = select_deep_pass_names(scan_report, max_deep_passes)
     return [
-        (
-            "changed-hunks",
-            prompt
-            + "\n\nFocus pass:\n"
-            + "- Report only bugs directly caused by changed files, changed hunks, or the state transitions those hunks now control.\n"
-            + "- Ignore unrelated pre-existing issues elsewhere unless the diff clearly routes through them.\n",
-        ),
-        (
-            "concurrency-state",
-            prompt
-            + "\n\nFocus pass:\n"
-            + "- Prioritize race conditions, TOCTOU bugs, rollback-on-throw gaps, stale status after reset, and source-of-truth drift.\n"
-            + "- Re-check shared async helpers for state that is only updated after await, fetch, retry, delay, throttle, or detached-process dispatch.\n"
-            + "- Re-check optimistic UI or workflow state for paths where thrown exceptions bypass rollback while returned error objects do not.\n"
-            + "- Prefer findings in the touched functions and their immediate callers/callees.\n",
-        ),
-        (
-            "validation-contract",
-            prompt
-            + "\n\nFocus pass:\n"
-            + "- Prioritize missing input validation, NULL or bounds guards, return-value handling, cleanup failures, and changed contract mismatches.\n"
-            + "- Re-scan sibling touched functions for the same low-level guard pattern once one missing NULL, parameter, bounds, or return-value check is found.\n"
-            + "- Prefer mismatches where the write path stores one source of truth but the read path still uses a live default or fallback value.\n"
-            + "- Prefer findings in the touched functions and their immediate callers/callees.\n",
-        ),
-        (
-            "workflow-lifecycle",
-            prompt
-            + "\n\nFocus pass:\n"
-            + "- Prioritize reset, cleanup, teardown, retry, process-launch, timeout, and refresh behavior.\n"
-            + "- Check whether the first successful or failing request leaves behind durable state that the next request still interprets correctly.\n"
-            + "- Check shell or external-process paths for verification-after-dispatch gaps, missing timeouts, or cleanup steps that depend on unrelated metadata.\n"
-            + "- Prefer findings in the touched functions and their immediate callers/callees.\n",
-        ),
-        (
-            "async-helpers",
-            prompt
-            + "\n\nFocus pass:\n"
-            + "- Prioritize shared async helpers such as throttle, retry, backoff, queue, cache, and client wrappers.\n"
-            + "- Check whether coordination state is read before await and only written after await, which lets concurrent callers bypass the intended guard.\n"
-            + "- Check whether helper fallbacks, retries, and Retry-After handling preserve the intended delay semantics when headers or metadata are absent.\n"
-            + "- Prefer findings in the touched helper and the immediate call site that depends on its coordination behavior.\n",
-        ),
+        (pass_name, prompt + PASS_FOCUS_SUFFIXES[pass_name]) for pass_name in pass_names
     ]
+
+
+def should_continue_after_pass(
+    *,
+    pass_name: str,
+    review_text: str,
+    scan_report: JsonDict,
+) -> bool:
+    if pass_name != "changed-hunks":
+        return False
+
+    findings = extract_findings_items(review_text)
+    if not findings:
+        return True
+
+    risk_hits = scan_report.get("risk_hits")
+    high_risk_keys: set[str] = set()
+    high_risk_count = 0
+    if isinstance(risk_hits, list):
+        for hit in risk_hits:
+            if not isinstance(hit, dict):
+                continue
+            if str(hit.get("severity") or "") != "high":
+                continue
+            high_risk_count += 1
+            key = str(hit.get("key") or "").strip()
+            if key:
+                high_risk_keys.add(key)
+
+    if len(findings) >= 2:
+        return False
+    if high_risk_count >= 2:
+        return True
+    if high_risk_keys & {"security-boundary", "queue-claim", "state-machine"}:
+        return True
+    return False
 
 
 def combine_pass_reviews(pass_reviews: list[tuple[str, str]]) -> str:
@@ -316,6 +492,7 @@ def run_codex_attempt(
     review_file: Path,
     run_dir: Path,
     attempt: int,
+    timeout_seconds: int,
 ) -> Tuple[bool, str, subprocess.CompletedProcess[str]]:
     if review_file.exists():
         review_file.unlink()
@@ -337,16 +514,31 @@ def run_codex_attempt(
         codex_cmd.extend(["--model", model])
     codex_cmd.append("-")
 
-    completed = subprocess.run(
-        codex_cmd,
-        cwd=repo,
-        input=prompt,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            codex_cmd,
+            cwd=repo,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        completed = subprocess.CompletedProcess(
+            args=codex_cmd,
+            returncode=124,
+            stdout=coerce_completed_text(exc.stdout),
+            stderr=coerce_completed_text(exc.stderr)
+            + f"\nTimed out after {timeout_seconds} seconds.\n",
+        )
+        stdout_log = run_dir / f"codex-attempt-{attempt}-stdout.txt"
+        stderr_log = run_dir / f"codex-attempt-{attempt}-stderr.txt"
+        write_file(stdout_log, completed.stdout)
+        write_file(stderr_log, completed.stderr)
+        return False, "codex-timeout", completed
 
     stdout_log = run_dir / f"codex-attempt-{attempt}-stdout.txt"
     stderr_log = run_dir / f"codex-attempt-{attempt}-stderr.txt"
@@ -368,6 +560,20 @@ def run_codex_attempt(
     return False, "unknown-review-failure", completed
 
 
+def should_abort_remaining_passes(
+    *,
+    successful_passes: int,
+    reason: str,
+    attempt: int,
+    max_attempts: int,
+) -> bool:
+    if successful_passes <= 0:
+        return False
+    if reason == "codex-timeout":
+        return True
+    return attempt >= max_attempts
+
+
 def main() -> int:
     args = parse_args()
     script_path = Path(__file__).resolve()
@@ -376,6 +582,15 @@ def main() -> int:
     pre_pr = load_pre_pr_module(skill_dir)
 
     repo = pre_pr.repo_root(Path(args.repo).resolve())
+    head_sha = current_head_sha(repo)
+    cache_key = review_cache_key(args, head_sha)
+    review_root = repo / args.output_dir
+    if not args.no_cache:
+        reusable_run = find_reusable_review_run(review_root, cache_key)
+        if reusable_run is not None:
+            print(f"Reused review artifacts: {reusable_run}")
+            print(f"Review: {reusable_run / 'review.md'}")
+            return 0
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = repo / args.output_dir / timestamp
 
@@ -393,6 +608,7 @@ def main() -> int:
     write_file(run_dir / "review-metadata.json", prepared["metadata"])
     write_file(run_dir / "surface-scan.txt", prepared["scan"])
     write_file(run_dir / "review-prompt.txt", prepared["prompt"])
+    write_cache_key(run_dir / "review-cache-key.json", cache_key)
     if prepared["calibration_section"]:
         write_file(
             run_dir / "miss-calibration.txt", prepared["calibration_section"] + "\n"
@@ -407,13 +623,20 @@ def main() -> int:
     stdout_log = run_dir / "codex-stdout.txt"
     stderr_log = run_dir / "codex-stderr.txt"
     repair_summary = run_dir / "repair-summary.txt"
+    scan_report = pre_pr.run_surface_scan(skill_dir, repo, args.base, args.mode)
 
     max_attempts = 2
     pass_reviews: list[tuple[str, str]] = []
     pass_stdout_texts: list[str] = []
     pass_stderr_texts: list[str] = []
     overall_notes: list[str] = []
-    pass_prompts = build_pass_prompts(prepared["prompt"], args.depth)
+    pass_prompts = build_pass_prompts(
+        prepared["prompt"],
+        args.depth,
+        scan_report,
+        args.max_deep_passes,
+    )
+    stop_remaining_passes = False
 
     for pass_index, (pass_name, pass_prompt) in enumerate(pass_prompts, start=1):
         final_completed = None
@@ -431,6 +654,7 @@ def main() -> int:
                 review_file=pass_review_file,
                 run_dir=run_dir,
                 attempt=pass_index * 10 + attempt,
+                timeout_seconds=args.pass_timeout_seconds,
             )
             final_completed = completed
 
@@ -441,6 +665,18 @@ def main() -> int:
                         f"First attempt failed with: {reason_before_retry or 'unknown mechanical failure'}."
                     )
                 success = True
+                break
+
+            if should_abort_remaining_passes(
+                successful_passes=len(pass_reviews),
+                reason=reason,
+                attempt=attempt,
+                max_attempts=max_attempts,
+            ):
+                overall_notes.append(
+                    f"{pass_name}: stopping after {reason} once earlier passes already produced a usable review."
+                )
+                stop_remaining_passes = True
                 break
 
             if attempt == max_attempts:
@@ -463,7 +699,25 @@ def main() -> int:
         if repair_notes:
             overall_notes.extend(repair_notes)
         if success:
-            pass_reviews.append((pass_name, read_text_if_present(pass_review_file)))
+            pass_review_text = read_text_if_present(pass_review_file)
+            pass_reviews.append((pass_name, pass_review_text))
+            if not should_continue_after_pass(
+                pass_name=pass_name,
+                review_text=pass_review_text,
+                scan_report=scan_report,
+            ):
+                stop_remaining_passes = True
+                if len(pass_prompts) > 1 and pass_name == "changed-hunks":
+                    overall_notes.append(
+                        "changed-hunks: first pass was strong enough, so deeper follow-up passes were skipped to save review budget."
+                    )
+        if stop_remaining_passes:
+            break
+
+    if not pass_reviews:
+        raise RuntimeError(
+            "Codex review generation did not produce any usable pass output."
+        )
 
     combined_review = combine_pass_reviews(pass_reviews)
     write_file(review_file, combined_review)
@@ -483,6 +737,10 @@ def main() -> int:
         )
     if overall_notes:
         print("Self-repair: recovered after one or more automatic read-only retries.")
+    if stop_remaining_passes:
+        print(
+            "Review hardening: stopped after a later pass stalled or failed, preserving earlier successful passes."
+        )
 
     repair_output = run_repair_plan(repair_script, review_file, run_dir, repo)
     print(repair_output.strip())

@@ -1,4 +1,4 @@
 interface:
   display_name: "Bug-Hunting Code Review"
   short_description: "Deep CodeRabbit-style review for real bugs"
-  default_prompt: "Use $bug-hunting-code-review to perform a deep CodeRabbit-style review of this patch for correctness bugs, AI-slop drift, broken paths, security issues, stale state, and broken feature behavior."
+  default_prompt: "Review this patch for real correctness, security, stale-state, contract, and broken-path bugs."

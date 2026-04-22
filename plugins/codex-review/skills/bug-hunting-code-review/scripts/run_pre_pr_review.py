@@ -359,13 +359,21 @@ def render_miss_calibration_section(
     lines = ["Miss calibration focus:"]
     if live_focus:
         lines.append("Fresh live misses to bias toward:")
-        lines.extend(f"- {item}" for item in live_focus[:6])
-    if public_focus:
-        lines.append("Public CodeRabbit miss patterns worth preserving:")
-        lines.extend(f"- {item}" for item in public_focus[:8])
-    if accepted_focus:
-        lines.append("Accepted CodeRabbit comment patterns worth preserving:")
-        lines.extend(f"- {item}" for item in accepted_focus[:6])
+        lines.extend(f"- {item}" for item in live_focus[:4])
+
+    durable_focus: list[str] = []
+    for item in public_focus[:3]:
+        if item not in durable_focus:
+            durable_focus.append(item)
+    for item in accepted_focus:
+        if item in durable_focus:
+            continue
+        durable_focus.append(item)
+        if len(durable_focus) == 5:
+            break
+    if durable_focus:
+        lines.append("Durable miss patterns worth preserving:")
+        lines.extend(f"- {item}" for item in durable_focus)
     return "\n".join(lines)
 
 
@@ -397,17 +405,16 @@ def build_prompt(
 
         Output contract:
         - Use the exact headings: Findings, Open questions, Change summary.
-        - Each finding needs a short title line, one short "Why this is a bug:" sentence, and one short "Evidence:" sentence.
+        - Each finding needs a short title, one short "Why this is a bug:" sentence, and one short "Evidence:" sentence.
         - Prioritize findings that are directly caused by the changed files, changed hunks, or the state transitions they now control.
-        - Do not spend the first findings on unrelated pre-existing issues unless the diff clearly routes through them.
         - Name the concrete symbol, field, error type, or state surface that is wrong.
         - When the issue is stale state, source-of-truth drift, or contract mismatch, name both sides that disagree.
-        - Prefer concrete API names, field names, functions, enums, and error names over abstract paraphrase.
+        - Prefer concrete API names, field names, functions, enums, and error names.
 
         Review loop:
         1. Pressure-test the changed code first for missing guards, guard-then-write races, rollback gaps, stale-status cleanup, and read-vs-write drift.
         2. Use the scan section below to inspect the highest-risk adjacent paths.
-        3. If you find one real bug in a touched area, check the sibling branch or mirrored path for the same failure class before stopping.
+        3. If you find one real bug in a touched area, check the sibling branch or mirrored path for the same failure class.
         4. Only then spend time on broader repo drift.
 
         Review mode guidance:
