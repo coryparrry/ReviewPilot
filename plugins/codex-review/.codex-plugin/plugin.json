@@ -1,6 +1,6 @@
 {
   "name": "codex-review",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Plugin-backed deep review system for Codex.",
   "author": {
     "name": "ReviewPilot",
