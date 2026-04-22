@@ -5,145 +5,99 @@ description: Run the full Codex Review automation loop for this repo: local revi
 
 # Autonomous Review Cycle
 
-Use this skill when Codex should run the plugin as an automation workflow, not just as a one-off review helper.
+Use this skill when Codex should run ReviewPilot as an automation workflow instead of a one-off review.
 
+This skill is the orchestration layer.
 The review standard still comes from `$bug-hunting-code-review`.
-This skill is the execution layer that wires the plugin-owned scripts together in a safe order.
 
-## Purpose
+## What This Skill Does
 
-This skill exists so a Codex automation can:
+Use it when Codex should:
 
-1. review the current repo changes
-2. generate a structured repair handoff
-3. ingest real GitHub review misses through the plugin's read-only MCP boundary
+1. run a local review
+2. prepare a bounded repair handoff
+3. ingest GitHub review misses through the plugin's read-only boundary
 4. learn safely into the probationary lane
-5. run a small external hardening batch from Hugging Face
-6. leave a compact summary artifact for follow-up
+5. run a small external hardening batch
+6. leave a compact automation summary
 
-This should be the main skill Codex uses when the user asks for:
+## Safety Rules
 
-- a recurring ReviewPilot automation
-- hourly or scheduled GitHub learning
-- "keep learning from my PR reviews"
-- "run the full ReviewPilot loop"
-
-The other skill, `$bug-hunting-code-review`, should stay the main one-off review brain.
-This skill is the automation and orchestration front door.
-
-## Safety Boundary
-
-- The review standard stays in `$bug-hunting-code-review`.
-- This skill should orchestrate existing scripts. It should not replace the review posture with a new prompt.
-- GitHub access must stay read-only.
-- Repair execution must stay bounded to one finding at a time unless the user explicitly asks for broader edits.
-- Default to a repair handoff, not automatic code edits.
+- Keep GitHub access read-only.
+- Default to repair handoff, not automatic repo edits.
 - Default GitHub learning into the probationary lane only.
-- Treat the Hugging Face lane as benchmark pressure, not direct corpus-writing automation.
+- Do not auto-promote into the primary corpus by default.
+- Do not widen the review standard here; reuse `$bug-hunting-code-review`.
+- Treat Hugging Face as benchmark pressure, not direct corpus-writing automation.
 
-## Default Automation Path
+## Preferred Entry Point
 
-When used in a Codex automation, prefer this sequence:
+Use the wrapper when possible:
 
-1. Run the local review:
-
-```powershell
-python .\plugins\codex-review\scripts\run_codex_review.py --repo . --base origin/main
+```sh
+python "./plugins/codex-review/scripts/run_automation_cycle.py" --repo .
 ```
 
-2. Prepare the bounded fix handoff from the generated `repair-plan.json`:
+That wrapper can:
+- run the local review
+- prepare the bounded repair handoff
+- optionally run GitHub intake
+- optionally compare against live GitHub misses
+- optionally auto-learn approved probationary cases
+- run a small Hugging Face hardening batch
+- write `automation-summary.json`
 
-```powershell
-python .\plugins\codex-review\scripts\run_review_fix.py --repo . --repair-plan "<repair-plan.json>" --finding-index 1
+## Default Automation Sequence
+
+When you need the steps explicitly, use this order:
+
+1. Local review
+
+```sh
+python "./plugins/codex-review/scripts/run_codex_review.py" --repo . --base origin/main
 ```
 
-3. If the automation has GitHub PR context, use the plugin's GitHub MCP connector in read-only mode to fetch PR comments or review threads, capture them with:
+2. Bounded repair handoff
 
-```powershell
-python .\plugins\codex-review\scripts\capture_github_mcp_feedback.py --repo owner/name --pr 123 --kind review_threads --input "<tool-output.json>"
+```sh
+python "./plugins/codex-review/scripts/run_review_fix.py" --repo . --repair-plan "<repair-plan.json>" --finding-index 1
 ```
 
-4. Feed the captured artifact into the intake pipeline with the review artifacts from step 1:
+3. Capture GitHub MCP feedback when PR context exists
 
-```powershell
-python .\plugins\codex-review\scripts\run_github_intake_pipeline.py --repo owner/name --pr 123 --raw-input "<captured-artifact.json>" --raw-format github_mcp_review_threads --score-review-artifacts "<review-run-dir>" --gate-candidates --apply-target probationary --apply-mode auto
+```sh
+python "./plugins/codex-review/scripts/capture_github_mcp_feedback.py" --repo owner/name --pr 123 --kind review_threads --input "<tool-output.json>"
 ```
 
-5. Run a small external hardening batch:
+4. Run intake and gated learning
 
-```powershell
-python .\plugins\codex-review\skills\bug-hunting-code-review\scripts\run_hf_hardening_cycle.py --repo . --offset 0 --length 3
+```sh
+python "./plugins/codex-review/scripts/run_github_intake_pipeline.py" --repo owner/name --pr 123 --raw-input "<captured-artifact.json>" --raw-format github_mcp_review_threads --score-review-artifacts "<review-run-dir>" --gate-candidates --apply-target probationary --apply-mode auto
 ```
 
-## Unified Wrapper
+5. Run a small hardening batch
 
-If you want the local shell-side orchestration in one command, use:
-
-```powershell
-python .\plugins\codex-review\scripts\run_automation_cycle.py --repo .
+```sh
+python "./plugins/codex-review/skills/bug-hunting-code-review/scripts/run_hf_hardening_cycle.py" --repo . --offset 0 --length 3
 ```
 
-That wrapper:
+## How To Explain It To Users
 
-- runs the local review
-- prepares the bounded repair handoff
-- can run GitHub intake if `--github-repo`, `--github-pr`, and `--github-raw-input` are provided
-- runs a small Hugging Face hardening batch unless you skip it
-- writes `automation-summary.json` under `artifacts/automation-runs/`
+Prefer skill names and wrapper entrypoints, not long script lists.
 
-## Product Model
+Use:
+- `$bug-hunting-code-review` for one-off reviews
+- `$autonomous-review-cycle` for recurring review and learning workflows
 
-Use the plugin in two modes:
+If a user wants a recurring automation, describe it in plain language:
 
-1. One-off review mode
-   - load `$bug-hunting-code-review`
-   - run `run_codex_review.py`
-   - if the user wants inline review cards in Codex, use the generated `inline-findings.json` next to the review artifact as the source of truth for code comments, or render them with `emit_inline_review_comments.py`
-
-2. Recurring learning mode
-   - load `$autonomous-review-cycle`
-   - create a Codex automation
-   - have the automation inspect GitHub review comments on the user's PRs, compare them against ReviewPilot output, and auto-learn only gated probationary cases
-
-Do not force users to pick individual scripts unless they are debugging the plugin itself.
-Prefer the wrapper entrypoints and skill names in user-facing explanations.
-
-## Codex Automation Shape
-
-When the user wants Codex to keep learning on a timer, the automation should say in plain language that it must:
-
-- load `$autonomous-review-cycle`
-- use the plugin's GitHub access in read-only mode
-- inspect recent PR review comments for the user's repos or PRs
-- compare those comments against ReviewPilot review artifacts when available
+- inspect recent PR review comments
+- compare them against ReviewPilot review artifacts
 - auto-learn only gated probationary misses
 - summarize what was learned and what still needs human review
 
-For example, the intended automation brief is closer to:
-
-- "Every hour, inspect my recent GitHub PR review comments, compare them against ReviewPilot review artifacts, and safely ingest new gated misses into the probationary corpus."
-
-Not:
-
-- "Run these five scripts manually in order."
-
-## For Codex Automations
-
-When creating a Codex automation prompt, tell Codex to:
-
-- load `$autonomous-review-cycle`
-- use `$bug-hunting-code-review` as the review standard
-- use the plugin's GitHub MCP boundary only in read-only mode
-- write outputs into repo-local artifact directories
-- summarize:
-  - review findings
-  - repair handoff path
-  - GitHub learning result
-  - hardening recall result
-  - what should be improved next
-
 ## Non-Goals
 
-- do not auto-promote probationary cases into the primary corpus by default
-- do not auto-apply multi-finding code fixes by default
-- do not let automation widen GitHub access beyond read-only
+- do not auto-apply multi-finding repair passes by default
+- do not make GitHub writes part of the normal automation path
+- do not treat this skill as a replacement for the review posture itself
