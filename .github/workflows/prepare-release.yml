@@ -7,6 +7,10 @@ on:
         description: Version to write into package.json and plugin.json
         required: true
         type: string
+      release_notes:
+        description: Optional release notes body for the GitHub Release
+        required: false
+        type: string
 
 jobs:
   prepare-release:
@@ -63,3 +67,29 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "Prepare release ${{ inputs.version }}"
           git push
+
+      - name: Create git tag
+        shell: bash
+        run: |
+          git fetch --tags
+          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ inputs.version }} already exists"
+            exit 1
+          fi
+          git tag "v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          notes_file="$(mktemp)"
+          if [ -n "${{ inputs.release_notes }}" ]; then
+            printf "%s\n" "${{ inputs.release_notes }}" > "$notes_file"
+          else
+            printf "Release %s\n" "v${{ inputs.version }}" > "$notes_file"
+          fi
+          gh release create "v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
+            --notes-file "$notes_file"
