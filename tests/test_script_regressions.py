@@ -9,7 +9,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, cast
 
-import pytest  # type: ignore[import-not-found]
+import pytest  # type: ignore[import-not-found,unused-ignore]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
