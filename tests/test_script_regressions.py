@@ -268,9 +268,7 @@ def test_run_surface_scan_invokes_expected_json_cli(
     (skill_dir / "scripts").mkdir(parents=True)
     repo.mkdir()
 
-    def fake_run(
-        cmd: list[str], **kwargs: Any
-    ) -> subprocess.CompletedProcess[str]:
+    def fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         calls.append({"cmd": cmd, **kwargs})
         return subprocess.CompletedProcess(cmd, 0, stdout='{"risk_hits": []}')
 
