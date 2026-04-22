@@ -2,18 +2,18 @@
 
 Use this checklist before pushing a public release or publishing the npm installer.
 
-If you want GitHub to prepare the release for you, run the **Prepare release** workflow first. It takes one version input and:
+If you want GitHub to prepare the version bump for you, run the **Prepare release** workflow first. It takes one version input and:
 
 - `package.json`
 - `plugins/codex-review/.codex-plugin/plugin.json`
 
 Then it:
 
-- commits the version update back to the branch
-- creates the matching git tag
-- creates the matching GitHub Release
+- creates a release branch
+- commits the version update onto that branch
+- opens or updates a release PR back into `main`
 
-That GitHub Release then triggers the npm publish workflow.
+After that PR is merged, create the matching GitHub Release to trigger the npm publish workflow.
 
 ## Required
 
