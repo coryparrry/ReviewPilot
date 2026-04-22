@@ -4,42 +4,27 @@
 
 # ReviewPilot 🧠🔍
 
-ReviewPilot is an early-beta Codex plugin and skill stack for deeper code review.
+ReviewPilot is a plugin for Codex Desktop that helps Codex do stronger code reviews.
 
-It pushes Codex toward:
-
-- real correctness bugs
-- security issues
-- stale state and broken workflow logic
-- contract drift
-- missing negative-path handling
-- missing or misleading tests
-
-It is designed to improve over time from:
-
-- real GitHub PR review misses
-- curated external benchmark lanes like SWE-bench
-- reviewed lessons from an optional local lessons log
+- **Find real bugs.** Pushes reviews toward correctness, security, stale-state, contract, and workflow failures.
+- **Review the right PRs first.** Triages open PRs so you spend deep review effort where it matters.
+- **Use review budget better.** Starts with a strong first pass and only goes deeper when the risk justifies it.
+- **Improve safely over time.** Learns from real GitHub review feedback through a safer probationary path.
 
 ## Why It Stands Out ✨
 
-- Runs deep local reviews and writes `review.md`
-- Scores review output against bundled benchmark lanes
-- Produces bounded repair handoffs from review findings
-- Learns safely from GitHub review feedback into a probationary corpus
-- Supports external hardening with curated Hugging Face benchmark cases
-- Can now refresh lessons snapshots and run the main automation flow from one wrapper
+- **Deeper reviews.** Focuses on real bugs, not just style comments.
+- **Smarter triage.** Ranks PRs as deep, quick, or skip.
+- **Token-aware review.** Escalates only when needed and reuses cached runs when possible.
+- **Safer learning loop.** Compares against real review feedback before promoting new lessons.
 
 ## Feature Highlights 🚀
 
-- `run_codex_review.py`: one-command local review with explicit `changes`, `dirty`, `full`, `quick`, and `deep` review modes
-- `run_review_fix.py`: one-finding repair handoff instead of loose "go fix things" prompts
-- `run_github_intake_pipeline.py`: safer learning intake with gating and corpus controls
-- `compare_review_quality.py`: compares a review artifact against fresh GitHub review intake and explains what the plugin still missed
-- `run_public_pr_quality_cycle.py`: fetches a public PR's review comments and compares them against a local review artifact without writing to the corpus lanes
-- `approve_quality_learning_candidates.py`: turns comparison-approved corpus-gap misses into tightly gated probationary learning candidates
-- `run_automation_cycle.py`: end-to-end wrapper for review, lessons refresh, GitHub intake, repair handoff, calibration, and hardening
-- `refresh_lessons_reference.py`: stages local lessons into a repo-local training snapshot without committing raw notes
+- **PR Queue Triage:** Rank open PRs as `deep`, `quick`, or `skip` before spending full review budget.
+- **Local Review Modes:** Review committed changes, dirty worktrees, or a broader repo surface.
+- **Inline Findings And Repair Handoffs:** Produce review output that is easier to act on and easier to turn into fixes.
+- **Review-Quality Comparison:** Compare your local review output against real GitHub review feedback to see what was missed.
+- **Safe Learning And Automation:** Refresh lessons, harden the review brain, and keep the safer learning path behind the plugin.
 
 ## Docs At A Glance 📚
 
@@ -52,11 +37,15 @@ It is designed to improve over time from:
 
 ## Install 📦
 
-Recommended install:
+Install ReviewPilot into **Codex Desktop** as a plugin:
 
 ```bash
 npx --yes --package=@reviewpilot/codex-review-install -- codex-review-install
 ```
+
+This is the normal public install flow. It installs the plugin into Codex and enables the bundled review skills.
+
+Then restart **Codex Desktop**.
 
 Manual fallback from a repo checkout or release bundle:
 
@@ -64,11 +53,19 @@ Manual fallback from a repo checkout or release bundle:
 powershell -ExecutionPolicy Bypass -File .\scripts\install_plugin_to_codex.ps1
 ```
 
-After install, restart Codex Desktop.
+If you are not sure which path to use:
+
+- use the `npx` installer for the normal public install flow
+- use the PowerShell script only if you are working from a local checkout or release bundle
 
 ## Quick Start ⚡
 
-Run a local review:
+After install, the simplest way to use it is:
+
+- ask Codex to use `$bug-hunting-code-review` when you want a review now
+- ask Codex to use `$autonomous-review-cycle` when you want the wider review and learning workflow
+
+If you want to run it directly:
 
 ```powershell
 python .\plugins\codex-review\scripts\run_codex_review.py `
@@ -85,59 +82,22 @@ That gives you:
 - a repair plan
 - inline review findings for Codex review cards
 
-Review modes:
-
-- `changes`: reviews the committed `base...HEAD` diff
-- `dirty`: reviews local uncommitted edits
-- `full`: uses a broader repo scan and treats the diff as only one clue
-- `quick`: skips the benchmark step
-- `deep`: keeps the fuller prompt package and benchmark step
-
-The review run now also writes `inline-findings.json` next to `review.md`.
-It also writes `codex-inline-comments.txt`.
-Those are the intended sources for native Codex inline review cards inside Codex.
-
-If Codex needs the actual inline review directives from that artifact, use:
+If you have several PRs open, triage them first:
 
 ```powershell
-python .\plugins\codex-review\scripts\emit_inline_review_comments.py `
-  --review-dir .\.codex-review\<run>
+python .\plugins\codex-review\scripts\triage_pr_queue.py `
+  --pr owner/name#123 `
+  --pr owner/name#124
 ```
 
-Quick local dirty-worktree review:
+That writes a ranked queue under `artifacts/pr-triage/` and includes a suggested review command for each PR.
 
-```powershell
-python .\plugins\codex-review\scripts\run_codex_review.py `
-  --repo . `
-  --mode dirty `
-  --depth quick
-```
+For more commands and workflow detail, use:
 
-Prepare a bounded repair handoff:
-
-```powershell
-python .\plugins\codex-review\scripts\run_review_fix.py `
-  --repo . `
-  --repair-plan .\.codex-review\<run>\repair-plan.json `
-  --finding-index 1
-```
-
-Run the automation wrapper:
-
-```powershell
-python .\plugins\codex-review\scripts\run_automation_cycle.py `
-  --repo . `
-  --lessons-source C:\path\to\codex-lessons.md `
-  --skip-github-intake `
-  --hardening-length 1
-```
-
-The intended product surface is:
-
-- use `$bug-hunting-code-review` when you want Codex to review code now
-- use `$autonomous-review-cycle` when you want Codex automations to keep learning from GitHub review feedback over time
-
-The scripts are still there, but they should sit behind those two skills instead of being the main thing a user has to memorize.
+- [Plugin overview](plugins/codex-review/README.md)
+- [GitHub MCP setup](docs/github-mcp-setup.md)
+- [Lessons workflow](docs/lessons-workflow.md)
+- [Architecture](docs/architecture.md)
 
 ## GitHub Learning Setup 🔌
 
@@ -151,6 +111,13 @@ That guide explains:
 - what you still need to connect in Codex
 - how to capture GitHub MCP output
 - how to feed that output into the learning pipeline
+
+If you already have a queue of open PRs, the normal sequence is now:
+
+1. triage the queue
+2. spend `deep` reviews only on the risky PRs
+3. use `quick` reviews for the smaller or lower-risk PRs
+4. feed the best missed findings back through the gated learning flow
 
 The fresh GitHub path is also the recommended quality-tuning loop. After you capture and normalize live review threads, compare them against a review artifact with:
 

@@ -429,7 +429,7 @@ def analyze_pr(
         "reasons": reasons,
         "checkout_hint": f"gh pr checkout {pr_number} --repo {repo_name}",
         "recommended_review_command": (
-            'python "/Users/coryparry/Documents/codex-review-skill/plugins/codex-review/scripts/run_codex_review.py" '
+            'python "./plugins/codex-review/scripts/run_codex_review.py" '
             '--repo "<checked-out-repo>" '
             "--base "
             f'{str(view.get("baseRefName") or "origin/main")} '

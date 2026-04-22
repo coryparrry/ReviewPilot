@@ -4,6 +4,15 @@
 
 This plugin is the primary container for the review system in this repo.
 
+Its main purpose is to install ReviewPilot into Codex Desktop as a usable plugin, not just as a loose set of scripts.
+
+Once installed, the plugin gives Codex a review-focused bundle that can:
+
+- run local code reviews
+- triage PR queues before spending full review budget
+- compare review output against real GitHub review feedback
+- support safer learning and repair workflows behind one plugin boundary
+
 ## Current Contents
 
 - `.codex-plugin/plugin.json`
@@ -16,6 +25,17 @@ This plugin is the primary container for the review system in this repo.
   Plugin-owned MCP config. GitHub is now declared there as a read-only remote MCP boundary for live PR intake.
 - `scripts/`
   Reserved for plugin-owned helper workflows as repo scripts migrate behind plugin boundaries
+
+## What The Plugin Does Now
+
+Today the plugin can:
+
+- triage a queue of open PRs before spending full review budget
+- run local reviews with explicit `quick` and `deep` depth controls
+- escalate from a strong first pass only when the scan says more depth is worth paying for
+- compare local review output against real GitHub review feedback
+- learn cautiously into a probationary corpus instead of writing raw misses straight into the main corpus
+- reuse cached triage and completed review artifacts when the relevant SHA and settings have not changed
 
 ## Current Boundary
 
@@ -58,6 +78,8 @@ npx --yes --package=@reviewpilot/codex-review-install -- codex-review-install
 
 That should be the main user-facing install flow.
 
+It is the easiest way to install ReviewPilot into Codex Desktop as a plugin.
+
 It still lands the plugin in Codex Desktop's marketplace path under the hood, but it removes most of the manual setup from the user's point of view.
 
 Use that full command on Windows. It avoids a command-resolution problem with the shorter `npx @reviewpilot/codex-review-install` form.
@@ -82,7 +104,7 @@ The zip installer remains the fallback path for people who want a manual install
 
 ## Intended Direction
 
-The plugin should become the clean integration boundary for:
+The plugin should be the clean integration boundary for:
 
 - GitHub PR review intake
 - corpus and benchmark scoring workflows
@@ -131,12 +153,27 @@ The plugin-owned review runner now lives at:
 - `plugins/codex-review/scripts/run_review_fix.py`
 - `plugins/codex-review/scripts/emit_inline_review_comments.py`
 
+The practical review flow is now:
+
+1. `triage_pr_queue.py` to rank PRs as `deep`, `quick`, or `skip`
+2. `run_codex_review.py` to run the suggested review depth
+3. `compare_review_quality.py` to measure what the review still missed
+4. `approve_quality_learning_candidates.py` if you want to move safe misses into the probationary lane
+5. `run_review_fix.py` when you want a bounded repair handoff from one finding
+
 Each review run now also produces:
 
 - `inline-findings.json`
 - `codex-inline-comments.txt`
 
 Those artifacts are meant to back Codex inline review cards, not just the plain `review.md` artifact.
+
+The review runner is also safer and cheaper than the earlier fixed multi-pass shape:
+
+- deep review starts with one strong pass first
+- follow-up passes only run when the first pass looks weak for the detected risk
+- later pass timeouts no longer throw away an earlier useful review
+- completed review runs can be reused when the repo head and review settings still match
 
 For local skill improvement from an optional local lessons log, use:
 
@@ -217,6 +254,16 @@ The wrapper now defaults `--apply-target` to `probationary` so the safer lane is
 
 The external SWE-bench lane is the hardening lane for broader review pressure. It helps the review brain improve without depending only on one team's historical PR misses, but it should not auto-write directly into the GitHub-derived corpus lanes.
 
+If you have many live PRs, start with:
+
+```powershell
+python .\plugins\codex-review\scripts\triage_pr_queue.py `
+  --pr owner/name#123 `
+  --pr owner/name#124
+```
+
+That produces a ranked queue under `artifacts/pr-triage/` and now emits a recommended review command for each PR so you can keep the expensive path focused on the right work.
+
 Recommended entrypoint for normal use:
 
 ```powershell
@@ -258,6 +305,8 @@ That command:
 - supports explicit review depth:
   - `quick`: lighter prompt and no benchmark step
   - `deep`: fuller prompt package plus benchmark step
+- starts with a strong changed-hunks pass and only escalates if more depth is justified
+- supports timeouts and reuse so stalled later passes or repeated reruns do not waste as much review budget
 - invokes Codex non-interactively in read-only mode
 - writes `review.md`
 - writes `repair-plan.json` and `repair-plan.md` next to the review artifact
