@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 JsonDict = dict[str, Any]
+TRIAGE_SCHEMA_VERSION = "codex-review.pr-triage.v2"
 
 PR_SPEC_RE = re.compile(r"^(?P<repo>[^/\s]+/[^#\s]+)#(?P<pr>\d+)$")
 PR_URL_RE = re.compile(
@@ -282,6 +283,40 @@ def layer_score(layer_counts: dict[str, int]) -> int:
     return score
 
 
+def build_recommendation_signals(
+    *,
+    total_score: int,
+    risk_hits: list[JsonDict],
+    layer_counts: dict[str, int],
+    code_files_changed: int,
+) -> dict[str, Any]:
+    high_risk_count = sum(
+        1 for hit in risk_hits if str(hit.get("severity") or "") == "high"
+    )
+    medium_risk_count = sum(
+        1 for hit in risk_hits if str(hit.get("severity") or "") == "medium"
+    )
+    docs_only = code_files_changed == 0 and set(layer_counts).issubset(
+        {"docs", "config"}
+    )
+    touches_workflow = layer_counts.get("workflow-runtime", 0) > 0
+    touches_persistence = layer_counts.get("persistence-migration", 0) > 0
+    touches_contracts = (
+        layer_counts.get("route-controller", 0) > 0
+        or layer_counts.get("contracts-types", 0) > 0
+    )
+    return {
+        "docs_only": docs_only,
+        "touches_workflow": touches_workflow,
+        "touches_persistence": touches_persistence,
+        "touches_contracts": touches_contracts,
+        "code_files_changed": code_files_changed,
+        "high_risk_count": high_risk_count,
+        "medium_risk_count": medium_risk_count,
+        "total_score": total_score,
+    }
+
+
 def recommend_review_depth(
     *,
     total_score: int,
@@ -289,21 +324,32 @@ def recommend_review_depth(
     layer_counts: dict[str, int],
     code_files_changed: int,
 ) -> str:
-    high_risk_count = sum(
-        1 for hit in risk_hits if str(hit.get("severity") or "") == "high"
+    signals = build_recommendation_signals(
+        total_score=total_score,
+        risk_hits=risk_hits,
+        layer_counts=layer_counts,
+        code_files_changed=code_files_changed,
     )
-    docs_only = code_files_changed == 0 and set(layer_counts).issubset(
-        {"docs", "config"}
-    )
-    if docs_only and total_score < 4:
+    if signals["docs_only"] and total_score < 4:
         return "skip"
     if (
-        total_score >= 14
-        or high_risk_count >= 2
-        or layer_counts.get("workflow-runtime", 0)
+        total_score >= 16
+        or signals["high_risk_count"] >= 2
+        or signals["touches_workflow"]
+        or (
+            signals["high_risk_count"] >= 1
+            and (signals["touches_persistence"] or signals["touches_contracts"])
+        )
     ):
         return "deep"
-    if total_score >= 6:
+    if (
+        total_score >= 5
+        or signals["medium_risk_count"] >= 1
+        or signals["high_risk_count"] >= 1
+        or signals["touches_persistence"]
+        or signals["touches_contracts"]
+        or code_files_changed >= 3
+    ):
         return "quick"
     return "skip"
 
@@ -325,6 +371,66 @@ def recommend_review_settings(recommended_depth: str, triage_score: int) -> Json
         "depth": "quick",
         "max_deep_passes": 1,
         "pass_timeout_seconds": 90,
+    }
+
+
+def recommendation_summary(
+    *,
+    recommended_depth: str,
+    total_score: int,
+    risk_hits: list[JsonDict],
+    layer_counts: dict[str, int],
+    code_files_changed: int,
+) -> JsonDict:
+    signals = build_recommendation_signals(
+        total_score=total_score,
+        risk_hits=risk_hits,
+        layer_counts=layer_counts,
+        code_files_changed=code_files_changed,
+    )
+    if recommended_depth == "skip":
+        if signals["docs_only"]:
+            primary_reason = "docs-or-config-only low-risk change"
+            reason_codes = ["docs-only-low-risk"]
+        else:
+            primary_reason = "low-risk change did not justify review spend"
+            reason_codes = ["below-review-threshold"]
+    elif recommended_depth == "deep":
+        reason_codes = []
+        if signals["touches_workflow"]:
+            reason_codes.append("workflow-runtime")
+        if signals["high_risk_count"] >= 2:
+            reason_codes.append("multiple-high-risk-signals")
+        if signals["high_risk_count"] >= 1 and (
+            signals["touches_persistence"] or signals["touches_contracts"]
+        ):
+            reason_codes.append("high-risk-plus-critical-layer")
+        if total_score >= 16:
+            reason_codes.append("high-total-score")
+        primary_reason = (
+            "deep review justified by risky code paths or strong risk signals"
+        )
+    else:
+        reason_codes = []
+        if signals["high_risk_count"] >= 1 or signals["medium_risk_count"] >= 1:
+            reason_codes.append("risk-signal-present")
+        if signals["touches_persistence"]:
+            reason_codes.append("persistence-change")
+        if signals["touches_contracts"]:
+            reason_codes.append("contract-change")
+        if code_files_changed >= 3:
+            reason_codes.append("multi-file-code-change")
+        if total_score >= 5:
+            reason_codes.append("moderate-total-score")
+        primary_reason = (
+            "quick review is enough unless later evidence shows missed risk"
+        )
+
+    return {
+        "recommended_depth": recommended_depth,
+        "primary_reason": primary_reason,
+        "reason_codes": reason_codes,
+        "signals": signals,
     }
 
 
@@ -394,6 +500,13 @@ def analyze_pr(
         code_files_changed=code_files_changed,
     )
     review_settings = recommend_review_settings(depth, score)
+    recommendation = recommendation_summary(
+        recommended_depth=depth,
+        total_score=score,
+        risk_hits=risk_hits,
+        layer_counts=layer_counts,
+        code_files_changed=code_files_changed,
+    )
 
     reasons: list[str] = []
     if risk_hits:
@@ -429,6 +542,7 @@ def analyze_pr(
         "triage_score": score,
         "recommended_depth": depth,
         "recommended_review_settings": review_settings,
+        "recommendation_summary": recommendation,
         "reasons": reasons,
         "checkout_hint": f"gh pr checkout {pr_number} --repo {repo_name}",
         "recommended_review_command": (
@@ -462,6 +576,8 @@ def load_cached_triage_result(
         except (OSError, json.JSONDecodeError):
             continue
         if not isinstance(payload, dict):
+            continue
+        if str(payload.get("schema_version") or "") != TRIAGE_SCHEMA_VERSION:
             continue
         prs = payload.get("prs")
         if not isinstance(prs, list):
@@ -501,6 +617,9 @@ def build_markdown(queue: list[JsonDict], top_n: int) -> str:
                 f"- `{item['repo']}#{item['pr']}` ({item['triage_score']}) - {item['title']}"
             )
             lines.append(f"  Reasons: {'; '.join(item['reasons'][:2])}")
+            summary = item.get("recommendation_summary") or {}
+            if isinstance(summary, dict) and summary.get("primary_reason"):
+                lines.append(f"  Decision: {summary['primary_reason']}")
     else:
         lines.append("- None.")
     lines.append("")
@@ -512,6 +631,9 @@ def build_markdown(queue: list[JsonDict], top_n: int) -> str:
                 f"- `{item['repo']}#{item['pr']}` ({item['triage_score']}) - {item['title']}"
             )
             lines.append(f"  Reasons: {'; '.join(item['reasons'][:2])}")
+            summary = item.get("recommendation_summary") or {}
+            if isinstance(summary, dict) and summary.get("primary_reason"):
+                lines.append(f"  Decision: {summary['primary_reason']}")
     else:
         lines.append("- None.")
     lines.append("")
@@ -524,6 +646,16 @@ def build_markdown(queue: list[JsonDict], top_n: int) -> str:
         )
         if item["reasons"]:
             lines.append(f"  Reasons: {'; '.join(item['reasons'][:3])}")
+        summary = item.get("recommendation_summary") or {}
+        if isinstance(summary, dict):
+            primary_reason = str(summary.get("primary_reason") or "").strip()
+            if primary_reason:
+                lines.append(f"  Decision: {primary_reason}")
+            reason_codes = summary.get("reason_codes")
+            if isinstance(reason_codes, list) and reason_codes:
+                lines.append(
+                    f"  Decision codes: {', '.join(str(code) for code in reason_codes)}"
+                )
         lines.append(f"  Checkout: `{item['checkout_hint']}`")
         lines.append(f"  Review: `{item['recommended_review_command']}`")
     lines.append("")
@@ -569,7 +701,7 @@ def main() -> int:
     )
 
     summary: JsonDict = {
-        "schema_version": "codex-review.pr-triage.v1",
+        "schema_version": TRIAGE_SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "output_dir": str(out_dir),
         "queue_size": len(analyzed),

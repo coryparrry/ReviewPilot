@@ -161,16 +161,27 @@ The practical review flow is now:
 
 1. `triage_pr_queue.py` to rank PRs as `deep`, `quick`, or `skip`
 2. `run_codex_review.py` to run the suggested review depth
-3. `compare_review_quality.py` to measure what the review still missed
-4. `approve_quality_learning_candidates.py` if you want to move safe misses into the probationary lane
-5. `run_review_fix.py` when you want a bounded repair handoff from one finding
+3. inspect `review-run-summary.json` to see what review strategy actually ran
+4. `compare_review_quality.py` to measure what the review still missed when live feedback exists
+5. `approve_quality_learning_candidates.py` if you want to move safe misses into the probationary lane
+6. `run_review_fix.py` when you want a bounded repair handoff from one finding
 
 Each review run now also produces:
 
+- `review-run-summary.json`
+- `review-run-summary.md`
 - `inline-findings.json`
 - `codex-inline-comments.txt`
 
-Those artifacts are meant to back Codex inline review cards, not just the plain `review.md` artifact.
+Those artifacts are meant to back Codex inline review cards and evaluation, not just the plain `review.md` artifact.
+
+The run summary is the stable per-run evidence file. It records:
+
+- requested depth versus the effective review strategy
+- selected passes, skipped passes, and why
+- cache reuse versus a fresh run
+- benchmark completion when present
+- linked quality-comparison input when present
 
 The review runner is also safer and cheaper than the earlier fixed multi-pass shape:
 
@@ -178,6 +189,7 @@ The review runner is also safer and cheaper than the earlier fixed multi-pass sh
 - follow-up passes only run when the first pass looks weak for the detected risk
 - later pass timeouts no longer throw away an earlier useful review
 - completed review runs can be reused when the repo head and review settings still match
+- triage output now includes a stable decision summary so the `deep` vs `quick` choice is easier to trust and audit
 
 For local skill improvement from an optional local lessons log, use:
 
