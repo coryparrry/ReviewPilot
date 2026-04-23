@@ -57,6 +57,10 @@ triage_pr_queue = load_module(
     "triage_pr_queue_test",
     "plugins/codex-review/scripts/triage_pr_queue.py",
 )
+run_public_coderabbit_calibration = load_module(
+    "run_public_coderabbit_calibration_test",
+    "plugins/codex-review/scripts/run_public_coderabbit_calibration.py",
+)
 
 
 def test_finding_is_auto_approvable_skips_non_dict_review_match() -> None:
@@ -1059,3 +1063,181 @@ def test_review_cache_key_tracks_effective_benchmark_mode() -> None:
 
     assert enabled["benchmark_enabled"] is True
     assert disabled["benchmark_enabled"] is False
+
+
+def test_public_coderabbit_calibration_parse_depths() -> None:
+    parse_depths = cast(
+        Callable[[str], list[str]],
+        getattr(run_public_coderabbit_calibration, "parse_depths"),
+    )
+
+    assert parse_depths("quick, deep") == ["quick", "deep"]
+    assert parse_depths("DEEP") == ["deep"]
+
+    with pytest.raises(ValueError, match="Duplicate review depth"):
+        parse_depths("quick,quick")
+    with pytest.raises(ValueError, match="Invalid review depth"):
+        parse_depths("quick,full")
+    with pytest.raises(ValueError, match="at least one depth"):
+        parse_depths(" , ")
+
+
+def test_public_coderabbit_calibration_aggregate_tracks_depth_delta(
+    tmp_path: Path,
+) -> None:
+    quick_comparison = tmp_path / "quick.json"
+    deep_comparison = tmp_path / "deep.json"
+    quick_comparison.write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "candidate_id": "candidate-1",
+                        "gap_classification": "missed",
+                        "candidate_title": "Handle stale state",
+                        "file_path": "src/app.py",
+                        "line": 10,
+                        "severity": "high",
+                        "normalized_category": "state",
+                        "suggested_signal_phrases": ["stale state"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    deep_comparison.write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "candidate_id": "candidate-1",
+                        "gap_classification": "caught",
+                        "candidate_title": "Handle stale state",
+                        "file_path": "src/app.py",
+                        "line": 10,
+                        "severity": "high",
+                        "normalized_category": "state",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summarize_comparison_files = cast(
+        Callable[[list[Path]], dict[str, Any]],
+        run_public_coderabbit_calibration.summarize_comparison_files,
+    )
+    quick_vs_deep_delta = cast(
+        Callable[[list[dict[str, Any]]], dict[str, Any]],
+        run_public_coderabbit_calibration.quick_vs_deep_delta,
+    )
+
+    summary = summarize_comparison_files([quick_comparison])
+    delta = quick_vs_deep_delta(
+        [
+            {
+                "label": "sample",
+                "repo": "owner/name",
+                "pr": 123,
+                "reviews": [
+                    {"depth": "quick", "comparison_file": str(quick_comparison)},
+                    {"depth": "deep", "comparison_file": str(deep_comparison)},
+                ],
+            }
+        ]
+    )
+
+    assert summary["missed_count"] == 1
+    assert summary["caught_count"] == 0
+    assert summary["missed_by_severity"] == {"high": 1}
+    assert delta["comparable_prs"] == 1
+    assert delta["quick_missed_deep_caught_count"] == 1
+    assert (
+        delta["quick_missed_deep_caught"][0]["finding"]["candidate_id"]
+        == "candidate-1"
+    )
+
+
+def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    main = cast(Callable[[], int], getattr(run_public_coderabbit_calibration, "main"))
+    output_dir = tmp_path / "out"
+    calibration_set = tmp_path / "calibration.json"
+    calibration_set.write_text(
+        json.dumps([{"repo": "owner/name", "pr": 123, "label": "sample"}]),
+        encoding="utf-8",
+    )
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    for depth in ("quick", "deep"):
+        review_run = output_dir / "reviews" / "sample" / depth / "20260422-000000"
+        review_run.mkdir(parents=True)
+        (review_run / "review.md").write_text(f"{depth} review", encoding="utf-8")
+        comparison_dir = (
+            output_dir / "comparisons" / "sample" / depth / "quality-comparison"
+        )
+        comparison_dir.mkdir(parents=True)
+        (comparison_dir / "quality-comparison.json").write_text(
+            json.dumps({"findings": [], "summary": {"depth": depth}}),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "parse_args",
+        lambda: Namespace(
+            calibration_set=str(calibration_set),
+            output_dir=str(output_dir),
+            model="gpt-5.4-mini",
+            depths="quick,deep",
+            limit=None,
+            resume=True,
+        ),
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration, "repo_root", lambda _cwd: tmp_path
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "ensure_repo_clone",
+        lambda _root, _github_repo: repo_dir,
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "pr_metadata",
+        lambda _repo_dir, _github_repo, _pr_number: {"baseRefName": "main"},
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "checkout_pr",
+        lambda _repo_dir, _pr_number: None,
+    )
+
+    def fail_run_review(*_args: Any, **_kwargs: Any) -> Path:
+        raise AssertionError("resume should not run a new review")
+
+    def fail_run_public_compare(*_args: Any, **_kwargs: Any) -> Path:
+        raise AssertionError("resume should not run a new comparison")
+
+    monkeypatch.setattr(run_public_coderabbit_calibration, "run_review", fail_run_review)
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration, "run_public_compare", fail_run_public_compare
+    )
+
+    assert main() == 0
+
+    aggregate = json.loads(
+        (output_dir / "aggregate-summary.json").read_text(encoding="utf-8")
+    )
+    reviews = aggregate["results"][0]["reviews"]
+    assert (
+        aggregate["schema_version"]
+        == "codex-review.public-coderabbit-calibration.v2"
+    )
+    assert [review["depth"] for review in reviews] == ["quick", "deep"]
+    assert "sample/quick" in reviews[0]["review_run_dir"]
+    assert "sample/deep" in reviews[1]["review_run_dir"]

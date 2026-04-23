@@ -47,6 +47,7 @@ Questions:
 
 - Can old async results overwrite newer state?
 - Can a backend refresh wipe in-progress local edits?
+- If the UI applies an optimistic update, does rollback happen for thrown failures as well as returned error payloads?
 - Does permission loss clear stale controls?
 - Does one tab failing incorrectly poison unrelated tabs?
 - Does retry/bootstrap use fresh auth/session state or stale headers?
@@ -189,6 +190,7 @@ If yes, run a dedicated security pass and escalate to `$security-review` when th
 - Does `401`, `403`, `404`, validation failure, or missing config produce the right behavior?
 - Should the feature degrade partially instead of blanking the entire surface?
 - Can stale errors remain visible after success?
+- Can a thrown action failure bypass rollback or resync logic that only handles `{ error }`-style responses?
 
 ### Time and concurrency
 

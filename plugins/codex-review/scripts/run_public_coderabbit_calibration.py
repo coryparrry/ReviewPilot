@@ -11,6 +11,8 @@ from typing import Any
 DEFAULT_SET_PATH = Path(
     "plugins/codex-review/references/public-coderabbit-calibration-set.json"
 )
+ALLOWED_DEPTHS = {"quick", "deep"}
+DEFAULT_DEPTHS = ["deep"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +37,14 @@ def parse_args() -> argparse.Namespace:
         help="Model passed to run_codex_review.py. Defaults to gpt-5.4-mini.",
     )
     parser.add_argument(
+        "--depths",
+        default=",".join(DEFAULT_DEPTHS),
+        help=(
+            "Comma-separated review depths to compare. Allowed values: quick,deep. "
+            "Defaults to deep for backward compatibility."
+        ),
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         help="Optional limit on the number of calibration entries to run.",
@@ -45,6 +55,23 @@ def parse_args() -> argparse.Namespace:
         help="Reuse existing review and comparison artifacts in the output directory when present.",
     )
     return parser.parse_args()
+
+
+def parse_depths(raw: str) -> list[str]:
+    depths = [item.strip().lower() for item in raw.split(",") if item.strip()]
+    if not depths:
+        raise ValueError("--depths must include at least one depth.")
+
+    seen: set[str] = set()
+    for depth in depths:
+        if depth not in ALLOWED_DEPTHS:
+            raise ValueError(
+                f"Invalid review depth {depth!r}. Expected one of {sorted(ALLOWED_DEPTHS)}."
+            )
+        if depth in seen:
+            raise ValueError(f"Duplicate review depth {depth!r} in --depths.")
+        seen.add(depth)
+    return depths
 
 
 def run_cmd(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -145,7 +172,12 @@ def review_run_is_complete(path: Path) -> bool:
 
 
 def run_review(
-    repo_root_dir: Path, target_repo: Path, base_ref: str, output_dir: Path, model: str
+    repo_root_dir: Path,
+    target_repo: Path,
+    base_ref: str,
+    output_dir: Path,
+    model: str,
+    depth: str,
 ) -> Path:
     cmd = [
         sys.executable,
@@ -161,7 +193,7 @@ def run_review(
         "--mode",
         "changes",
         "--depth",
-        "deep",
+        depth,
         "--base",
         base_ref,
         "--model",
@@ -249,9 +281,129 @@ def cluster_misses(comparison_files: list[Path]) -> dict[str, Any]:
     }
 
 
+def finding_identity(finding: dict[str, Any]) -> str:
+    candidate_id = finding.get("candidate_id")
+    if isinstance(candidate_id, str) and candidate_id.strip():
+        return f"id:{candidate_id.strip()}"
+    return "|".join(
+        [
+            str(finding.get("file_path") or ""),
+            str(finding.get("line") or ""),
+            str(finding.get("candidate_title") or ""),
+            str(finding.get("candidate_summary") or ""),
+        ]
+    )
+
+
+def summarize_comparison_files(comparison_files: list[Path]) -> dict[str, Any]:
+    severity_counter: Counter[str] = Counter()
+    title_counter: Counter[str] = Counter()
+    anchor_counter: Counter[str] = Counter()
+    category_counter: Counter[str] = Counter()
+    caught_count = 0
+    missed_count = 0
+    total_findings = 0
+
+    for path in comparison_files:
+        payload = load_json(path)
+        for finding in payload.get("findings", []):
+            total_findings += 1
+            if finding.get("gap_classification") == "caught":
+                caught_count += 1
+                continue
+
+            missed_count += 1
+            severity_counter[str(finding.get("severity") or "unknown")] += 1
+            title_counter[str(finding.get("candidate_title") or "untitled")] += 1
+            category_counter[
+                str(finding.get("normalized_category") or "uncategorized")
+            ] += 1
+            for phrase in finding.get("suggested_signal_phrases") or []:
+                cleaned = " ".join(str(phrase).split())
+                if cleaned:
+                    anchor_counter[cleaned] += 1
+
+    return {
+        "total_findings": total_findings,
+        "caught_count": caught_count,
+        "missed_count": missed_count,
+        "missed_by_severity": dict(severity_counter),
+        "top_missed_categories": [
+            {"category": key, "count": count}
+            for key, count in category_counter.most_common(10)
+        ],
+        "repeated_missed_titles": [
+            {"title": key, "count": count}
+            for key, count in title_counter.most_common(10)
+        ],
+        "repeated_missed_signal_phrases": [
+            {"phrase": key, "count": count}
+            for key, count in anchor_counter.most_common(20)
+        ],
+    }
+
+
+def finding_label(finding: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "candidate_id": finding.get("candidate_id"),
+        "candidate_title": finding.get("candidate_title"),
+        "file_path": finding.get("file_path"),
+        "line": finding.get("line"),
+        "severity": finding.get("severity"),
+        "normalized_category": finding.get("normalized_category"),
+    }
+
+
+def quick_vs_deep_delta(results: list[dict[str, Any]]) -> dict[str, Any]:
+    improved_findings: list[dict[str, Any]] = []
+    comparable_prs = 0
+
+    for result in results:
+        reviews_by_depth = {
+            review["depth"]: review
+            for review in result.get("reviews", [])
+            if isinstance(review, dict)
+        }
+        quick_review = reviews_by_depth.get("quick")
+        deep_review = reviews_by_depth.get("deep")
+        if not quick_review or not deep_review:
+            continue
+        comparable_prs += 1
+
+        quick_payload = load_json(Path(str(quick_review["comparison_file"])))
+        deep_payload = load_json(Path(str(deep_review["comparison_file"])))
+        quick_missed = {
+            finding_identity(finding): finding
+            for finding in quick_payload.get("findings", [])
+            if finding.get("gap_classification") != "caught"
+        }
+        deep_caught = {
+            finding_identity(finding): finding
+            for finding in deep_payload.get("findings", [])
+            if finding.get("gap_classification") == "caught"
+        }
+
+        for key in sorted(quick_missed.keys() & deep_caught.keys()):
+            improved_findings.append(
+                {
+                    "label": result.get("label"),
+                    "repo": result.get("repo"),
+                    "pr": result.get("pr"),
+                    "finding": finding_label(deep_caught[key]),
+                }
+            )
+
+    return {
+        "comparable_prs": comparable_prs,
+        "quick_missed_deep_caught_count": len(improved_findings),
+        "quick_missed_deep_caught": improved_findings,
+    }
+
+
 def main() -> int:
     args = parse_args()
     root = repo_root(Path.cwd())
+    depths = parse_depths(args.depths)
     output_dir = (
         Path(args.output_dir).resolve() if args.output_dir else default_output_dir(root)
     )
@@ -275,7 +427,8 @@ def main() -> int:
     comparisons_root = output_dir / "comparisons"
 
     results: list[dict[str, Any]] = []
-    comparison_files: list[Path] = []
+    comparison_files_by_depth: dict[str, list[Path]] = {depth: [] for depth in depths}
+    all_comparison_files: list[Path] = []
 
     for entry in entries:
         github_repo = str(entry["repo"])
@@ -288,30 +441,47 @@ def main() -> int:
         checkout_pr(repo_dir, pr_number)
         base_ref = f"origin/{metadata['baseRefName']}"
 
-        review_parent = reviews_root / label
-        existing_review_run = None
-        if args.resume and review_parent.is_dir():
-            try:
-                existing_review_run = newest_child_dir(review_parent)
-                if not review_run_is_complete(existing_review_run):
+        reviews: list[dict[str, Any]] = []
+        for depth in depths:
+            review_parent = reviews_root / label / depth
+            existing_review_run = None
+            if args.resume and review_parent.is_dir():
+                try:
+                    existing_review_run = newest_child_dir(review_parent)
+                    if not review_run_is_complete(existing_review_run):
+                        existing_review_run = None
+                except FileNotFoundError:
                     existing_review_run = None
-            except FileNotFoundError:
-                existing_review_run = None
-        review_run_dir = existing_review_run or run_review(
-            root, repo_dir, base_ref, review_parent, args.model
-        )
-        review_file = review_run_dir / "review.md"
-
-        comparison_parent = comparisons_root / label
-        comparison_file = (
-            comparison_parent / "quality-comparison" / "quality-comparison.json"
-        )
-        if not (args.resume and comparison_file.is_file()):
-            comparison_file = run_public_compare(
-                root, github_repo, pr_number, source, review_file, comparison_parent
+            review_run_dir = existing_review_run or run_review(
+                root, repo_dir, base_ref, review_parent, args.model, depth
             )
-        comparison_files.append(comparison_file)
-        comparison_payload = load_json(comparison_file)
+            review_file = review_run_dir / "review.md"
+
+            comparison_parent = comparisons_root / label / depth
+            comparison_file = (
+                comparison_parent / "quality-comparison" / "quality-comparison.json"
+            )
+            if not (args.resume and comparison_file.is_file()):
+                comparison_file = run_public_compare(
+                    root,
+                    github_repo,
+                    pr_number,
+                    source,
+                    review_file,
+                    comparison_parent,
+                )
+            comparison_files_by_depth[depth].append(comparison_file)
+            all_comparison_files.append(comparison_file)
+            comparison_payload = load_json(comparison_file)
+            reviews.append(
+                {
+                    "depth": depth,
+                    "review_run_dir": str(review_run_dir),
+                    "review_file": str(review_file),
+                    "comparison_file": str(comparison_file),
+                    "summary": comparison_payload.get("summary") or {},
+                }
+            )
 
         results.append(
             {
@@ -319,19 +489,22 @@ def main() -> int:
                 "repo": github_repo,
                 "pr": pr_number,
                 "base_ref": base_ref,
-                "review_run_dir": str(review_run_dir),
-                "review_file": str(review_file),
-                "comparison_file": str(comparison_file),
-                "summary": comparison_payload.get("summary") or {},
+                "reviews": reviews,
             }
         )
 
     aggregate = {
-        "schema_version": "codex-review.public-coderabbit-calibration.v1",
+        "schema_version": "codex-review.public-coderabbit-calibration.v2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model": args.model,
+        "depths": depths,
         "results": results,
-        "miss_clusters": cluster_misses(comparison_files),
+        "depth_summaries": {
+            depth: summarize_comparison_files(files)
+            for depth, files in comparison_files_by_depth.items()
+        },
+        "quick_vs_deep_delta": quick_vs_deep_delta(results),
+        "miss_clusters": cluster_misses(all_comparison_files),
     }
     write_json(output_dir / "aggregate-summary.json", aggregate)
     print(f"Public CodeRabbit calibration run: {output_dir}")
