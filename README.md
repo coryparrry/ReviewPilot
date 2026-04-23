@@ -29,11 +29,19 @@ ReviewPilot is a plugin for Codex Desktop that helps Codex do stronger code revi
 ## Docs At A Glance 📚
 
 - [Plugin overview](plugins/codex-review/README.md)
+- [Contributing](CONTRIBUTING.md)
 - [GitHub MCP setup](docs/github-mcp-setup.md)
 - [Lessons workflow](docs/lessons-workflow.md)
-- [Public release checklist](docs/public-release-checklist.md)
 - [Architecture](docs/architecture.md)
 - [Installed skill relationship](skill/README.md)
+
+## Contribute 🤝
+
+Want to help improve ReviewPilot?
+
+- read [CONTRIBUTING.md](CONTRIBUTING.md)
+- open an issue for bigger ideas
+- send a pull request for focused fixes, docs, or review improvements
 
 ## Install 📦
 

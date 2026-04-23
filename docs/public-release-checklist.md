@@ -1,4 +1,6 @@
-# Public Release Checklist
+# Maintainer Release Checklist
+
+This document is for ReviewPilot maintainers.
 
 Use this checklist before pushing a public release or publishing the npm installer.
 
