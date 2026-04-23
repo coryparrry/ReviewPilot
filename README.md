@@ -86,6 +86,7 @@ python .\plugins\codex-review\scripts\run_codex_review.py `
 That gives you:
 
 - a review artifact
+- a run summary artifact
 - benchmark output
 - a repair plan
 - inline review findings for Codex review cards
@@ -98,7 +99,10 @@ python .\plugins\codex-review\scripts\triage_pr_queue.py `
   --pr owner/name#124
 ```
 
-That writes a ranked queue under `artifacts/pr-triage/` and includes a suggested review command for each PR.
+That writes a ranked queue under `artifacts/pr-triage/` and includes:
+
+- a suggested review command for each PR
+- a stable decision summary for why each PR was marked `deep`, `quick`, or `skip`
 
 For more commands and workflow detail, use:
 
@@ -125,7 +129,19 @@ If you already have a queue of open PRs, the normal sequence is now:
 1. triage the queue
 2. spend `deep` reviews only on the risky PRs
 3. use `quick` reviews for the smaller or lower-risk PRs
-4. feed the best missed findings back through the gated learning flow
+4. inspect `review-run-summary.json` to confirm what strategy ran and what it produced
+5. compare review quality when live GitHub feedback exists
+6. feed the best missed findings back through the gated learning flow
+
+Each local review run now writes `review-run-summary.json` and `review-run-summary.md` next to `review.md`.
+
+Those summary files tell you, in plain English:
+
+- whether the run was fresh or reused from cache
+- which review passes were selected
+- which passes were skipped and why
+- whether benchmarking ran
+- where to find the linked quality-comparison artifact if you supplied one
 
 The fresh GitHub path is also the recommended quality-tuning loop. After you capture and normalize live review threads, compare them against a review artifact with:
 
@@ -137,6 +153,12 @@ python .\plugins\codex-review\scripts\compare_review_quality.py `
 ```
 
 That writes a plain-English summary plus a machine-readable comparison artifact you can feed back into later `run_codex_review.py --quality-comparison ...` runs.
+
+The comparison output now also breaks down:
+
+- missed findings by severity
+- missed findings by gap type
+- whether the current review was probably enough or likely needs a deeper follow-up
 
 For public-repo calibration work, you can also use:
 

@@ -418,9 +418,63 @@ def build_prompt_focus(missed_records: list[dict[str, Any]]) -> list[str]:
     return focus
 
 
+def bucket_counts(
+    findings: list[dict[str, Any]], field_name: str, buckets: list[str]
+) -> dict[str, int]:
+    counts = {bucket: 0 for bucket in buckets}
+    for item in findings:
+        value = str(item.get(field_name) or "").lower()
+        if value in counts:
+            counts[value] += 1
+        else:
+            counts.setdefault("other", 0)
+            counts["other"] += 1
+    return counts
+
+
+def build_evaluation_summary(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    missed = [item for item in findings if item["gap_classification"] != "caught"]
+    high_severity_missed = [
+        item
+        for item in missed
+        if str(item.get("severity") or "").lower() in {"critical", "high"}
+    ]
+    prompt_gap_misses = [
+        item for item in missed if item["gap_classification"] == "prompt-gap"
+    ]
+    known_blind_spot_misses = [
+        item
+        for item in missed
+        if item["gap_classification"]
+        in {"prompt-gap", "corpus-and-calibration-gap"}
+    ]
+    novel_gap_misses = [
+        item for item in missed if item["gap_classification"] == "corpus-gap"
+    ]
+    deeper_review_likely_helpful = bool(high_severity_missed or prompt_gap_misses)
+    if not missed:
+        review_sufficiency = "sufficient"
+    elif deeper_review_likely_helpful:
+        review_sufficiency = "needs-deeper-follow-up"
+    else:
+        review_sufficiency = "needs-prompt-or-corpus-tuning"
+    return {
+        "review_sufficiency": review_sufficiency,
+        "deeper_review_likely_helpful": deeper_review_likely_helpful,
+        "known_blind_spot_misses": len(known_blind_spot_misses),
+        "novel_gap_misses": len(novel_gap_misses),
+        "high_severity_missed": len(high_severity_missed),
+    }
+
+
 def build_markdown_report(
-    summary: dict[str, Any], findings: list[dict[str, Any]], prompt_focus: list[str]
+    summary: dict[str, Any],
+    findings: list[dict[str, Any]],
+    prompt_focus: list[str],
+    evaluation_summary: dict[str, Any],
 ) -> str:
+    severity_counts = summary.get("severity_counts") or {}
+    gap_counts = summary.get("gap_class_counts") or {}
     lines = [
         "# Review Quality Comparison",
         "",
@@ -432,6 +486,22 @@ def build_markdown_report(
         f"- Prompt gaps: {summary['prompt_gaps']}",
         f"- Corpus gaps: {summary['corpus_gaps']}",
         f"- Corpus and calibration gaps: {summary['corpus_and_calibration_gaps']}",
+        f"- Review sufficiency: {evaluation_summary['review_sufficiency']}",
+        f"- Deeper review likely helpful: {'yes' if evaluation_summary['deeper_review_likely_helpful'] else 'no'}",
+        "",
+        "## Severity Breakdown",
+        "",
+        f"- Critical: {severity_counts.get('critical', 0)}",
+        f"- High: {severity_counts.get('high', 0)}",
+        f"- Medium: {severity_counts.get('medium', 0)}",
+        f"- Low: {severity_counts.get('low', 0)}",
+        "",
+        "## Gap Breakdown",
+        "",
+        f"- Caught: {gap_counts.get('caught', 0)}",
+        f"- Prompt gaps: {gap_counts.get('prompt-gap', 0)}",
+        f"- Corpus gaps: {gap_counts.get('corpus-gap', 0)}",
+        f"- Corpus and calibration gaps: {gap_counts.get('corpus-and-calibration-gap', 0)}",
         "",
         "## Findings",
         "",
@@ -511,6 +581,15 @@ def main() -> int:
 
     missed = [item for item in findings if item["gap_classification"] != "caught"]
     prompt_focus = build_prompt_focus(missed)
+    severity_counts = bucket_counts(
+        findings, "severity", ["critical", "high", "medium", "low"]
+    )
+    gap_class_counts = bucket_counts(
+        findings,
+        "gap_classification",
+        ["caught", "prompt-gap", "corpus-gap", "corpus-and-calibration-gap"],
+    )
+    evaluation_summary = build_evaluation_summary(findings)
     summary = {
         "accepted_live_findings": len(findings),
         "caught": sum(1 for item in findings if item["gap_classification"] == "caught"),
@@ -526,6 +605,10 @@ def main() -> int:
             for item in findings
             if item["gap_classification"] == "corpus-and-calibration-gap"
         ),
+        "severity_counts": severity_counts,
+        "gap_class_counts": gap_class_counts,
+        "known_blind_spot_misses": evaluation_summary["known_blind_spot_misses"],
+        "novel_gap_misses": evaluation_summary["novel_gap_misses"],
     }
 
     output = {
@@ -534,8 +617,18 @@ def main() -> int:
         "review_file": str(review_path),
         "proposal_file": str(proposal_path),
         "summary": summary,
+        "evaluation_summary": evaluation_summary,
         "findings": findings,
         "prompt_focus": prompt_focus,
+        "top_missed_findings": [
+            {
+                "candidate_title": item["candidate_title"],
+                "file_path": item["file_path"],
+                "severity": item["severity"],
+                "gap_classification": item["gap_classification"],
+            }
+            for item in missed[:5]
+        ],
         "recommended_probationary_candidates": [
             item["candidate_id"]
             for item in findings
@@ -556,7 +649,9 @@ def main() -> int:
     json_path = output_dir / "quality-comparison.json"
     md_path = output_dir / "quality-comparison.md"
     write_json(json_path, output)
-    write_text(md_path, build_markdown_report(summary, findings, prompt_focus))
+    write_text(
+        md_path, build_markdown_report(summary, findings, prompt_focus, evaluation_summary)
+    )
 
     print(f"Quality comparison JSON: {json_path}")
     print(f"Quality comparison Markdown: {md_path}")

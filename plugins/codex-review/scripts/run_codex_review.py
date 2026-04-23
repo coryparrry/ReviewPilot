@@ -7,13 +7,20 @@ import shutil
 import subprocess
 import sys
 import types
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Tuple
 
 JsonDict = dict[str, Any]
 DEFAULT_PASS_TIMEOUT_SECONDS = 420
 DEFAULT_MAX_DEEP_PASSES = 3
+DEEP_PASS_ORDER = [
+    "changed-hunks",
+    "concurrency-state",
+    "validation-contract",
+    "workflow-lifecycle",
+    "async-helpers",
+]
 
 SECTION_HEADING_RE = re.compile(r"^\*\*(.+?)\*\*$")
 MARKDOWN_HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$")
@@ -191,6 +198,172 @@ def find_reusable_review_run(review_root: Path, cache_key: JsonDict) -> Path | N
         if existing_key == cache_key:
             return candidate
     return None
+
+
+def finding_priority(item: str) -> tuple[int, int]:
+    lowered = item.lower()
+    score = 0
+    if any(
+        token in lowered
+        for token in ("security", "auth", "permission", "secret", "token")
+    ):
+        score += 6
+    if any(
+        token in lowered
+        for token in ("race", "queue", "concurrency", "duplicate", "claim")
+    ):
+        score += 5
+    if any(
+        token in lowered
+        for token in ("state", "stale", "rollback", "reset", "workflow", "lifecycle")
+    ):
+        score += 4
+    if any(
+        token in lowered
+        for token in ("contract", "validation", "null", "bounds", "cleanup")
+    ):
+        score += 3
+    return score, -len(item)
+
+
+def summarize_review_findings(review_text: str) -> JsonDict:
+    findings = extract_findings_items(review_text)
+    titles = [item.splitlines()[0].strip() for item in findings if item.strip()]
+    return {
+        "count": len(findings),
+        "titles": titles,
+        "has_findings": bool(findings),
+    }
+
+
+def build_review_run_summary(
+    *,
+    run_dir: Path,
+    repo: Path,
+    head_sha: str,
+    args: argparse.Namespace,
+    cache_hit: bool,
+    cache_source: str | None,
+    selected_passes: list[str],
+    skipped_passes: list[JsonDict],
+    pass_results: list[JsonDict],
+    review_file: Path,
+    benchmark_enabled: bool,
+    benchmark_json: JsonDict | None,
+    stop_reason: str | None,
+    overall_notes: list[str],
+) -> JsonDict:
+    review_text = read_text_if_present(review_file)
+    findings_summary = summarize_review_findings(review_text)
+    benchmark_summary: JsonDict = {
+        "enabled": benchmark_enabled,
+        "completed": benchmark_json is not None,
+    }
+    if benchmark_json is not None:
+        benchmark_summary["results"] = benchmark_json
+
+    if args.depth == "deep":
+        effective_strategy = "multi-pass" if len(selected_passes) > 1 else "single-pass-deep"
+    else:
+        effective_strategy = "single-pass-quick"
+
+    return {
+        "schema_version": "codex-review.review-run-summary.v1",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "run_dir": str(run_dir),
+        "repo": str(repo),
+        "base": args.base,
+        "head_sha": head_sha,
+        "mode": args.mode,
+        "model": args.model,
+        "requested_depth": args.depth,
+        "effective_strategy": effective_strategy,
+        "quality_comparison_file": str(args.quality_comparison or ""),
+        "cache": {
+            "hit": cache_hit,
+            "source": cache_source or "",
+        },
+        "pass_strategy": {
+            "selected_passes": selected_passes,
+            "skipped_passes": skipped_passes,
+            "stop_reason": stop_reason or "",
+            "completed_passes": [
+                result["name"] for result in pass_results if result.get("status") == "success"
+            ],
+        },
+        "pass_results": pass_results,
+        "findings_summary": findings_summary,
+        "benchmark": benchmark_summary,
+        "notes": overall_notes,
+        "artifacts": {
+            "review_file": str(review_file),
+            "repair_plan_json": str(run_dir / "repair-plan.json"),
+            "repair_plan_markdown": str(run_dir / "repair-plan.md"),
+            "inline_findings": str(run_dir / "inline-findings.json"),
+            "inline_comments": str(run_dir / "codex-inline-comments.txt"),
+            "benchmark_json": str(run_dir / "benchmark-summary.json"),
+            "benchmark_text": str(run_dir / "benchmark-summary.txt"),
+        },
+    }
+
+
+def build_review_run_summary_markdown(summary: JsonDict) -> str:
+    cache = summary.get("cache") if isinstance(summary.get("cache"), dict) else {}
+    pass_strategy = (
+        summary.get("pass_strategy")
+        if isinstance(summary.get("pass_strategy"), dict)
+        else {}
+    )
+    findings_summary = (
+        summary.get("findings_summary")
+        if isinstance(summary.get("findings_summary"), dict)
+        else {}
+    )
+    benchmark = (
+        summary.get("benchmark") if isinstance(summary.get("benchmark"), dict) else {}
+    )
+    lines = [
+        "# Review Run Summary",
+        "",
+        f"- Requested depth: {summary.get('requested_depth', 'unknown')}",
+        f"- Effective strategy: {summary.get('effective_strategy', 'unknown')}",
+        f"- Cache reuse: {'yes' if cache.get('hit') else 'no'}",
+        f"- Selected passes: {', '.join(pass_strategy.get('selected_passes') or ['none'])}",
+        f"- Findings surfaced: {findings_summary.get('count', 0)}",
+        f"- Benchmark completed: {'yes' if benchmark.get('completed') else 'no'}",
+    ]
+    if summary.get("quality_comparison_file"):
+        lines.append(
+            f"- Linked quality comparison: {summary.get('quality_comparison_file')}"
+        )
+    skipped = pass_strategy.get("skipped_passes")
+    if isinstance(skipped, list) and skipped:
+        lines.extend(["", "## Skipped Passes", ""])
+        for item in skipped:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"- {item.get('name', 'unknown')}: {item.get('reason', 'no reason recorded')}"
+            )
+    results = summary.get("pass_results")
+    if isinstance(results, list) and results:
+        lines.extend(["", "## Pass Results", ""])
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"- {item.get('name', 'unknown')}: {item.get('status', 'unknown')}"
+            )
+    notes = summary.get("notes")
+    if isinstance(notes, list) and notes:
+        lines.extend(["", "## Notes", ""])
+        lines.extend(f"- {note}" for note in notes if str(note).strip())
+    return "\n".join(lines) + "\n"
+
+
+def write_review_run_summary(run_dir: Path, summary: JsonDict) -> None:
+    write_file(run_dir / "review-run-summary.json", json.dumps(summary, indent=2) + "\n")
+    write_file(run_dir / "review-run-summary.md", build_review_run_summary_markdown(summary))
 
 
 def resolve_codex_base_command() -> list[str]:
@@ -450,21 +623,51 @@ def should_continue_after_pass(
     return False
 
 
-def combine_pass_reviews(pass_reviews: list[tuple[str, str]]) -> str:
-    combined_items: list[str] = []
+def combine_pass_reviews(
+    pass_reviews: list[tuple[str, str]],
+    *,
+    overall_notes: list[str] | None = None,
+) -> str:
+    deduped_items: list[tuple[int, str]] = []
     seen: set[str] = set()
 
-    for _, review_text in pass_reviews:
+    for order, (_pass_name, review_text) in enumerate(pass_reviews):
         for item in extract_findings_items(review_text):
             first_line = item.splitlines()[0].strip().lower()
             key = re.sub(r"\s+", " ", first_line)
             if key in seen:
                 continue
             seen.add(key)
-            combined_items.append(item)
+            deduped_items.append((order, item))
+
+    combined_items = [
+        item
+        for _order, item in sorted(
+            deduped_items,
+            key=lambda entry: (
+                -finding_priority(entry[1])[0],
+                entry[0],
+                finding_priority(entry[1])[1],
+            ),
+        )
+    ]
+    pass_names = [name for name, _review in pass_reviews]
 
     if not combined_items:
-        return "No findings.\n\nResidual risk:\n- Multi-pass review did not surface a concrete release-blocking issue.\n"
+        lines = [
+            "No findings.",
+            "",
+            "**Open questions**",
+            "",
+            "- None.",
+            "",
+            "**Residual risk**",
+            "",
+            f"- Review covered {', '.join(pass_names)} but did not surface a concrete release-blocking bug.",
+        ]
+        if overall_notes:
+            lines.extend(["- Notes: " + "; ".join(note for note in overall_notes if note)])
+        return "\n".join(lines).rstrip() + "\n"
 
     lines = ["**Findings**", ""]
     for index, item in enumerate(combined_items, start=1):
@@ -478,10 +681,13 @@ def combine_pass_reviews(pass_reviews: list[tuple[str, str]]) -> str:
             "",
             "**Change summary**",
             "",
-            "- Combined multi-pass deep review from changed-hunk, concurrency-state, validation-contract, workflow-lifecycle, and async-helper passes.",
+            f"- Combined findings from: {', '.join(pass_names)}.",
+            "- Findings are ordered so the highest-signal bug reports appear first.",
             "",
         ]
     )
+    if overall_notes:
+        lines.extend(["**Residual risk**", "", "- " + "; ".join(note for note in overall_notes if note), ""])
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -589,8 +795,34 @@ def main() -> int:
     if not args.no_cache and args.mode != "dirty":
         reusable_run = find_reusable_review_run(review_root, cache_key)
         if reusable_run is not None:
+            summary_path = reusable_run / "review-run-summary.json"
+            summary = load_cache_key(summary_path) or {}
+            if not isinstance(summary, dict):
+                summary = {}
+            summary.setdefault("schema_version", "codex-review.review-run-summary.v1")
+            summary["generated_at"] = datetime.now(timezone.utc).isoformat()
+            summary["run_dir"] = str(reusable_run)
+            summary["repo"] = str(repo)
+            summary["base"] = args.base
+            summary["head_sha"] = head_sha
+            summary["mode"] = args.mode
+            summary["model"] = args.model
+            summary["requested_depth"] = args.depth
+            cache_summary = summary.get("cache")
+            if not isinstance(cache_summary, dict):
+                cache_summary = {}
+            cache_summary["hit"] = True
+            cache_summary["source"] = str(reusable_run)
+            summary["cache"] = cache_summary
+            artifacts = summary.get("artifacts")
+            if not isinstance(artifacts, dict):
+                artifacts = {}
+            artifacts.setdefault("review_file", str(reusable_run / "review.md"))
+            summary["artifacts"] = artifacts
+            write_review_run_summary(reusable_run, summary)
             print(f"Reused review artifacts: {reusable_run}")
             print(f"Review: {reusable_run / 'review.md'}")
+            print(f"Run summary: {reusable_run / 'review-run-summary.json'}")
             return 0
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = repo / args.output_dir / timestamp
@@ -631,13 +863,26 @@ def main() -> int:
     pass_stdout_texts: list[str] = []
     pass_stderr_texts: list[str] = []
     overall_notes: list[str] = []
+    pass_results: list[JsonDict] = []
     pass_prompts = build_pass_prompts(
         prepared["prompt"],
         args.depth,
         scan_report,
         args.max_deep_passes,
     )
+    selected_passes = [name for name, _prompt in pass_prompts]
+    skipped_passes: list[JsonDict] = []
+    if args.depth == "deep":
+        for pass_name in DEEP_PASS_ORDER:
+            if pass_name not in selected_passes:
+                skipped_passes.append(
+                    {
+                        "name": pass_name,
+                        "reason": "adaptive pass selection did not prioritize this risk lane",
+                    }
+                )
     stop_remaining_passes = False
+    stop_reason: str | None = None
 
     for pass_index, (pass_name, pass_prompt) in enumerate(pass_prompts, start=1):
         final_completed = None
@@ -645,6 +890,8 @@ def main() -> int:
         reason_before_retry: str | None = None
         success = False
         pass_review_file = run_dir / f"{pass_name}-review.md"
+        pass_status = "pending"
+        final_reason = ""
 
         for attempt in range(1, max_attempts + 1):
             attempt_success, reason, completed = run_codex_attempt(
@@ -658,6 +905,7 @@ def main() -> int:
                 timeout_seconds=args.pass_timeout_seconds,
             )
             final_completed = completed
+            final_reason = reason
 
             if attempt_success:
                 if attempt > 1:
@@ -666,6 +914,7 @@ def main() -> int:
                         f"First attempt failed with: {reason_before_retry or 'unknown mechanical failure'}."
                     )
                 success = True
+                pass_status = "success"
                 break
 
             if should_abort_remaining_passes(
@@ -678,6 +927,8 @@ def main() -> int:
                     f"{pass_name}: stopping after {reason} once earlier passes already produced a usable review."
                 )
                 stop_remaining_passes = True
+                stop_reason = reason
+                pass_status = "aborted-after-earlier-success"
                 break
 
             if attempt == max_attempts:
@@ -691,6 +942,7 @@ def main() -> int:
                 f"{pass_name}: first Codex review attempt failed mechanically "
                 f"({reason}). Retrying once in the same read-only sandbox."
             )
+            pass_status = "retried"
 
         assert final_completed is not None
         write_file(run_dir / f"{pass_name}-codex-stdout.txt", final_completed.stdout)
@@ -708,11 +960,32 @@ def main() -> int:
                 scan_report=scan_report,
             ):
                 stop_remaining_passes = True
+                stop_reason = "first-pass-strong-enough"
                 if len(pass_prompts) > 1 and pass_name == "changed-hunks":
                     overall_notes.append(
                         "changed-hunks: first pass was strong enough, so deeper follow-up passes were skipped to save review budget."
                     )
+        pass_results.append(
+            {
+                "name": pass_name,
+                "status": pass_status,
+                "attempts": attempt,
+                "final_reason": final_reason,
+                "review_file": str(pass_review_file),
+            }
+        )
         if stop_remaining_passes:
+            for remaining_name, _remaining_prompt in pass_prompts[pass_index:]:
+                skipped_passes.append(
+                    {
+                        "name": remaining_name,
+                        "reason": (
+                            "earlier pass was strong enough to stop deeper follow-up passes"
+                            if stop_reason == "first-pass-strong-enough"
+                            else "later pass stalled after earlier useful output was already preserved"
+                        ),
+                    }
+                )
             break
 
     if not pass_reviews:
@@ -720,7 +993,7 @@ def main() -> int:
             "Codex review generation did not produce any usable pass output."
         )
 
-    combined_review = combine_pass_reviews(pass_reviews)
+    combined_review = combine_pass_reviews(pass_reviews, overall_notes=overall_notes)
     write_file(review_file, combined_review)
     write_file(stdout_log, "\n\n".join(pass_stdout_texts))
     write_file(stderr_log, "\n\n".join(pass_stderr_texts))
@@ -747,7 +1020,26 @@ def main() -> int:
     print(repair_output.strip())
 
     should_skip_benchmark = args.no_benchmark or args.depth == "quick"
+    benchmark_json: JsonDict | None = None
     if should_skip_benchmark:
+        summary = build_review_run_summary(
+            run_dir=run_dir,
+            repo=repo,
+            head_sha=head_sha,
+            args=args,
+            cache_hit=False,
+            cache_source=None,
+            selected_passes=selected_passes,
+            skipped_passes=skipped_passes,
+            pass_results=pass_results,
+            review_file=review_file,
+            benchmark_enabled=False,
+            benchmark_json=None,
+            stop_reason=stop_reason,
+            overall_notes=overall_notes,
+        )
+        write_review_run_summary(run_dir, summary)
+        print(f"Run summary: {run_dir / 'review-run-summary.json'}")
         return 0
 
     benchmark_output = pre_pr.run_benchmarks(skill_dir, review_file, repo)
@@ -759,6 +1051,24 @@ def main() -> int:
 
     print()
     print(benchmark_output.strip())
+    summary = build_review_run_summary(
+        run_dir=run_dir,
+        repo=repo,
+        head_sha=head_sha,
+        args=args,
+        cache_hit=False,
+        cache_source=None,
+        selected_passes=selected_passes,
+        skipped_passes=skipped_passes,
+        pass_results=pass_results,
+        review_file=review_file,
+        benchmark_enabled=True,
+        benchmark_json=benchmark_json,
+        stop_reason=stop_reason,
+        overall_notes=overall_notes,
+    )
+    write_review_run_summary(run_dir, summary)
+    print(f"Run summary: {run_dir / 'review-run-summary.json'}")
     return 0
 
 

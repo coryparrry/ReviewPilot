@@ -410,6 +410,22 @@ def test_recommend_review_depth_prefers_deep_for_high_signal_workflow_changes() 
     assert depth == "deep"
 
 
+def test_recommend_review_depth_prefers_quick_for_medium_risk_contract_change() -> None:
+    recommend_review_depth = cast(
+        Callable[..., str],
+        getattr(triage_pr_queue, "recommend_review_depth"),
+    )
+
+    depth = recommend_review_depth(
+        total_score=4,
+        risk_hits=[{"severity": "medium"}],
+        layer_counts={"contracts-types": 1},
+        code_files_changed=1,
+    )
+
+    assert depth == "quick"
+
+
 def test_recommend_review_depth_skips_docs_only_low_score_changes() -> None:
     recommend_review_depth = cast(
         Callable[..., str],
@@ -424,6 +440,25 @@ def test_recommend_review_depth_skips_docs_only_low_score_changes() -> None:
     )
 
     assert depth == "skip"
+
+
+def test_recommendation_summary_records_decision_codes() -> None:
+    recommendation_summary = cast(
+        Callable[..., dict[str, Any]],
+        getattr(triage_pr_queue, "recommendation_summary"),
+    )
+
+    summary = recommendation_summary(
+        recommended_depth="deep",
+        total_score=18,
+        risk_hits=[{"severity": "high"}],
+        layer_counts={"workflow-runtime": 1, "contracts-types": 1},
+        code_files_changed=2,
+    )
+
+    assert summary["primary_reason"]
+    assert "workflow-runtime" in summary["reason_codes"]
+    assert "high-risk-plus-critical-layer" in summary["reason_codes"]
 
 
 def test_recommend_review_settings_match_depth_and_score() -> None:
@@ -567,7 +602,133 @@ def test_combine_pass_reviews_preserves_successful_first_pass() -> None:
 
     assert "**Findings**" in combined
     assert "Title one" in combined
-    assert "Combined multi-pass deep review" in combined
+    assert "Combined findings from: changed-hunks." in combined
+
+
+def test_combine_pass_reviews_prioritizes_higher_signal_finding_titles() -> None:
+    combine_pass_reviews = cast(
+        Callable[[list[tuple[str, str]]], str],
+        getattr(run_codex_review, "combine_pass_reviews"),
+    )
+
+    combined = combine_pass_reviews(
+        [
+            (
+                "changed-hunks",
+                """**Findings**
+
+1. Minor cleanup issue
+   Why this is a bug: Example.
+   Evidence: Example.
+
+2. Auth token can be reused after reset
+   Why this is a bug: Example.
+   Evidence: Example.
+""",
+            )
+        ]
+    )
+
+    assert combined.index("Auth token can be reused after reset") < combined.index(
+        "Minor cleanup issue"
+    )
+
+
+def test_build_review_run_summary_captures_selected_and_skipped_passes(
+    tmp_path: Path,
+) -> None:
+    build_review_run_summary = cast(
+        Callable[..., dict[str, Any]],
+        getattr(run_codex_review, "build_review_run_summary"),
+    )
+    review_file = tmp_path / "review.md"
+    review_file.write_text(
+        """**Findings**
+
+1. Queue claim can race
+   Why this is a bug: Example.
+   Evidence: Example.
+""",
+        encoding="utf-8",
+    )
+    args = Namespace(
+        base="origin/main",
+        mode="changes",
+        depth="deep",
+        model="gpt-5.4-mini",
+        quality_comparison="artifacts/review-quality/run/quality-comparison.json",
+    )
+
+    summary = build_review_run_summary(
+        run_dir=tmp_path,
+        repo=tmp_path,
+        head_sha="abc123",
+        args=args,
+        cache_hit=False,
+        cache_source=None,
+        selected_passes=["changed-hunks", "concurrency-state"],
+        skipped_passes=[{"name": "async-helpers", "reason": "not prioritized"}],
+        pass_results=[
+            {
+                "name": "changed-hunks",
+                "status": "success",
+                "attempts": 1,
+                "final_reason": "ok",
+                "review_file": str(review_file),
+            },
+            {
+                "name": "concurrency-state",
+                "status": "aborted-after-earlier-success",
+                "attempts": 1,
+                "final_reason": "codex-timeout",
+                "review_file": str(tmp_path / "concurrency-state-review.md"),
+            },
+        ],
+        review_file=review_file,
+        benchmark_enabled=True,
+        benchmark_json={"overall": {"score": 0.75}},
+        stop_reason="codex-timeout",
+        overall_notes=["preserved earlier successful pass"],
+    )
+
+    assert summary["pass_strategy"]["selected_passes"] == [
+        "changed-hunks",
+        "concurrency-state",
+    ]
+    assert summary["pass_strategy"]["skipped_passes"] == [
+        {"name": "async-helpers", "reason": "not prioritized"}
+    ]
+    assert summary["cache"]["hit"] is False
+    assert summary["benchmark"]["completed"] is True
+    assert summary["findings_summary"]["count"] == 1
+
+
+def test_build_review_run_summary_markdown_mentions_cache_and_skipped_passes() -> None:
+    build_review_run_summary_markdown = cast(
+        Callable[[dict[str, Any]], str],
+        getattr(run_codex_review, "build_review_run_summary_markdown"),
+    )
+
+    rendered = build_review_run_summary_markdown(
+        {
+            "requested_depth": "deep",
+            "effective_strategy": "multi-pass",
+            "quality_comparison_file": "artifacts/run/quality-comparison.json",
+            "cache": {"hit": True, "source": "/tmp/run"},
+            "pass_strategy": {
+                "selected_passes": ["changed-hunks"],
+                "skipped_passes": [{"name": "async-helpers", "reason": "not prioritized"}],
+            },
+            "findings_summary": {"count": 2},
+            "benchmark": {"completed": False},
+            "pass_results": [{"name": "changed-hunks", "status": "success"}],
+            "notes": ["reused prior run"],
+        }
+    )
+
+    assert "- Cache reuse: yes" in rendered
+    assert "async-helpers: not prioritized" in rendered
+    assert "Linked quality comparison" in rendered
 
 
 def test_select_deep_pass_names_prefers_relevant_subset() -> None:
@@ -687,6 +848,67 @@ def test_should_continue_after_single_finding_when_high_risk_remains() -> None:
     )
 
 
+def test_build_evaluation_summary_distinguishes_known_vs_novel_misses() -> None:
+    build_evaluation_summary = cast(
+        Callable[[list[dict[str, Any]]], dict[str, Any]],
+        getattr(compare_review_quality, "build_evaluation_summary"),
+    )
+
+    summary = build_evaluation_summary(
+        [
+            {"gap_classification": "caught", "severity": "low"},
+            {"gap_classification": "prompt-gap", "severity": "high"},
+            {"gap_classification": "corpus-gap", "severity": "medium"},
+        ]
+    )
+
+    assert summary["review_sufficiency"] == "needs-deeper-follow-up"
+    assert summary["deeper_review_likely_helpful"] is True
+    assert summary["known_blind_spot_misses"] == 1
+    assert summary["novel_gap_misses"] == 1
+
+
+def test_build_markdown_report_includes_evaluation_breakdowns() -> None:
+    build_markdown_report = cast(
+        Callable[[dict[str, Any], list[dict[str, Any]], list[str], dict[str, Any]], str],
+        getattr(compare_review_quality, "build_markdown_report"),
+    )
+
+    rendered = build_markdown_report(
+        {
+            "accepted_live_findings": 3,
+            "caught": 1,
+            "missed": 2,
+            "prompt_gaps": 1,
+            "corpus_gaps": 1,
+            "corpus_and_calibration_gaps": 0,
+            "severity_counts": {"critical": 0, "high": 1, "medium": 1, "low": 1},
+            "gap_class_counts": {
+                "caught": 1,
+                "prompt-gap": 1,
+                "corpus-gap": 1,
+                "corpus-and-calibration-gap": 0,
+            },
+        },
+        [
+            {
+                "gap_classification": "prompt-gap",
+                "candidate_title": "Missed auth reset gap",
+                "file_path": "src/auth.ts",
+            }
+        ],
+        ["Missed auth reset gap in src/auth.ts: example"],
+        {
+            "review_sufficiency": "needs-deeper-follow-up",
+            "deeper_review_likely_helpful": True,
+        },
+    )
+
+    assert "Review sufficiency: needs-deeper-follow-up" in rendered
+    assert "## Severity Breakdown" in rendered
+    assert "## Gap Breakdown" in rendered
+
+
 def test_triage_markdown_includes_review_command() -> None:
     build_markdown = cast(
         Callable[[list[dict[str, Any]], int], str],
@@ -710,6 +932,36 @@ def test_triage_markdown_includes_review_command() -> None:
     )
 
     assert "Review: `python run_codex_review.py --depth quick`" in rendered
+
+
+def test_triage_markdown_includes_decision_summary() -> None:
+    build_markdown = cast(
+        Callable[[list[dict[str, Any]], int], str],
+        getattr(triage_pr_queue, "build_markdown"),
+    )
+
+    rendered = build_markdown(
+        [
+            {
+                "repo": "owner/name",
+                "pr": 123,
+                "triage_score": 3,
+                "title": "Docs tweak",
+                "recommended_depth": "skip",
+                "reasons": ["docs-only change"],
+                "checkout_hint": "gh pr checkout 123 --repo owner/name",
+                "recommended_review_command": "python run_codex_review.py --depth quick",
+                "recommendation_summary": {
+                    "primary_reason": "docs-or-config-only low-risk change",
+                    "reason_codes": ["docs-only-low-risk"],
+                },
+            }
+        ],
+        5,
+    )
+
+    assert "Decision: docs-or-config-only low-risk change" in rendered
+    assert "Decision codes: docs-only-low-risk" in rendered
 
 
 def test_find_reusable_review_run_matches_cache_key(tmp_path: Path) -> None:
