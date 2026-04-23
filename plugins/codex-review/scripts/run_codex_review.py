@@ -14,6 +14,7 @@ from typing import Any, Tuple
 JsonDict = dict[str, Any]
 DEFAULT_PASS_TIMEOUT_SECONDS = 420
 DEFAULT_MAX_DEEP_PASSES = 3
+REVIEW_RUN_SUMMARY_SCHEMA_VERSION = "codex-review.review-run-summary.v1"
 DEEP_PASS_ORDER = [
     "changed-hunks",
     "concurrency-state",
@@ -270,7 +271,7 @@ def build_review_run_summary(
         effective_strategy = "single-pass-quick"
 
     return {
-        "schema_version": "codex-review.review-run-summary.v1",
+        "schema_version": REVIEW_RUN_SUMMARY_SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "run_dir": str(run_dir),
         "repo": str(repo),
@@ -338,6 +339,9 @@ def build_review_run_summary_markdown(summary: JsonDict) -> str:
         lines.append(
             f"- Linked quality comparison: {summary.get('quality_comparison_file')}"
         )
+    warning = str(summary.get("summary_warning") or "").strip()
+    if warning:
+        lines.append(f"- Summary warning: {warning}")
     skipped = pass_strategy.get("skipped_passes")
     if isinstance(skipped, list) and skipped:
         lines.extend(["", "## Skipped Passes", ""])
@@ -811,10 +815,35 @@ def main() -> int:
         reusable_run = find_reusable_review_run(review_root, cache_key)
         if reusable_run is not None:
             summary_path = reusable_run / "review-run-summary.json"
-            summary = load_cache_key(summary_path) or {}
-            if not isinstance(summary, dict):
-                summary = {}
-            summary.setdefault("schema_version", "codex-review.review-run-summary.v1")
+            loaded_summary = load_cache_key(summary_path)
+            if (
+                isinstance(loaded_summary, dict)
+                and str(loaded_summary.get("schema_version") or "")
+                == REVIEW_RUN_SUMMARY_SCHEMA_VERSION
+            ):
+                summary = dict(loaded_summary)
+                cache_summary = summary.get("cache")
+                if not isinstance(cache_summary, dict):
+                    cache_summary = {}
+                cache_summary["hit"] = True
+                cache_summary["source"] = str(reusable_run)
+                summary["cache"] = cache_summary
+            else:
+                summary = {
+                    "schema_version": REVIEW_RUN_SUMMARY_SCHEMA_VERSION,
+                    "incomplete": True,
+                    "summary_warning": (
+                        "Reused a cached review artifact without a compatible structured run summary. "
+                        "Pass, benchmark, and strategy details were not trusted from legacy metadata."
+                    ),
+                    "cache": {
+                        "hit": False,
+                        "source": "",
+                    },
+                    "artifacts": {
+                        "review_file": str(reusable_run / "review.md"),
+                    },
+                }
             summary["generated_at"] = datetime.now(timezone.utc).isoformat()
             summary["run_dir"] = str(reusable_run)
             summary["repo"] = str(repo)
@@ -823,17 +852,6 @@ def main() -> int:
             summary["mode"] = args.mode
             summary["model"] = args.model
             summary["requested_depth"] = args.depth
-            cache_summary = summary.get("cache")
-            if not isinstance(cache_summary, dict):
-                cache_summary = {}
-            cache_summary["hit"] = True
-            cache_summary["source"] = str(reusable_run)
-            summary["cache"] = cache_summary
-            artifacts = summary.get("artifacts")
-            if not isinstance(artifacts, dict):
-                artifacts = {}
-            artifacts.setdefault("review_file", str(reusable_run / "review.md"))
-            summary["artifacts"] = artifacts
             write_review_run_summary(reusable_run, summary)
             print(f"Reused review artifacts: {reusable_run}")
             print(f"Review: {reusable_run / 'review.md'}")

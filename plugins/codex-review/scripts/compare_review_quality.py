@@ -581,12 +581,12 @@ def main() -> int:
     missed = [item for item in findings if item["gap_classification"] != "caught"]
     prompt_focus = build_prompt_focus(missed)
     severity_counts = bucket_counts(
-        findings, "severity", ["critical", "high", "medium", "low"]
+        missed, "severity", ["critical", "high", "medium", "low"]
     )
     gap_class_counts = bucket_counts(
-        findings,
+        missed,
         "gap_classification",
-        ["caught", "prompt-gap", "corpus-gap", "corpus-and-calibration-gap"],
+        ["prompt-gap", "corpus-gap", "corpus-and-calibration-gap"],
     )
     evaluation_summary = build_evaluation_summary(findings)
     summary = {

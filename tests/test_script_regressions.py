@@ -494,6 +494,7 @@ def test_load_cached_triage_result_matches_head_oid(tmp_path: Path) -> None:
     summary_path.write_text(
         json.dumps(
             {
+                "schema_version": triage_pr_queue.TRIAGE_SCHEMA_VERSION,
                 "prs": [
                     {
                         "repo": "owner/name",
@@ -501,7 +502,7 @@ def test_load_cached_triage_result_matches_head_oid(tmp_path: Path) -> None:
                         "head_oid": "abc123",
                         "recommended_depth": "quick",
                     }
-                ]
+                ],
             }
         ),
         encoding="utf-8",
@@ -520,6 +521,7 @@ def test_load_cached_triage_result_skips_malformed_cached_pr(tmp_path: Path) -> 
     summary_path.write_text(
         json.dumps(
             {
+                "schema_version": triage_pr_queue.TRIAGE_SCHEMA_VERSION,
                 "prs": [
                     {"repo": "owner/name", "pr": "not-a-number", "head_oid": "abc123"},
                     {
@@ -528,7 +530,7 @@ def test_load_cached_triage_result_skips_malformed_cached_pr(tmp_path: Path) -> 
                         "head_oid": "abc123",
                         "recommended_depth": "quick",
                     },
-                ]
+                ],
             }
         ),
         encoding="utf-8",
@@ -540,6 +542,33 @@ def test_load_cached_triage_result_skips_malformed_cached_pr(tmp_path: Path) -> 
 
     assert cached is not None
     assert cached["recommended_depth"] == "quick"
+
+
+def test_load_cached_triage_result_skips_older_schema(tmp_path: Path) -> None:
+    summary_path = tmp_path / "artifacts" / "pr-triage" / "run" / "triage-summary.json"
+    summary_path.parent.mkdir(parents=True)
+    summary_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "codex-review.pr-triage.v1",
+                "prs": [
+                    {
+                        "repo": "owner/name",
+                        "pr": 123,
+                        "head_oid": "abc123",
+                        "recommended_depth": "quick",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cached = triage_pr_queue.load_cached_triage_result(
+        tmp_path, "owner/name", 123, "abc123"
+    )
+
+    assert cached is None
 
 
 def test_should_abort_remaining_passes_on_timeout_after_success() -> None:
@@ -731,6 +760,29 @@ def test_build_review_run_summary_markdown_mentions_cache_and_skipped_passes() -
     assert "- Cache reuse: yes" in rendered
     assert "async-helpers: not prioritized" in rendered
     assert "Linked quality comparison" in rendered
+
+
+def test_build_review_run_summary_markdown_mentions_incomplete_legacy_summary() -> None:
+    build_review_run_summary_markdown = cast(
+        Callable[[dict[str, Any]], str],
+        getattr(run_codex_review, "build_review_run_summary_markdown"),
+    )
+
+    rendered = build_review_run_summary_markdown(
+        {
+            "requested_depth": "deep",
+            "effective_strategy": "single-pass-deep",
+            "cache": {"hit": False, "source": ""},
+            "pass_strategy": {"selected_passes": [], "skipped_passes": []},
+            "findings_summary": {"count": 0},
+            "benchmark": {"completed": False},
+            "notes": [],
+            "summary_warning": "legacy summary metadata was not trusted",
+        }
+    )
+
+    assert "- Cache reuse: no" in rendered
+    assert "Summary warning: legacy summary metadata was not trusted" in rendered
 
 
 def test_select_deep_pass_names_prefers_relevant_subset() -> None:

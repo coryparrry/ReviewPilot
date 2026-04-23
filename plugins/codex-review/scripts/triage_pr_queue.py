@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 JsonDict = dict[str, Any]
+TRIAGE_SCHEMA_VERSION = "codex-review.pr-triage.v2"
 
 PR_SPEC_RE = re.compile(r"^(?P<repo>[^/\s]+/[^#\s]+)#(?P<pr>\d+)$")
 PR_URL_RE = re.compile(
@@ -576,6 +577,8 @@ def load_cached_triage_result(
             continue
         if not isinstance(payload, dict):
             continue
+        if str(payload.get("schema_version") or "") != TRIAGE_SCHEMA_VERSION:
+            continue
         prs = payload.get("prs")
         if not isinstance(prs, list):
             continue
@@ -698,7 +701,7 @@ def main() -> int:
     )
 
     summary: JsonDict = {
-        "schema_version": "codex-review.pr-triage.v1",
+        "schema_version": TRIAGE_SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "output_dir": str(out_dir),
         "queue_size": len(analyzed),
