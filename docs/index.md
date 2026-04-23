@@ -36,6 +36,8 @@ That is large enough to justify its own repo and docs.
 
 ## Active Plans
 
+- [Roadmap](roadmap.md)
+  Current project direction and next-phase priorities after the public plugin release
 - [GitHub Intake Plan](github-intake-plan.md)
   Plugin-owned workflow plan for ingesting GitHub PR review feedback, generating corpus candidates, and applying safe additions
 
@@ -50,7 +52,7 @@ That is large enough to justify its own repo and docs.
 
 ## Near-Term Direction
 
-- keep the installed skill working where it is today
-- treat `plugins/codex-review` as the repo-backed primary container
-- use the repo-owned sync script instead of editing two copies casually
-- keep the review workflow measurable against GitHub review misses and external datasets
+- improve the quality of review findings before adding broad new surface area
+- measure review quality and cost more clearly on real PRs
+- make `quick`, `deep`, and triage feel like the normal user flow
+- keep the learning loop safe, auditable, and deliberate

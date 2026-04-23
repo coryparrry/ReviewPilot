@@ -113,7 +113,11 @@ The plugin should be the clean integration boundary for:
 
 The bundled skill remains the review brain inside that plugin.
 
-The current next-step implementation plan is documented at:
+The current project roadmap is documented at:
+
+- `docs/roadmap.md`
+
+The GitHub intake design plan is still documented at:
 
 - `docs/github-intake-plan.md`
 

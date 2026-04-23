@@ -1,64 +1,103 @@
 # Roadmap
 
-## Phase 1
+This document is the working plan for ReviewPilot from this point forward.
 
-- create dedicated repo
-- document project boundary
-- document relationship to installed skill
-- copy the installed skill into the repo under a clean source layout
+The project is now past the early scaffolding stage. The plugin exists, the public install path exists, the public repo is live, and the main review, triage, learning, and release workflows are in place.
 
-## Phase 2
+The next job is not to add lots of new surface area. The next job is to make ReviewPilot sharper, easier to trust, and easier to use.
 
-- define canonical source-of-truth rules
-- add sync workflow between the repo copy and the installed runtime copy
-- add lightweight validation commands
-- scaffold the plugin container that will own the skill long-term
+## What Is Already In Place
 
-## Current Phase 2 Status
+- a public `codex-review` plugin
+- a public npm install path
+- local review modes with `quick` and `deep`
+- PR queue triage
+- review-quality comparison against real GitHub review feedback
+- safer probationary learning
+- release validation and publish automation
 
-- repo copy is the maintained edit location
-- plugin scaffold now exists at `plugins/codex-review`
-- one-way repo-to-installed sync now lives at `scripts/sync_skill_to_codex.ps1`
-- destination deletes remain intentionally manual for now
-- next sync hardening should add verification before any mirror-delete mode
+## Current Priority
 
-## Phase 3
+Improve review quality and prove it with better evaluation.
 
-- formalize benchmark workflows
-- add regression gates for critical and high misses
-- document how Codex should invoke bundled scripts during review
-- make the GitHub PR review lane a first-class input to skill improvement
-- document how this repo should ingest future missed-review cases from linked GitHub repos
-- start moving GitHub-facing workflows behind plugin-owned interfaces instead of loose repo scripts
-- make the plugin MCP boundary, not ambient `gh`, the primary live GitHub access path
-- add a Codex-side capture helper so GitHub connector output becomes a pipeline artifact without manual save steps
+That means ReviewPilot should:
 
-## Next Execution Plan
+- find more real bugs
+- produce fewer weak or noisy findings
+- use less review budget on low-risk PRs
+- make the learning loop safer and more explainable
 
-- implement the [GitHub Intake Plan](github-intake-plan.md) as the first plugin-owned workflow
-- run the first live `ReviewPilot` PR through the wrapper pipeline command over fetch, ingest, propose, and apply
-- keep live GitHub fetch read-only while the self-improvement loop hardens
-- make `auto` the default corpus-apply mode, with `review` as the explicit no-write option
-- wire before/after benchmark comparison into the wrapper when a real review output is available
-- let the wrapper consume prepared `.codex-review` artifact directories directly so Codex-authored reviews can flow into scoring without manual file extraction
-- let the wrapper reuse a prepared review run directory and stop after proposal generation so the full authoring loop can stay in one folder
-- let the wrapper resume from existing shared-run artifacts instead of repeating the early read-only stages
-- make MCP-shaped GitHub raw artifacts a first-class wrapper input and keep `gh` fetch as an explicit fallback only
-- define the normalized schema and apply safety checks before broader automation
-- gate GitHub-derived candidates into a probationary corpus before they can influence the primary GitHub corpus
-- use the curated SWE-bench lane as external hardening pressure so the skill can improve without relying only on one team's historical PR misses
-- keep strict benchmark scoring separate from softer probationary admission evidence so learning stays safer than raw regex matching alone
-- expose one plugin-owned review runner so the review brain can actually author `review.md` and benchmark it in one command
-- let the review runner self-repair only obvious review-output failures with one automatic read-only retry, not broad auto-editing
-- emit a structured repair plan from each completed review run so later code-fix automation has a safe intermediate artifact
-- add a one-finding repair executor that prepares a bounded fix handoff by default and only runs an edit pass on explicit apply
-- automate the external Hugging Face hardening lane so curated SWE-bench cases can be fetched, reviewed blindly, and scored in one run
-- add a plugin-owned automation entrypoint so Codex automations can invoke the skill-centered review, learning, repair-handoff, and hardening loop end to end
-- make probationary-to-primary promotion evidence-based so the durable corpus only grows when repeated review artifacts support the same case
-- wire that durable-promotion step into the wrapper as an explicit opt-in so the whole learning loop can run from one entrypoint
+## Phase A: Improve The Review Output
 
-## Phase 4
+Focus on the actual quality of findings first.
 
-- optionally add CI or packaging only after the local workflow is stable
-- optionally add GitHub-facing automation only after the local review and scoring loop is stable
-- add plugin install/runtime documentation once the local plugin shape is stable
+- improve prioritization so the most important bugs appear first
+- reduce vague or low-signal findings
+- make inline comments clearer and easier to act on
+- strengthen `quick` mode for smaller PRs so it is useful without feeling shallow
+- keep `deep` mode for higher-risk PRs, but make it earn the extra spend
+
+## Phase B: Add Better Evaluation
+
+ReviewPilot now needs stronger evidence, not just more features.
+
+- build a small real-world evaluation set from real PRs
+- track whether `quick` was enough or should have escalated
+- track whether `deep` found materially better issues
+- measure token usage and cache reuse across review modes
+- make it easy to compare runs over time
+
+## Phase C: Improve The GitHub User Flow
+
+The engine is now stronger than the product experience. Tighten the path around it.
+
+- make it obvious when to use `quick`, `deep`, or `skip`
+- make PR triage output easier to read and act on
+- make one-PR review and multi-PR triage feel like the default workflow
+- make review-quality comparison easier to run after a review finishes
+
+## Phase D: Tighten The Learning Loop
+
+Learning from misses is a core differentiator, so it needs to stay careful.
+
+- improve approval gates before learning from GitHub misses
+- keep a clear audit trail for what was learned and why
+- make rollback easy if a bad lesson gets through
+- keep probationary lessons clearly separate from durable lessons
+
+## Phase E: Product Polish
+
+Keep improving the public product surface without turning the repo into marketing fluff.
+
+- add better screenshots or demo visuals
+- keep the README focused on features and install
+- keep contributor docs obvious and simple
+- keep maintainer-only docs clearly marked as maintainer docs
+
+## What Should Wait
+
+These ideas are valid, but they should not lead the next phase.
+
+- broad new automation layers
+- major new benchmark lanes
+- large refactors for style alone
+- SaaS-style product expansion
+- extra packaging complexity that does not improve review quality or usability
+
+## Near-Term Execution Order
+
+1. improve the quality of review findings
+2. add better evaluation and reporting around real PR reviews
+3. tighten the PR triage and review flow
+4. harden the learning loop further
+5. keep polishing the public plugin surface
+
+## Success Criteria
+
+The next phase is working if:
+
+- users trust the findings more
+- low-risk PRs are cheaper to review
+- high-risk PRs still get strong deep reviews
+- learning changes are safer and easier to audit
+- the plugin feels more like a dependable product than an experimental repo
