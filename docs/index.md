@@ -48,7 +48,7 @@ That is large enough to justify its own repo and docs.
 - [Lessons workflow](lessons-workflow.md)
   How to turn local review lessons into reviewed prompt improvements safely
 - [Public release checklist](public-release-checklist.md)
-  What to run and confirm before making the repo public
+  Maintainer release checks for publishing updates safely
 
 ## Near-Term Direction
 
