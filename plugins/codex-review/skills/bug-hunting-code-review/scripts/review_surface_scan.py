@@ -111,6 +111,18 @@ RISK_RULES: tuple[RiskRule, ...] = (
         check="Make sure create and patch validation reflects the real request contract, not a response DTO or display model.",
     ),
     RiskRule(
+        key="optimistic-rollback",
+        title="Optimistic UI rollback gap risk",
+        severity="high",
+        patterns=(
+            re.compile(r"\bset[A-Z]\w*\s*\(", re.I),
+            re.compile(r"\b(await|async)\b", re.I),
+            re.compile(r"\b(error|catch|throw|reject|rollback|previous|prev)\b", re.I),
+        ),
+        why="Optimistic state updates can remain visible when an awaited mutation throws instead of returning an error payload.",
+        check="If local state changes before an awaited mutation, verify returned errors and thrown/rejected failures both restore prior state or resync from durable truth.",
+    ),
+    RiskRule(
         key="error-shaping",
         title="Typed error or parser-shaping risk",
         severity="medium",

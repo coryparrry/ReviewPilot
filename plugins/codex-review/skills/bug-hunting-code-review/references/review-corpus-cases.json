@@ -132,6 +132,25 @@
     ]
   },
   {
+    "id": "optimistic-rollback-thrown-action",
+    "title": "Rollback optimistic UI state when awaited actions throw",
+    "severity": "high",
+    "category": "optimistic-state",
+    "source": "kkzakaria/dbs-store#17/review-3890611981/comment-2884853072",
+    "expected_groups": [
+      [
+        "optimistic|setSlides|local state",
+        "throw|catch|reject|exception",
+        "rollback|restore|previous|prev|resync"
+      ],
+      [
+        "reorderHeroSlides",
+        "result\\?\\.error|returned error",
+        "throw|catch|exception"
+      ]
+    ]
+  },
+  {
     "id": "preserve-explicit-null",
     "title": "Preserve explicit null state instead of falling through to a fallback",
     "severity": "high",

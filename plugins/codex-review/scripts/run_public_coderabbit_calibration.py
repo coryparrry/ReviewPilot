@@ -45,6 +45,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--review-ref",
+        default="comment-original",
+        choices=["comment-original", "head"],
+        help=(
+            "Commit to review. comment-original reviews the commit that public review comments targeted; "
+            "head reviews the final PR head. Defaults to comment-original for apples-to-apples calibration."
+        ),
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         help="Optional limit on the number of calibration entries to run.",
@@ -153,6 +162,66 @@ def checkout_pr(repo_dir: Path, pr_number: int) -> None:
     run_cmd(["git", "checkout", "--force", "-B", local_branch, "FETCH_HEAD"], repo_dir)
 
 
+def current_head_sha(repo_dir: Path) -> str:
+    completed = run_cmd(["git", "rev-parse", "HEAD"], repo_dir)
+    return completed.stdout.strip()
+
+
+def fetch_pr_review_comments(repo_dir: Path, github_repo: str, pr_number: int) -> list[dict[str, Any]]:
+    completed = run_cmd(
+        [
+            "gh",
+            "api",
+            f"repos/{github_repo}/pulls/{pr_number}/comments",
+            "--paginate",
+            "--slurp",
+        ],
+        repo_dir,
+    )
+    payload = json.loads(completed.stdout)
+    comments: list[dict[str, Any]] = []
+    if isinstance(payload, list):
+        for page_or_item in payload:
+            if isinstance(page_or_item, list):
+                comments.extend(
+                    item for item in page_or_item if isinstance(item, dict)
+                )
+            elif isinstance(page_or_item, dict):
+                comments.append(page_or_item)
+    return comments
+
+
+def choose_original_comment_commit(comments: list[dict[str, Any]]) -> str | None:
+    commit_counter: Counter[str] = Counter()
+    commit_order: list[str] = []
+    for comment in comments:
+        commit = comment.get("original_commit_id") or comment.get("commit_id")
+        if not isinstance(commit, str) or not commit.strip():
+            continue
+        commit = commit.strip()
+        if commit not in commit_counter:
+            commit_order.append(commit)
+        commit_counter[commit] += 1
+    if not commit_counter:
+        return None
+    return max(commit_order, key=lambda commit: (commit_counter[commit], -commit_order.index(commit)))
+
+
+def checkout_review_ref(
+    repo_dir: Path, github_repo: str, pr_number: int, review_ref: str
+) -> tuple[str, str]:
+    if review_ref == "head":
+        return current_head_sha(repo_dir), "head"
+
+    comments = fetch_pr_review_comments(repo_dir, github_repo, pr_number)
+    original_commit = choose_original_comment_commit(comments)
+    if original_commit is None:
+        return current_head_sha(repo_dir), "head-no-comments"
+
+    run_cmd(["git", "checkout", "--force", original_commit], repo_dir)
+    return current_head_sha(repo_dir), "comment-original"
+
+
 def newest_child_dir(path: Path) -> Path:
     children = sorted(
         (child for child in path.iterdir() if child.is_dir()),
@@ -164,11 +233,38 @@ def newest_child_dir(path: Path) -> Path:
     return children[0]
 
 
-def review_run_is_complete(path: Path) -> bool:
+def review_run_is_complete(path: Path, expected_head_sha: str | None = None) -> bool:
     review_file = path / "review.md"
-    return review_file.is_file() and bool(
-        review_file.read_text(encoding="utf-8", errors="replace").strip()
-    )
+    if not review_file.is_file() or not review_file.read_text(
+        encoding="utf-8", errors="replace"
+    ).strip():
+        return False
+    if expected_head_sha is None:
+        return True
+    cache_key_path = path / "review-cache-key.json"
+    if not cache_key_path.is_file():
+        return False
+    try:
+        cache_key = json.loads(
+            cache_key_path.read_text(encoding="utf-8", errors="replace")
+        )
+    except json.JSONDecodeError:
+        return False
+    return isinstance(cache_key, dict) and cache_key.get("head_sha") == expected_head_sha
+
+
+def newest_complete_review_run(path: Path, expected_head_sha: str) -> Path | None:
+    if not path.is_dir():
+        return None
+    for candidate in sorted(
+        (child for child in path.iterdir() if child.is_dir()),
+        key=lambda item: item.name,
+        reverse=True,
+    ):
+        if review_run_is_complete(candidate, expected_head_sha):
+            return candidate
+    return None
+
 
 
 def run_review(
@@ -439,19 +535,19 @@ def main() -> int:
         repo_dir = ensure_repo_clone(clones_root, github_repo)
         metadata = pr_metadata(repo_dir, github_repo, pr_number)
         checkout_pr(repo_dir, pr_number)
+        review_head_sha, effective_review_ref = checkout_review_ref(
+            repo_dir, github_repo, pr_number, args.review_ref
+        )
         base_ref = f"origin/{metadata['baseRefName']}"
 
         reviews: list[dict[str, Any]] = []
         for depth in depths:
             review_parent = reviews_root / label / depth
-            existing_review_run = None
-            if args.resume and review_parent.is_dir():
-                try:
-                    existing_review_run = newest_child_dir(review_parent)
-                    if not review_run_is_complete(existing_review_run):
-                        existing_review_run = None
-                except FileNotFoundError:
-                    existing_review_run = None
+            existing_review_run = (
+                newest_complete_review_run(review_parent, review_head_sha)
+                if args.resume
+                else None
+            )
             review_run_dir = existing_review_run or run_review(
                 root, repo_dir, base_ref, review_parent, args.model, depth
             )
@@ -489,6 +585,8 @@ def main() -> int:
                 "repo": github_repo,
                 "pr": pr_number,
                 "base_ref": base_ref,
+                "review_ref": effective_review_ref,
+                "review_head_sha": review_head_sha,
                 "reviews": reviews,
             }
         )
@@ -498,6 +596,7 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model": args.model,
         "depths": depths,
+        "review_ref": args.review_ref,
         "results": results,
         "depth_summaries": {
             depth: summarize_comparison_files(files)

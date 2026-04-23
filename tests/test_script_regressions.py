@@ -61,6 +61,10 @@ run_public_coderabbit_calibration = load_module(
     "run_public_coderabbit_calibration_test",
     "plugins/codex-review/scripts/run_public_coderabbit_calibration.py",
 )
+ingest_github_review_feedback = load_module(
+    "ingest_github_review_feedback_test",
+    "plugins/codex-review/scripts/ingest_github_review_feedback.py",
+)
 
 
 def test_finding_is_auto_approvable_skips_non_dict_review_match() -> None:
@@ -335,6 +339,83 @@ def test_scan_risks_flags_fallback_null_and_queue_claim_patterns() -> None:
     assert "fail-open-fallback" in keys
     assert "explicit-null-drift" in keys
     assert "queue-claim" in keys
+
+
+def test_scan_risks_flags_optimistic_rollback_gap() -> None:
+    scan_risks = cast(
+        Callable[..., list[dict[str, str]]],
+        getattr(review_surface_scan, "scan_risks"),
+    )
+    text = """
+    const prev = slides;
+    setSlides(reordered);
+    const result = await reorderHeroSlides(reordered.map((s) => s.id));
+    if (result?.error) {
+      setSlides(prev);
+      setActionError(result.error);
+    }
+    """
+
+    risks = scan_risks(text, code_like_change_present=True)
+    keys = {risk["key"] for risk in risks}
+
+    assert "optimistic-rollback" in keys
+
+
+def test_ingest_classifies_optimistic_rollback_comment() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, severity, confidence = classify_comment(
+        "Rollback is only triggered when the action returns { error }. "
+        "If reorderHeroSlides throws, optimistic state is kept. "
+        "Catch exceptions and restore prev too.",
+        "components/admin/hero-slide-list.tsx",
+    )
+
+    assert (category, severity, confidence) == (
+        "optimistic-state",
+        "high",
+        "high",
+    )
+
+
+def test_ingest_does_not_classify_transaction_comment_as_optimistic() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, _, _ = classify_comment(
+        "Two concurrent activations can both pass the count check. "
+        "Run the count check inside the same transaction as the insert/update write. "
+        "Ensure the transaction rolls back on error.",
+        "lib/actions/admin-hero.ts",
+    )
+
+    assert category != "optimistic-state"
+
+
+def test_ingest_classifies_toctou_transaction_comment() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, severity, confidence = classify_comment(
+        "These are TOCTOU checks right now. Two concurrent activations can both "
+        "pass the count check and end up with more than 5 active slides. "
+        "Run the count check inside the same transaction as the write.",
+        "lib/actions/admin-hero.ts",
+    )
+
+    assert (category, severity, confidence) == (
+        "concurrency-atomicity",
+        "high",
+        "high",
+    )
 
 
 def test_public_pr_quality_cycle_requires_review_artifact_for_auto_learning(
@@ -1177,6 +1258,10 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
         review_run = output_dir / "reviews" / "sample" / depth / "20260422-000000"
         review_run.mkdir(parents=True)
         (review_run / "review.md").write_text(f"{depth} review", encoding="utf-8")
+        (review_run / "review-cache-key.json").write_text(
+            json.dumps({"head_sha": "reviewed-commit"}),
+            encoding="utf-8",
+        )
         comparison_dir = (
             output_dir / "comparisons" / "sample" / depth / "quality-comparison"
         )
@@ -1194,6 +1279,7 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
             output_dir=str(output_dir),
             model="gpt-5.4-mini",
             depths="quick,deep",
+            review_ref="comment-original",
             limit=None,
             resume=True,
         ),
@@ -1215,6 +1301,14 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
         run_public_coderabbit_calibration,
         "checkout_pr",
         lambda _repo_dir, _pr_number: None,
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "checkout_review_ref",
+        lambda _repo_dir, _github_repo, _pr_number, _review_ref: (
+            "reviewed-commit",
+            "comment-original",
+        ),
     )
 
     def fail_run_review(*_args: Any, **_kwargs: Any) -> Path:
@@ -1239,5 +1333,23 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
         == "codex-review.public-coderabbit-calibration.v2"
     )
     assert [review["depth"] for review in reviews] == ["quick", "deep"]
+    assert aggregate["results"][0]["review_head_sha"] == "reviewed-commit"
     assert "sample/quick" in reviews[0]["review_run_dir"]
     assert "sample/deep" in reviews[1]["review_run_dir"]
+
+
+def test_public_coderabbit_calibration_prefers_original_comment_commit() -> None:
+    choose_original_comment_commit = cast(
+        Callable[[list[dict[str, Any]]], str | None],
+        run_public_coderabbit_calibration.choose_original_comment_commit,
+    )
+
+    commit = choose_original_comment_commit(
+        [
+            {"original_commit_id": "old-a", "commit_id": "new-a"},
+            {"original_commit_id": "old-b", "commit_id": "new-b"},
+            {"original_commit_id": "old-a", "commit_id": "new-c"},
+        ]
+    )
+
+    assert commit == "old-a"

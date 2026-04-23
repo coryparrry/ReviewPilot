@@ -160,6 +160,18 @@ CATEGORY_RULES = [
         ],
     },
     {
+        "category": "concurrency-atomicity",
+        "severity": "high",
+        "confidence": "medium",
+        "patterns": [
+            r"toctou",
+            r"concurrent",
+            r"atomic|transaction|same transaction",
+            r"count check|check.*write|pass the check",
+            r"race",
+        ],
+    },
+    {
         "category": "test-realism",
         "severity": "medium",
         "confidence": "medium",
@@ -765,6 +777,13 @@ def extract_comment_summary(body: str) -> tuple[str, str]:
 
 def classify_comment(body: str, file_path: str | None = None) -> tuple[str, str, str]:
     lowered = body.lower()
+    if (
+        re.search(r"\b(optimistic|local state|ui)\b", lowered)
+        and re.search(r"\b(rollback|restore|previous|prev|resync)\b", lowered)
+        and re.search(r"\b(throw|catch|exception|reject)\b", lowered)
+    ):
+        return ("optimistic-state", "high", "high")
+
     best_match: tuple[int, dict[str, Any] | None] = (0, None)
 
     for rule in CATEGORY_RULES:
