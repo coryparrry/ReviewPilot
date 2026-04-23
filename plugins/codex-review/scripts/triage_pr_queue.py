@@ -400,14 +400,15 @@ def recommendation_summary(
             reason_codes.append("workflow-runtime")
         if signals["high_risk_count"] >= 2:
             reason_codes.append("multiple-high-risk-signals")
-        if (
-            signals["high_risk_count"] >= 1
-            and (signals["touches_persistence"] or signals["touches_contracts"])
+        if signals["high_risk_count"] >= 1 and (
+            signals["touches_persistence"] or signals["touches_contracts"]
         ):
             reason_codes.append("high-risk-plus-critical-layer")
         if total_score >= 16:
             reason_codes.append("high-total-score")
-        primary_reason = "deep review justified by risky code paths or strong risk signals"
+        primary_reason = (
+            "deep review justified by risky code paths or strong risk signals"
+        )
     else:
         reason_codes = []
         if signals["high_risk_count"] >= 1 or signals["medium_risk_count"] >= 1:
@@ -420,7 +421,9 @@ def recommendation_summary(
             reason_codes.append("multi-file-code-change")
         if total_score >= 5:
             reason_codes.append("moderate-total-score")
-        primary_reason = "quick review is enough unless later evidence shows missed risk"
+        primary_reason = (
+            "quick review is enough unless later evidence shows missed risk"
+        )
 
     return {
         "recommended_depth": recommended_depth,
@@ -647,7 +650,9 @@ def build_markdown(queue: list[JsonDict], top_n: int) -> str:
                 lines.append(f"  Decision: {primary_reason}")
             reason_codes = summary.get("reason_codes")
             if isinstance(reason_codes, list) and reason_codes:
-                lines.append(f"  Decision codes: {', '.join(str(code) for code in reason_codes)}")
+                lines.append(
+                    f"  Decision codes: {', '.join(str(code) for code in reason_codes)}"
+                )
         lines.append(f"  Checkout: `{item['checkout_hint']}`")
         lines.append(f"  Review: `{item['recommended_review_command']}`")
     lines.append("")

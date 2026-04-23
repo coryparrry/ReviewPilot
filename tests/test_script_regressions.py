@@ -717,7 +717,9 @@ def test_build_review_run_summary_markdown_mentions_cache_and_skipped_passes() -
             "cache": {"hit": True, "source": "/tmp/run"},
             "pass_strategy": {
                 "selected_passes": ["changed-hunks"],
-                "skipped_passes": [{"name": "async-helpers", "reason": "not prioritized"}],
+                "skipped_passes": [
+                    {"name": "async-helpers", "reason": "not prioritized"}
+                ],
             },
             "findings_summary": {"count": 2},
             "benchmark": {"completed": False},
@@ -870,7 +872,9 @@ def test_build_evaluation_summary_distinguishes_known_vs_novel_misses() -> None:
 
 def test_build_markdown_report_includes_evaluation_breakdowns() -> None:
     build_markdown_report = cast(
-        Callable[[dict[str, Any], list[dict[str, Any]], list[str], dict[str, Any]], str],
+        Callable[
+            [dict[str, Any], list[dict[str, Any]], list[str], dict[str, Any]], str
+        ],
         getattr(compare_review_quality, "build_markdown_report"),
     )
 

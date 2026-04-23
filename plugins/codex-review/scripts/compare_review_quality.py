@@ -445,8 +445,7 @@ def build_evaluation_summary(findings: list[dict[str, Any]]) -> dict[str, Any]:
     known_blind_spot_misses = [
         item
         for item in missed
-        if item["gap_classification"]
-        in {"prompt-gap", "corpus-and-calibration-gap"}
+        if item["gap_classification"] in {"prompt-gap", "corpus-and-calibration-gap"}
     ]
     novel_gap_misses = [
         item for item in missed if item["gap_classification"] == "corpus-gap"
@@ -650,7 +649,8 @@ def main() -> int:
     md_path = output_dir / "quality-comparison.md"
     write_json(json_path, output)
     write_text(
-        md_path, build_markdown_report(summary, findings, prompt_focus, evaluation_summary)
+        md_path,
+        build_markdown_report(summary, findings, prompt_focus, evaluation_summary),
     )
 
     print(f"Quality comparison JSON: {json_path}")

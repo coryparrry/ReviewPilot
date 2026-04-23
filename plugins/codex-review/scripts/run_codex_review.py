@@ -263,7 +263,9 @@ def build_review_run_summary(
         benchmark_summary["results"] = benchmark_json
 
     if args.depth == "deep":
-        effective_strategy = "multi-pass" if len(selected_passes) > 1 else "single-pass-deep"
+        effective_strategy = (
+            "multi-pass" if len(selected_passes) > 1 else "single-pass-deep"
+        )
     else:
         effective_strategy = "single-pass-quick"
 
@@ -288,7 +290,9 @@ def build_review_run_summary(
             "skipped_passes": skipped_passes,
             "stop_reason": stop_reason or "",
             "completed_passes": [
-                result["name"] for result in pass_results if result.get("status") == "success"
+                result["name"]
+                for result in pass_results
+                if result.get("status") == "success"
             ],
         },
         "pass_results": pass_results,
@@ -308,20 +312,18 @@ def build_review_run_summary(
 
 
 def build_review_run_summary_markdown(summary: JsonDict) -> str:
-    cache = summary.get("cache") if isinstance(summary.get("cache"), dict) else {}
-    pass_strategy = (
-        summary.get("pass_strategy")
-        if isinstance(summary.get("pass_strategy"), dict)
-        else {}
+    cache_value = summary.get("cache")
+    cache: JsonDict = cache_value if isinstance(cache_value, dict) else {}
+    pass_strategy_value = summary.get("pass_strategy")
+    pass_strategy: JsonDict = (
+        pass_strategy_value if isinstance(pass_strategy_value, dict) else {}
     )
-    findings_summary = (
-        summary.get("findings_summary")
-        if isinstance(summary.get("findings_summary"), dict)
-        else {}
+    findings_value = summary.get("findings_summary")
+    findings_summary: JsonDict = (
+        findings_value if isinstance(findings_value, dict) else {}
     )
-    benchmark = (
-        summary.get("benchmark") if isinstance(summary.get("benchmark"), dict) else {}
-    )
+    benchmark_value = summary.get("benchmark")
+    benchmark: JsonDict = benchmark_value if isinstance(benchmark_value, dict) else {}
     lines = [
         "# Review Run Summary",
         "",
@@ -362,8 +364,12 @@ def build_review_run_summary_markdown(summary: JsonDict) -> str:
 
 
 def write_review_run_summary(run_dir: Path, summary: JsonDict) -> None:
-    write_file(run_dir / "review-run-summary.json", json.dumps(summary, indent=2) + "\n")
-    write_file(run_dir / "review-run-summary.md", build_review_run_summary_markdown(summary))
+    write_file(
+        run_dir / "review-run-summary.json", json.dumps(summary, indent=2) + "\n"
+    )
+    write_file(
+        run_dir / "review-run-summary.md", build_review_run_summary_markdown(summary)
+    )
 
 
 def resolve_codex_base_command() -> list[str]:
@@ -666,7 +672,9 @@ def combine_pass_reviews(
             f"- Review covered {', '.join(pass_names)} but did not surface a concrete release-blocking bug.",
         ]
         if overall_notes:
-            lines.extend(["- Notes: " + "; ".join(note for note in overall_notes if note)])
+            lines.extend(
+                ["- Notes: " + "; ".join(note for note in overall_notes if note)]
+            )
         return "\n".join(lines).rstrip() + "\n"
 
     lines = ["**Findings**", ""]
@@ -687,7 +695,14 @@ def combine_pass_reviews(
         ]
     )
     if overall_notes:
-        lines.extend(["**Residual risk**", "", "- " + "; ".join(note for note in overall_notes if note), ""])
+        lines.extend(
+            [
+                "**Residual risk**",
+                "",
+                "- " + "; ".join(note for note in overall_notes if note),
+                "",
+            ]
+        )
     return "\n".join(lines).rstrip() + "\n"
 
 
