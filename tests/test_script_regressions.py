@@ -267,6 +267,29 @@ def test_render_surface_scan_highlights_risk_prompts_and_questions() -> None:
     assert "Questions to explicitly answer before you stop:" in rendered
 
 
+def test_build_prompt_requires_high_risk_prompt_accountability() -> None:
+    rendered = run_pre_pr_review.build_prompt(
+        "Default review prompt.",
+        "branch: feature",
+        "\n".join(
+            [
+                "Surface scan summary:",
+                "Risk prompts to verify:",
+                "- [high] Optimistic UI rollback gap risk: Verify thrown failures restore prior state.",
+            ]
+        ),
+        "diff --git a/file.tsx b/file.tsx",
+        "changes",
+        "quick",
+        "",
+    )
+
+    assert "For every `[high]` risk prompt in Surface scan" in rendered
+    assert "Verified high-risk prompt:" in rendered
+    assert "optimistic rollback" in rendered
+    assert "thrown or rejected awaited mutations" in rendered
+
+
 def test_run_surface_scan_invokes_expected_json_cli(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -410,10 +410,12 @@ def build_prompt(
         - Name the concrete symbol, field, error type, or state surface that is wrong.
         - When the issue is stale state, source-of-truth drift, or contract mismatch, name both sides that disagree.
         - Prefer concrete API names, field names, functions, enums, and error names.
+        - For every `[high]` risk prompt in Surface scan, either turn it into a finding or add an `Open questions` line starting `Verified high-risk prompt:` that names the prompt and the concrete code evidence that made it safe.
+        - Do not claim a high-risk prompt is verified just because the happy path handles returned errors; for optimistic rollback, explicitly check thrown or rejected awaited mutations too.
 
         Review loop:
         1. Pressure-test the changed code first for missing guards, guard-then-write races, rollback gaps, stale-status cleanup, and read-vs-write drift.
-        2. Use the scan section below to inspect the highest-risk adjacent paths.
+        2. Use the scan section below to inspect every `[high]` risk prompt before lower-risk cleanup.
         3. If you find one real bug in a touched area, check the sibling branch or mirrored path for the same failure class.
         4. Only then spend time on broader repo drift.
 
