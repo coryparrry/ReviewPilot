@@ -407,6 +407,11 @@ def build_prompt(
         - Use the exact headings: Findings, Open questions, Change summary.
         - Each finding needs a short title, one short "Why this is a bug:" sentence, and one short "Evidence:" sentence.
         - Prioritize findings that are directly caused by the changed files, changed hunks, or the state transitions they now control.
+        - Before reporting a finding, name the concrete trigger scenario and the changed code path that makes it newly possible.
+        - For clear bugs and security issues, do not skip a real defect only because the trigger is narrow.
+        - For lower-severity concerns, report only when you can confidently explain the failure path from source evidence.
+        - Do not speculate about broken callers, missing definitions, or incomplete scopes unless the specific affected code path is visible in the review context.
+        - If the visible diff ends at an opening scope such as `if`, `for`, `try`, or a function body, treat that as a context boundary, not automatically as incomplete code.
         - Name the concrete symbol, field, error type, or state surface that is wrong.
         - When the issue is stale state, source-of-truth drift, or contract mismatch, name both sides that disagree.
         - Prefer concrete API names, field names, functions, enums, and error names.

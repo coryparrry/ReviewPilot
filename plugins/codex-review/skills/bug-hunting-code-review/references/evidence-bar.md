@@ -4,6 +4,7 @@ Use this file to decide whether something is strong enough to report as a review
 
 ## Report a Finding Only When All of These Are True
 
+- The issue is introduced by the PR, by a changed hunk, or by a state transition the changed code now controls.
 - A concrete failing scenario exists.
 - The scenario follows from the code as written, not from a vague possibility.
 - The broken invariant, contract, or user expectation is identifiable.
@@ -11,6 +12,16 @@ Use this file to decide whether something is strong enough to report as a review
 - The issue would matter in a real release, not only as a stylistic preference.
 
 If any of these are missing, downgrade the item to an open question or residual risk.
+
+## PR-Introduced Bug Gate
+
+Borrow this discipline from strong PR-review tools:
+
+- For clear correctness, security, data-loss, or workflow-break issues, report the bug even when the trigger is narrow.
+- For low-severity concerns, require stronger certainty. If you cannot explain the exact input, state, or sequence that fails, do not report it as a finding.
+- Do not assume a missing import, declaration, helper, or closing brace is a bug when the review context only shows a diff hunk.
+- Do not claim another caller breaks unless you can identify that caller or contract from the visible source.
+- When confidence is limited but impact is high, report the uncertainty explicitly instead of hiding it or overstating it.
 
 ## Strong Finding Template
 

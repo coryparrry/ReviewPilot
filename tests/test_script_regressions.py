@@ -290,6 +290,23 @@ def test_build_prompt_requires_high_risk_prompt_accountability() -> None:
     assert "thrown or rejected awaited mutations" in rendered
 
 
+def test_build_prompt_includes_pr_introduced_bug_gate() -> None:
+    rendered = run_pre_pr_review.build_prompt(
+        "Default review prompt.",
+        "branch: feature",
+        "Surface scan summary:",
+        "diff --git a/file.ts b/file.ts",
+        "changes",
+        "quick",
+        "",
+    )
+
+    assert "concrete trigger scenario" in rendered
+    assert "changed code path" in rendered
+    assert "trigger is narrow" in rendered
+    assert "context boundary" in rendered
+
+
 def test_run_surface_scan_invokes_expected_json_cli(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

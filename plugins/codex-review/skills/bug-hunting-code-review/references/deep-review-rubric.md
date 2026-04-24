@@ -4,6 +4,17 @@ Use this rubric before declaring `No findings`.
 
 The goal is not to produce more comments. The goal is to make sure the review actually reached CodeRabbit-level failure modes instead of stopping at tidy local code.
 
+## Bug Pickup Discipline
+
+Use this before starting any broad checklist:
+
+- First ask what bug this PR could newly introduce, not what generic cleanup would improve the code.
+- Anchor every finding to a changed hunk, changed contract, or state transition now controlled by the patch.
+- For each possible issue, reconstruct the smallest realistic trigger: input, existing state, changed branch, and wrong result.
+- Be aggressive about real correctness, security, data-loss, and workflow-break bugs even when the trigger is narrow.
+- Be conservative about lower-severity concerns; do not report them unless the failure path is concrete.
+- Treat visible diff boundaries honestly. A hunk ending at an opening scope is not proof of incomplete code.
+
 ## Required Review Outputs
 
 Before concluding a serious review, be able to answer all of these from source:
