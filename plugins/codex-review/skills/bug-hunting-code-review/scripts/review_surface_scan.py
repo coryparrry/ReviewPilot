@@ -23,6 +23,18 @@ JsonDict = dict[str, Any]
 
 FULL_REPO_SCAN_LIMIT = 20
 UNTRACKED_TEXT_LIMIT = 8000
+IGNORED_ADJACENT_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "node_modules",
+}
+IGNORED_ADJACENT_SUFFIXES = {
+    ".pyc",
+    ".pyo",
+}
 
 
 @dataclass(frozen=True)
@@ -459,12 +471,18 @@ def find_adjacent(repo: Path, changed: Iterable[Path]) -> list[str]:
                 if parent:
                     suggestions.add(f"{parent}/{hint}/")
 
-        for root, _, filenames in os.walk(repo):
+        for root, dirnames, filenames in os.walk(repo):
+            dirnames[:] = [
+                dirname for dirname in dirnames if dirname not in IGNORED_ADJACENT_DIRS
+            ]
             root_path = Path(root)
-            if ".git" in root_path.parts:
+            relative_parts = root_path.relative_to(repo).parts
+            if any(part in IGNORED_ADJACENT_DIRS for part in relative_parts):
                 continue
             for filename in filenames:
                 candidate = root_path / filename
+                if candidate.suffix.lower() in IGNORED_ADJACENT_SUFFIXES:
+                    continue
                 if candidate.resolve() in changed_set:
                     continue
                 candidate_name = candidate.name.lower()

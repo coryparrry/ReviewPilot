@@ -423,6 +423,47 @@ def test_scan_risks_flags_connector_workflow_boundary() -> None:
     assert "connector-workflow-boundary" in keys
 
 
+def test_find_adjacent_ignores_generated_cache_files(tmp_path: Path) -> None:
+    find_adjacent = cast(
+        Callable[[Path, list[Path]], list[str]],
+        getattr(review_surface_scan, "find_adjacent"),
+    )
+    changed = tmp_path / "tests" / "foo.test.py"
+    generated = tmp_path / "tests" / "__pycache__" / "foo.test.cpython-314.pyc"
+    changed.parent.mkdir(parents=True)
+    generated.parent.mkdir(parents=True)
+    changed.write_text("def test_foo(): pass\n", encoding="utf-8")
+    generated.write_bytes(b"compiled")
+
+    adjacent = find_adjacent(tmp_path, [changed])
+
+    assert not any("__pycache__" in path for path in adjacent)
+    assert not any(path.endswith(".pyc") for path in adjacent)
+
+
+def test_find_adjacent_does_not_ignore_repo_with_cache_named_parent(
+    tmp_path: Path,
+) -> None:
+    find_adjacent = cast(
+        Callable[[Path, list[Path]], list[str]],
+        getattr(review_surface_scan, "find_adjacent"),
+    )
+    repo = tmp_path / "node_modules" / "repo"
+    changed = repo / "src" / "foo.ts"
+    sibling_test = repo / "src" / "foo.test.ts"
+    sibling_cache = repo / "src" / "__pycache__" / "foo.test.cpython-314.pyc"
+    sibling_cache.parent.mkdir(parents=True)
+    changed.parent.mkdir(parents=True, exist_ok=True)
+    changed.write_text("export function foo() { return 1; }\n", encoding="utf-8")
+    sibling_test.write_text("import { foo } from './foo';\n", encoding="utf-8")
+    sibling_cache.write_bytes(b"compiled")
+
+    adjacent = find_adjacent(repo, [changed])
+
+    assert "src/foo.test.ts" in adjacent
+    assert not any("__pycache__" in path for path in adjacent)
+
+
 def test_ingest_classifies_optimistic_rollback_comment() -> None:
     classify_comment = cast(
         Callable[[str, str | None], tuple[str, str, str]],
@@ -1399,15 +1440,32 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
         review_run.mkdir(parents=True)
         (review_run / "review.md").write_text(f"{depth} review", encoding="utf-8")
         (review_run / "review-cache-key.json").write_text(
-            json.dumps({"head_sha": "reviewed-commit"}),
+            json.dumps(
+                run_public_coderabbit_calibration.expected_review_cache_key(
+                    head_sha="reviewed-commit",
+                    base_ref="origin/main",
+                    depth=depth,
+                    model="gpt-5.4-mini",
+                )
+            ),
             encoding="utf-8",
         )
-        comparison_dir = (
-            output_dir / "comparisons" / "sample" / depth / "quality-comparison"
-        )
+        comparison_parent = output_dir / "comparisons" / "sample" / depth
+        comparison_dir = comparison_parent / "quality-comparison"
         comparison_dir.mkdir(parents=True)
         (comparison_dir / "quality-comparison.json").write_text(
             json.dumps({"findings": [], "summary": {"depth": depth}}),
+            encoding="utf-8",
+        )
+        (comparison_parent / "comparison-cache-key.json").write_text(
+            json.dumps(
+                run_public_coderabbit_calibration.comparison_cache_key(
+                    github_repo="owner/name",
+                    pr_number=123,
+                    source="rest",
+                    review_file=review_run / "review.md",
+                )
+            ),
             encoding="utf-8",
         )
 
@@ -1476,6 +1534,77 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
     assert aggregate["results"][0]["review_head_sha"] == "reviewed-commit"
     assert "sample/quick" in reviews[0]["review_run_dir"]
     assert "sample/deep" in reviews[1]["review_run_dir"]
+
+
+def test_public_coderabbit_calibration_review_resume_requires_full_cache_key(
+    tmp_path: Path,
+) -> None:
+    review_run = tmp_path / "reviews" / "sample" / "quick" / "20260422-000000"
+    review_run.mkdir(parents=True)
+    (review_run / "review.md").write_text("quick review", encoding="utf-8")
+    (review_run / "review-cache-key.json").write_text(
+        json.dumps(
+            run_public_coderabbit_calibration.expected_review_cache_key(
+                head_sha="reviewed-commit",
+                base_ref="origin/main",
+                depth="quick",
+                model="gpt-5.4-mini",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    stale_key = run_public_coderabbit_calibration.expected_review_cache_key(
+        head_sha="reviewed-commit",
+        base_ref="origin/main",
+        depth="deep",
+        model="gpt-5.4-mini",
+    )
+
+    reusable = run_public_coderabbit_calibration.newest_complete_review_run(
+        review_run.parent, stale_key
+    )
+
+    assert reusable is None
+
+
+def test_public_coderabbit_calibration_comparison_resume_requires_review_file(
+    tmp_path: Path,
+) -> None:
+    comparison_file = tmp_path / "quality-comparison" / "quality-comparison.json"
+    cache_key_file = tmp_path / "comparison-cache-key.json"
+    old_review_file = tmp_path / "old" / "review.md"
+    new_review_file = tmp_path / "new" / "review.md"
+    comparison_file.parent.mkdir(parents=True)
+    old_review_file.parent.mkdir(parents=True)
+    new_review_file.parent.mkdir(parents=True)
+    comparison_file.write_text(json.dumps({"findings": []}), encoding="utf-8")
+    old_review_file.write_text("old", encoding="utf-8")
+    new_review_file.write_text("new", encoding="utf-8")
+    cache_key_file.write_text(
+        json.dumps(
+            run_public_coderabbit_calibration.comparison_cache_key(
+                github_repo="owner/name",
+                pr_number=123,
+                source="rest",
+                review_file=old_review_file,
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    is_current = run_public_coderabbit_calibration.comparison_file_is_current(
+        comparison_file,
+        cache_key_file,
+        run_public_coderabbit_calibration.comparison_cache_key(
+            github_repo="owner/name",
+            pr_number=123,
+            source="rest",
+            review_file=new_review_file,
+        ),
+    )
+
+    assert is_current is False
 
 
 def test_public_coderabbit_calibration_prefers_original_comment_commit() -> None:

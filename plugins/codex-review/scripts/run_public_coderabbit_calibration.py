@@ -13,6 +13,8 @@ DEFAULT_SET_PATH = Path(
 )
 ALLOWED_DEPTHS = {"quick", "deep"}
 DEFAULT_DEPTHS = ["quick"]
+DEFAULT_PASS_TIMEOUT_SECONDS = 420
+DEFAULT_MAX_DEEP_PASSES = 3
 
 
 def parse_args() -> argparse.Namespace:
@@ -233,13 +235,35 @@ def newest_child_dir(path: Path) -> Path:
     return children[0]
 
 
-def review_run_is_complete(path: Path, expected_head_sha: str | None = None) -> bool:
+def expected_review_cache_key(
+    *,
+    head_sha: str,
+    base_ref: str,
+    depth: str,
+    model: str,
+) -> dict[str, Any]:
+    return {
+        "head_sha": head_sha,
+        "base": base_ref,
+        "mode": "changes",
+        "depth": depth,
+        "model": model,
+        "quality_comparison": "",
+        "max_deep_passes": DEFAULT_MAX_DEEP_PASSES,
+        "pass_timeout_seconds": DEFAULT_PASS_TIMEOUT_SECONDS,
+        "benchmark_enabled": depth != "quick",
+    }
+
+
+def review_run_is_complete(
+    path: Path, expected_cache_key: dict[str, Any] | None = None
+) -> bool:
     review_file = path / "review.md"
     if not review_file.is_file() or not review_file.read_text(
         encoding="utf-8", errors="replace"
     ).strip():
         return False
-    if expected_head_sha is None:
+    if expected_cache_key is None:
         return True
     cache_key_path = path / "review-cache-key.json"
     if not cache_key_path.is_file():
@@ -250,10 +274,12 @@ def review_run_is_complete(path: Path, expected_head_sha: str | None = None) -> 
         )
     except json.JSONDecodeError:
         return False
-    return isinstance(cache_key, dict) and cache_key.get("head_sha") == expected_head_sha
+    return isinstance(cache_key, dict) and cache_key == expected_cache_key
 
 
-def newest_complete_review_run(path: Path, expected_head_sha: str) -> Path | None:
+def newest_complete_review_run(
+    path: Path, expected_cache_key: dict[str, Any]
+) -> Path | None:
     if not path.is_dir():
         return None
     for candidate in sorted(
@@ -261,9 +287,43 @@ def newest_complete_review_run(path: Path, expected_head_sha: str) -> Path | Non
         key=lambda item: item.name,
         reverse=True,
     ):
-        if review_run_is_complete(candidate, expected_head_sha):
+        if review_run_is_complete(candidate, expected_cache_key):
             return candidate
     return None
+
+
+def comparison_cache_key(
+    *,
+    github_repo: str,
+    pr_number: int,
+    source: str,
+    review_file: Path,
+) -> dict[str, Any]:
+    return {
+        "github_repo": github_repo,
+        "pr": pr_number,
+        "source": source,
+        "review_file": str(review_file.resolve()),
+    }
+
+
+def write_comparison_cache_key(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def comparison_file_is_current(
+    comparison_file: Path, cache_key_file: Path, expected_cache_key: dict[str, Any]
+) -> bool:
+    if not comparison_file.is_file() or not cache_key_file.is_file():
+        return False
+    try:
+        cache_key = json.loads(
+            cache_key_file.read_text(encoding="utf-8", errors="replace")
+        )
+    except json.JSONDecodeError:
+        return False
+    return isinstance(cache_key, dict) and cache_key == expected_cache_key
 
 
 
@@ -543,8 +603,14 @@ def main() -> int:
         reviews: list[dict[str, Any]] = []
         for depth in depths:
             review_parent = reviews_root / label / depth
+            review_cache_key = expected_review_cache_key(
+                head_sha=review_head_sha,
+                base_ref=base_ref,
+                depth=depth,
+                model=args.model,
+            )
             existing_review_run = (
-                newest_complete_review_run(review_parent, review_head_sha)
+                newest_complete_review_run(review_parent, review_cache_key)
                 if args.resume
                 else None
             )
@@ -557,7 +623,19 @@ def main() -> int:
             comparison_file = (
                 comparison_parent / "quality-comparison" / "quality-comparison.json"
             )
-            if not (args.resume and comparison_file.is_file()):
+            comparison_cache = comparison_cache_key(
+                github_repo=github_repo,
+                pr_number=pr_number,
+                source=source,
+                review_file=review_file,
+            )
+            comparison_cache_file = comparison_parent / "comparison-cache-key.json"
+            if not (
+                args.resume
+                and comparison_file_is_current(
+                    comparison_file, comparison_cache_file, comparison_cache
+                )
+            ):
                 comparison_file = run_public_compare(
                     root,
                     github_repo,
@@ -566,6 +644,7 @@ def main() -> int:
                     review_file,
                     comparison_parent,
                 )
+                write_comparison_cache_key(comparison_cache_file, comparison_cache)
             comparison_files_by_depth[depth].append(comparison_file)
             all_comparison_files.append(comparison_file)
             comparison_payload = load_json(comparison_file)
