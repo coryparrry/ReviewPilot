@@ -169,7 +169,9 @@ def current_head_sha(repo_dir: Path) -> str:
     return completed.stdout.strip()
 
 
-def fetch_pr_review_comments(repo_dir: Path, github_repo: str, pr_number: int) -> list[dict[str, Any]]:
+def fetch_pr_review_comments(
+    repo_dir: Path, github_repo: str, pr_number: int
+) -> list[dict[str, Any]]:
     completed = run_cmd(
         [
             "gh",
@@ -185,9 +187,7 @@ def fetch_pr_review_comments(repo_dir: Path, github_repo: str, pr_number: int) -
     if isinstance(payload, list):
         for page_or_item in payload:
             if isinstance(page_or_item, list):
-                comments.extend(
-                    item for item in page_or_item if isinstance(item, dict)
-                )
+                comments.extend(item for item in page_or_item if isinstance(item, dict))
             elif isinstance(page_or_item, dict):
                 comments.append(page_or_item)
     return comments
@@ -206,7 +206,10 @@ def choose_original_comment_commit(comments: list[dict[str, Any]]) -> str | None
         commit_counter[commit] += 1
     if not commit_counter:
         return None
-    return max(commit_order, key=lambda commit: (commit_counter[commit], -commit_order.index(commit)))
+    return max(
+        commit_order,
+        key=lambda commit: (commit_counter[commit], -commit_order.index(commit)),
+    )
 
 
 def checkout_review_ref(
@@ -259,9 +262,10 @@ def review_run_is_complete(
     path: Path, expected_cache_key: dict[str, Any] | None = None
 ) -> bool:
     review_file = path / "review.md"
-    if not review_file.is_file() or not review_file.read_text(
-        encoding="utf-8", errors="replace"
-    ).strip():
+    if (
+        not review_file.is_file()
+        or not review_file.read_text(encoding="utf-8", errors="replace").strip()
+    ):
         return False
     if expected_cache_key is None:
         return True
@@ -324,7 +328,6 @@ def comparison_file_is_current(
     except json.JSONDecodeError:
         return False
     return isinstance(cache_key, dict) and cache_key == expected_cache_key
-
 
 
 def run_review(

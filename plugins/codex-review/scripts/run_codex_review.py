@@ -589,7 +589,12 @@ def select_deep_pass_names(
         selected.append("boundary-fidelity")
     if (
         risk_keys
-        & {"state-machine", "queue-claim", "fail-open-fallback", "connector-workflow-boundary"}
+        & {
+            "state-machine",
+            "queue-claim",
+            "fail-open-fallback",
+            "connector-workflow-boundary",
+        }
         or "workflow-runtime" in layer_names
     ):
         selected.append("workflow-lifecycle")

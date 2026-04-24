@@ -1417,8 +1417,7 @@ def test_public_coderabbit_calibration_aggregate_tracks_depth_delta(
     assert delta["comparable_prs"] == 1
     assert delta["quick_missed_deep_caught_count"] == 1
     assert (
-        delta["quick_missed_deep_caught"][0]["finding"]["candidate_id"]
-        == "candidate-1"
+        delta["quick_missed_deep_caught"][0]["finding"]["candidate_id"] == "candidate-1"
     )
 
 
@@ -1515,7 +1514,9 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
     def fail_run_public_compare(*_args: Any, **_kwargs: Any) -> Path:
         raise AssertionError("resume should not run a new comparison")
 
-    monkeypatch.setattr(run_public_coderabbit_calibration, "run_review", fail_run_review)
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration, "run_review", fail_run_review
+    )
     monkeypatch.setattr(
         run_public_coderabbit_calibration, "run_public_compare", fail_run_public_compare
     )
@@ -1527,8 +1528,7 @@ def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
     )
     reviews = aggregate["results"][0]["reviews"]
     assert (
-        aggregate["schema_version"]
-        == "codex-review.public-coderabbit-calibration.v2"
+        aggregate["schema_version"] == "codex-review.public-coderabbit-calibration.v2"
     )
     assert [review["depth"] for review in reviews] == ["quick", "deep"]
     assert aggregate["results"][0]["review_head_sha"] == "reviewed-commit"
