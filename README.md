@@ -79,7 +79,6 @@ If you want to run it directly:
 python .\plugins\codex-review\scripts\run_codex_review.py `
   --repo . `
   --mode changes `
-  --depth deep `
   --base origin/main
 ```
 
@@ -87,9 +86,10 @@ That gives you:
 
 - a review artifact
 - a run summary artifact
-- benchmark output
 - a repair plan
 - inline review findings for Codex review cards
+
+The direct command defaults to `quick` so normal use does not burn through review budget. Add `--depth deep` only when triage or recent evidence says the PR needs the fuller review package and benchmark step.
 
 If you have several PRs open, triage them first:
 

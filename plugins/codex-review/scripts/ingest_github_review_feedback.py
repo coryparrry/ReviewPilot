@@ -37,6 +37,18 @@ CATEGORY_RULES = [
         ],
     },
     {
+        "category": "boundary-fidelity",
+        "severity": "high",
+        "confidence": "medium",
+        "patterns": [
+            r"non-?2xx|status",
+            r"failure payload|error payload|response body|wrapped payload|payload shape",
+            r"gateway|connector|transport|fetch|external await|timeout",
+            r"wake|claim|pending|current run|global pending",
+            r"fallback|explicit null|cleared state",
+        ],
+    },
+    {
         "category": "state-symmetry",
         "severity": "high",
         "confidence": "medium",
@@ -157,6 +169,18 @@ CATEGORY_RULES = [
             r"queue",
             r"heartbeat",
             r"wake",
+        ],
+    },
+    {
+        "category": "concurrency-atomicity",
+        "severity": "high",
+        "confidence": "medium",
+        "patterns": [
+            r"toctou",
+            r"concurrent",
+            r"atomic|transaction|same transaction",
+            r"count check|check.*write|pass the check",
+            r"race",
         ],
     },
     {
@@ -765,6 +789,13 @@ def extract_comment_summary(body: str) -> tuple[str, str]:
 
 def classify_comment(body: str, file_path: str | None = None) -> tuple[str, str, str]:
     lowered = body.lower()
+    if (
+        re.search(r"\b(optimistic|local state|ui)\b", lowered)
+        and re.search(r"\b(rollback|restore|previous|prev|resync)\b", lowered)
+        and re.search(r"\b(throw|catch|exception|reject)\b", lowered)
+    ):
+        return ("optimistic-state", "high", "high")
+
     best_match: tuple[int, dict[str, Any] | None] = (0, None)
 
     for rule in CATEGORY_RULES:

@@ -23,6 +23,18 @@ JsonDict = dict[str, Any]
 
 FULL_REPO_SCAN_LIMIT = 20
 UNTRACKED_TEXT_LIMIT = 8000
+IGNORED_ADJACENT_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "node_modules",
+}
+IGNORED_ADJACENT_SUFFIXES = {
+    ".pyc",
+    ".pyo",
+}
 
 
 @dataclass(frozen=True)
@@ -84,6 +96,23 @@ RISK_RULES: tuple[RiskRule, ...] = (
         check="Compare every duplicated field that downstream execution or UI reads, not just the headline ones.",
     ),
     RiskRule(
+        key="connector-workflow-boundary",
+        title="Connector or workflow boundary fidelity risk",
+        severity="high",
+        patterns=(
+            re.compile(
+                r"\b(connector|gateway|transport|fetch|response|payload|json|non-?2xx|status|timeout|await|wake|claim|fallback)\b",
+                re.I,
+            ),
+            re.compile(
+                r"\b(workflow|runtime|execution|adapter|wrapped|error|failure|pending|cleared|null|queue)\b",
+                re.I,
+            ),
+        ),
+        why="Connector and workflow boundaries often drop failure details, wrap payloads differently than tests expect, or compute workflow state from the wrong source.",
+        check="Trace the boundary both ways: preserve non-2xx failure detail, bound external awaits, assert actual wrapped payloads, keep fallback sources canonical, preserve explicit cleared state, and verify wake/claim timing uses the current run.",
+    ),
+    RiskRule(
         key="fixture-widening",
         title="Over-broad test fixture risk",
         severity="high",
@@ -109,6 +138,18 @@ RISK_RULES: tuple[RiskRule, ...] = (
         ),
         why="Generated-looking API code often reuses response or persisted shapes as input validation.",
         check="Make sure create and patch validation reflects the real request contract, not a response DTO or display model.",
+    ),
+    RiskRule(
+        key="optimistic-rollback",
+        title="Optimistic UI rollback gap risk",
+        severity="high",
+        patterns=(
+            re.compile(r"\bset[A-Z]\w*\s*\(", re.I),
+            re.compile(r"\b(await|async)\b", re.I),
+            re.compile(r"\b(error|catch|throw|reject|rollback|previous|prev)\b", re.I),
+        ),
+        why="Optimistic state updates can remain visible when an awaited mutation throws instead of returning an error payload.",
+        check="If local state changes before an awaited mutation, verify returned errors and thrown/rejected failures both restore prior state or resync from durable truth.",
     ),
     RiskRule(
         key="error-shaping",
@@ -430,12 +471,18 @@ def find_adjacent(repo: Path, changed: Iterable[Path]) -> list[str]:
                 if parent:
                     suggestions.add(f"{parent}/{hint}/")
 
-        for root, _, filenames in os.walk(repo):
+        for root, dirnames, filenames in os.walk(repo):
+            dirnames[:] = [
+                dirname for dirname in dirnames if dirname not in IGNORED_ADJACENT_DIRS
+            ]
             root_path = Path(root)
-            if ".git" in root_path.parts:
+            relative_parts = root_path.relative_to(repo).parts
+            if any(part in IGNORED_ADJACENT_DIRS for part in relative_parts):
                 continue
             for filename in filenames:
                 candidate = root_path / filename
+                if candidate.suffix.lower() in IGNORED_ADJACENT_SUFFIXES:
+                    continue
                 if candidate.resolve() in changed_set:
                     continue
                 candidate_name = candidate.name.lower()
@@ -534,7 +581,10 @@ def build_report(repo: Path, base: str | None, head: str | None, mode: str) -> J
             "Which fallback, default, or ?? path could invent owner/runtime state or overwrite an explicit cleared value?",
             "Could any test helper or fixture be broadening permissions or feature gates so the regression would still pass?",
             "Does the real route or UI contract match the shape the tests currently assert?",
+            "Which connector or gateway failure details could be dropped at a non-2xx, malformed JSON, or wrapper boundary?",
+            "Which external await, connector call, or gateway request needs a timeout, abort, or retry bound?",
             "If this is queued, scheduled, or wake-driven work, where is the claim written relative to awaits, retries, or re-polls?",
+            "Is wake or pending status computed from the current run/item rather than global pending state?",
             "Which negative path, retry path, and stale-state path did I actually trace?",
             "What proof do I have that imports, docs paths, and claimed validation commands still resolve?",
         ],

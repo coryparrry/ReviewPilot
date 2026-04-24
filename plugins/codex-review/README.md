@@ -307,7 +307,6 @@ For the actual review-authoring path, use:
 python .\plugins\codex-review\scripts\run_codex_review.py `
   --repo . `
   --mode changes `
-  --depth deep `
   --base origin/main
 ```
 
@@ -319,9 +318,9 @@ That command:
   - `dirty`: local dirty worktree changes, including untracked text files
   - `full`: broader repo-scan mode where the diff is only one clue
 - supports explicit review depth:
-  - `quick`: lighter prompt and no benchmark step
-  - `deep`: fuller prompt package plus benchmark step
-- starts with a strong changed-hunks pass and only escalates if more depth is justified
+  - `quick`: lighter prompt and no benchmark step; this is the default for budget-safe normal use
+  - `deep`: fuller prompt package plus benchmark step; request this deliberately after triage or strong miss evidence
+- in `deep`, starts with a strong changed-hunks pass and only continues into extra focused passes if more depth is justified
 - supports timeouts and reuse so stalled later passes or repeated reruns do not waste as much review budget
 - invokes Codex non-interactively in read-only mode
 - writes `review.md`
@@ -354,7 +353,7 @@ If you have a fresh quality-comparison artifact from live GitHub intake, you can
 python .\plugins\codex-review\scripts\run_codex_review.py `
   --repo . `
   --mode changes `
-  --depth deep `
+  --depth quick `
   --base origin/main `
   --quality-comparison .\artifacts\review-quality\<run>\quality-comparison.json
 ```

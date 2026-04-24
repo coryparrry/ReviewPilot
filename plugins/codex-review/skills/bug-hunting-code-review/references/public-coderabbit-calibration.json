@@ -34,5 +34,13 @@
   {
     "use": "retry-throttle-shared-state",
     "summary": "For shared async rate-limit or throttle helpers, check whether the last-request timestamp or similar coordination state is only updated after await or fetch completes, which allows concurrent callers to bypass the intended serialization."
+  },
+  {
+    "use": "transport-preserved-failure-detail",
+    "summary": "When a connector or gateway receives a non-2xx response, verify the response body or structured failure payload is preserved through normalization instead of collapsed into a generic status-only error."
+  },
+  {
+    "use": "connector-workflow-boundary-fidelity",
+    "summary": "For connector/workflow boundary changes, check wrapped payload shapes against the real returned object, bound external awaits with timeout or abort behavior, preserve explicit null or cleared state against fallbacks, and compute wake or pending status from the current run rather than global pending state."
   }
 ]

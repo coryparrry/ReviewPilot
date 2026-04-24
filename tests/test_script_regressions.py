@@ -57,6 +57,14 @@ triage_pr_queue = load_module(
     "triage_pr_queue_test",
     "plugins/codex-review/scripts/triage_pr_queue.py",
 )
+run_public_coderabbit_calibration = load_module(
+    "run_public_coderabbit_calibration_test",
+    "plugins/codex-review/scripts/run_public_coderabbit_calibration.py",
+)
+ingest_github_review_feedback = load_module(
+    "ingest_github_review_feedback_test",
+    "plugins/codex-review/scripts/ingest_github_review_feedback.py",
+)
 
 
 def test_finding_is_auto_approvable_skips_non_dict_review_match() -> None:
@@ -259,6 +267,46 @@ def test_render_surface_scan_highlights_risk_prompts_and_questions() -> None:
     assert "Questions to explicitly answer before you stop:" in rendered
 
 
+def test_build_prompt_requires_high_risk_prompt_accountability() -> None:
+    rendered = run_pre_pr_review.build_prompt(
+        "Default review prompt.",
+        "branch: feature",
+        "\n".join(
+            [
+                "Surface scan summary:",
+                "Risk prompts to verify:",
+                "- [high] Optimistic UI rollback gap risk: Verify thrown failures restore prior state.",
+            ]
+        ),
+        "diff --git a/file.tsx b/file.tsx",
+        "changes",
+        "quick",
+        "",
+    )
+
+    assert "For every `[high]` risk prompt in Surface scan" in rendered
+    assert "Verified high-risk prompt:" in rendered
+    assert "optimistic rollback" in rendered
+    assert "thrown or rejected awaited mutations" in rendered
+
+
+def test_build_prompt_includes_pr_introduced_bug_gate() -> None:
+    rendered = run_pre_pr_review.build_prompt(
+        "Default review prompt.",
+        "branch: feature",
+        "Surface scan summary:",
+        "diff --git a/file.ts b/file.ts",
+        "changes",
+        "quick",
+        "",
+    )
+
+    assert "concrete trigger scenario" in rendered
+    assert "changed code path" in rendered
+    assert "trigger is narrow" in rendered
+    assert "context boundary" in rendered
+
+
 def test_run_surface_scan_invokes_expected_json_cli(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -331,6 +379,185 @@ def test_scan_risks_flags_fallback_null_and_queue_claim_patterns() -> None:
     assert "fail-open-fallback" in keys
     assert "explicit-null-drift" in keys
     assert "queue-claim" in keys
+
+
+def test_scan_risks_flags_optimistic_rollback_gap() -> None:
+    scan_risks = cast(
+        Callable[..., list[dict[str, str]]],
+        getattr(review_surface_scan, "scan_risks"),
+    )
+    text = """
+    const prev = slides;
+    setSlides(reordered);
+    const result = await reorderHeroSlides(reordered.map((s) => s.id));
+    if (result?.error) {
+      setSlides(prev);
+      setActionError(result.error);
+    }
+    """
+
+    risks = scan_risks(text, code_like_change_present=True)
+    keys = {risk["key"] for risk in risks}
+
+    assert "optimistic-rollback" in keys
+
+
+def test_scan_risks_flags_connector_workflow_boundary() -> None:
+    scan_risks = cast(
+        Callable[..., list[dict[str, str]]],
+        getattr(review_surface_scan, "scan_risks"),
+    )
+    text = """
+    const response = await connector.fetchGateway(payload);
+    if (response.status >= 400) {
+      return { error: "Gateway failed" };
+    }
+    const wrapped = await response.json();
+    const wakeStatus = globalPendingQueue.length ? "pending" : run.status;
+    const adapter = fallbackRuntimeAdapter ?? defaultAdapter;
+    """
+
+    risks = scan_risks(text, code_like_change_present=True)
+    keys = {risk["key"] for risk in risks}
+
+    assert "connector-workflow-boundary" in keys
+
+
+def test_find_adjacent_ignores_generated_cache_files(tmp_path: Path) -> None:
+    find_adjacent = cast(
+        Callable[[Path, list[Path]], list[str]],
+        getattr(review_surface_scan, "find_adjacent"),
+    )
+    changed = tmp_path / "tests" / "foo.test.py"
+    generated = tmp_path / "tests" / "__pycache__" / "foo.test.cpython-314.pyc"
+    changed.parent.mkdir(parents=True)
+    generated.parent.mkdir(parents=True)
+    changed.write_text("def test_foo(): pass\n", encoding="utf-8")
+    generated.write_bytes(b"compiled")
+
+    adjacent = find_adjacent(tmp_path, [changed])
+
+    assert not any("__pycache__" in path for path in adjacent)
+    assert not any(path.endswith(".pyc") for path in adjacent)
+
+
+def test_find_adjacent_does_not_ignore_repo_with_cache_named_parent(
+    tmp_path: Path,
+) -> None:
+    find_adjacent = cast(
+        Callable[[Path, list[Path]], list[str]],
+        getattr(review_surface_scan, "find_adjacent"),
+    )
+    repo = tmp_path / "node_modules" / "repo"
+    changed = repo / "src" / "foo.ts"
+    sibling_test = repo / "src" / "foo.test.ts"
+    sibling_cache = repo / "src" / "__pycache__" / "foo.test.cpython-314.pyc"
+    sibling_cache.parent.mkdir(parents=True)
+    changed.parent.mkdir(parents=True, exist_ok=True)
+    changed.write_text("export function foo() { return 1; }\n", encoding="utf-8")
+    sibling_test.write_text("import { foo } from './foo';\n", encoding="utf-8")
+    sibling_cache.write_bytes(b"compiled")
+
+    adjacent = find_adjacent(repo, [changed])
+
+    assert "src/foo.test.ts" in adjacent
+    assert not any("__pycache__" in path for path in adjacent)
+
+
+def test_ingest_classifies_optimistic_rollback_comment() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, severity, confidence = classify_comment(
+        "Rollback is only triggered when the action returns { error }. "
+        "If reorderHeroSlides throws, optimistic state is kept. "
+        "Catch exceptions and restore prev too.",
+        "components/admin/hero-slide-list.tsx",
+    )
+
+    assert (category, severity, confidence) == (
+        "optimistic-state",
+        "high",
+        "high",
+    )
+
+
+def test_ingest_does_not_classify_transaction_comment_as_optimistic() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, _, _ = classify_comment(
+        "Two concurrent activations can both pass the count check. "
+        "Run the count check inside the same transaction as the insert/update write. "
+        "Ensure the transaction rolls back on error.",
+        "lib/actions/admin-hero.ts",
+    )
+
+    assert category != "optimistic-state"
+
+
+def test_ingest_classifies_toctou_transaction_comment() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, severity, confidence = classify_comment(
+        "These are TOCTOU checks right now. Two concurrent activations can both "
+        "pass the count check and end up with more than 5 active slides. "
+        "Run the count check inside the same transaction as the write.",
+        "lib/actions/admin-hero.ts",
+    )
+
+    assert (category, severity, confidence) == (
+        "concurrency-atomicity",
+        "high",
+        "high",
+    )
+
+
+def test_ingest_classifies_connector_boundary_comment() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, severity, confidence = classify_comment(
+        "The gateway non-2xx response body contains a failure payload, but the "
+        "connector collapses it into a generic status error and drops the detail.",
+        "packages/connectors/gateway.ts",
+    )
+
+    assert (category, severity, confidence) == (
+        "boundary-fidelity",
+        "high",
+        "high",
+    )
+
+
+def test_local_review_runners_default_to_quick(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_codex_review.py", "--repo", ".", "--prepare-only"],
+    )
+    codex_args = run_codex_review.parse_args()
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_pre_pr_review.py", "--repo", ".", "--prepare-only"],
+    )
+    pre_pr_args = run_pre_pr_review.parse_args()
+
+    assert codex_args.depth == "quick"
+    assert pre_pr_args.depth == "quick"
 
 
 def test_public_pr_quality_cycle_requires_review_artifact_for_auto_learning(
@@ -808,6 +1035,41 @@ def test_select_deep_pass_names_prefers_relevant_subset() -> None:
     assert selected == ["changed-hunks", "concurrency-state", "validation-contract"]
 
 
+def test_select_deep_pass_names_adds_boundary_fidelity_pass() -> None:
+    select_deep_pass_names = cast(
+        Callable[[dict[str, Any], int], list[str]],
+        getattr(run_codex_review, "select_deep_pass_names"),
+    )
+
+    selected = select_deep_pass_names(
+        {
+            "risk_hits": [
+                {"key": "connector-workflow-boundary"},
+            ],
+            "layers": {
+                "workflow-runtime": {"count": 1, "files": ["src/workflow.ts"]},
+            },
+        },
+        5,
+    )
+
+    assert selected == [
+        "changed-hunks",
+        "validation-contract",
+        "boundary-fidelity",
+        "workflow-lifecycle",
+    ]
+
+
+def test_deep_pass_order_includes_boundary_fidelity() -> None:
+    deep_pass_order = getattr(run_codex_review, "DEEP_PASS_ORDER")
+
+    assert "boundary-fidelity" in deep_pass_order
+    assert deep_pass_order.index("boundary-fidelity") > deep_pass_order.index(
+        "validation-contract"
+    )
+
+
 def test_build_pass_prompts_limits_deep_pass_count() -> None:
     build_pass_prompts = cast(
         Callable[[str, str, dict[str, Any], int], list[tuple[str, str]]],
@@ -1059,3 +1321,304 @@ def test_review_cache_key_tracks_effective_benchmark_mode() -> None:
 
     assert enabled["benchmark_enabled"] is True
     assert disabled["benchmark_enabled"] is False
+
+
+def test_public_coderabbit_calibration_parse_depths() -> None:
+    parse_depths = cast(
+        Callable[[str], list[str]],
+        getattr(run_public_coderabbit_calibration, "parse_depths"),
+    )
+
+    assert parse_depths("quick, deep") == ["quick", "deep"]
+    assert parse_depths("DEEP") == ["deep"]
+
+    with pytest.raises(ValueError, match="Duplicate review depth"):
+        parse_depths("quick,quick")
+    with pytest.raises(ValueError, match="Invalid review depth"):
+        parse_depths("quick,full")
+    with pytest.raises(ValueError, match="at least one depth"):
+        parse_depths(" , ")
+
+
+def test_public_coderabbit_calibration_defaults_to_quick() -> None:
+    assert run_public_coderabbit_calibration.DEFAULT_DEPTHS == ["quick"]
+
+
+def test_public_coderabbit_calibration_aggregate_tracks_depth_delta(
+    tmp_path: Path,
+) -> None:
+    quick_comparison = tmp_path / "quick.json"
+    deep_comparison = tmp_path / "deep.json"
+    quick_comparison.write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "candidate_id": "candidate-1",
+                        "gap_classification": "missed",
+                        "candidate_title": "Handle stale state",
+                        "file_path": "src/app.py",
+                        "line": 10,
+                        "severity": "high",
+                        "normalized_category": "state",
+                        "suggested_signal_phrases": ["stale state"],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    deep_comparison.write_text(
+        json.dumps(
+            {
+                "findings": [
+                    {
+                        "candidate_id": "candidate-1",
+                        "gap_classification": "caught",
+                        "candidate_title": "Handle stale state",
+                        "file_path": "src/app.py",
+                        "line": 10,
+                        "severity": "high",
+                        "normalized_category": "state",
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summarize_comparison_files = cast(
+        Callable[[list[Path]], dict[str, Any]],
+        run_public_coderabbit_calibration.summarize_comparison_files,
+    )
+    quick_vs_deep_delta = cast(
+        Callable[[list[dict[str, Any]]], dict[str, Any]],
+        run_public_coderabbit_calibration.quick_vs_deep_delta,
+    )
+
+    summary = summarize_comparison_files([quick_comparison])
+    delta = quick_vs_deep_delta(
+        [
+            {
+                "label": "sample",
+                "repo": "owner/name",
+                "pr": 123,
+                "reviews": [
+                    {"depth": "quick", "comparison_file": str(quick_comparison)},
+                    {"depth": "deep", "comparison_file": str(deep_comparison)},
+                ],
+            }
+        ]
+    )
+
+    assert summary["missed_count"] == 1
+    assert summary["caught_count"] == 0
+    assert summary["missed_by_severity"] == {"high": 1}
+    assert delta["comparable_prs"] == 1
+    assert delta["quick_missed_deep_caught_count"] == 1
+    assert (
+        delta["quick_missed_deep_caught"][0]["finding"]["candidate_id"] == "candidate-1"
+    )
+
+
+def test_public_coderabbit_calibration_resume_uses_depth_specific_artifacts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    main = cast(Callable[[], int], getattr(run_public_coderabbit_calibration, "main"))
+    output_dir = tmp_path / "out"
+    calibration_set = tmp_path / "calibration.json"
+    calibration_set.write_text(
+        json.dumps([{"repo": "owner/name", "pr": 123, "label": "sample"}]),
+        encoding="utf-8",
+    )
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    for depth in ("quick", "deep"):
+        review_run = output_dir / "reviews" / "sample" / depth / "20260422-000000"
+        review_run.mkdir(parents=True)
+        (review_run / "review.md").write_text(f"{depth} review", encoding="utf-8")
+        (review_run / "review-cache-key.json").write_text(
+            json.dumps(
+                run_public_coderabbit_calibration.expected_review_cache_key(
+                    head_sha="reviewed-commit",
+                    base_ref="origin/main",
+                    depth=depth,
+                    model="gpt-5.4-mini",
+                )
+            ),
+            encoding="utf-8",
+        )
+        comparison_parent = output_dir / "comparisons" / "sample" / depth
+        comparison_dir = comparison_parent / "quality-comparison"
+        comparison_dir.mkdir(parents=True)
+        (comparison_dir / "quality-comparison.json").write_text(
+            json.dumps({"findings": [], "summary": {"depth": depth}}),
+            encoding="utf-8",
+        )
+        (comparison_parent / "comparison-cache-key.json").write_text(
+            json.dumps(
+                run_public_coderabbit_calibration.comparison_cache_key(
+                    github_repo="owner/name",
+                    pr_number=123,
+                    source="rest",
+                    review_file=review_run / "review.md",
+                )
+            ),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "parse_args",
+        lambda: Namespace(
+            calibration_set=str(calibration_set),
+            output_dir=str(output_dir),
+            model="gpt-5.4-mini",
+            depths="quick,deep",
+            review_ref="comment-original",
+            limit=None,
+            resume=True,
+        ),
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration, "repo_root", lambda _cwd: tmp_path
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "ensure_repo_clone",
+        lambda _root, _github_repo: repo_dir,
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "pr_metadata",
+        lambda _repo_dir, _github_repo, _pr_number: {"baseRefName": "main"},
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "checkout_pr",
+        lambda _repo_dir, _pr_number: None,
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration,
+        "checkout_review_ref",
+        lambda _repo_dir, _github_repo, _pr_number, _review_ref: (
+            "reviewed-commit",
+            "comment-original",
+        ),
+    )
+
+    def fail_run_review(*_args: Any, **_kwargs: Any) -> Path:
+        raise AssertionError("resume should not run a new review")
+
+    def fail_run_public_compare(*_args: Any, **_kwargs: Any) -> Path:
+        raise AssertionError("resume should not run a new comparison")
+
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration, "run_review", fail_run_review
+    )
+    monkeypatch.setattr(
+        run_public_coderabbit_calibration, "run_public_compare", fail_run_public_compare
+    )
+
+    assert main() == 0
+
+    aggregate = json.loads(
+        (output_dir / "aggregate-summary.json").read_text(encoding="utf-8")
+    )
+    reviews = aggregate["results"][0]["reviews"]
+    assert (
+        aggregate["schema_version"] == "codex-review.public-coderabbit-calibration.v2"
+    )
+    assert [review["depth"] for review in reviews] == ["quick", "deep"]
+    assert aggregate["results"][0]["review_head_sha"] == "reviewed-commit"
+    assert "sample/quick" in reviews[0]["review_run_dir"]
+    assert "sample/deep" in reviews[1]["review_run_dir"]
+
+
+def test_public_coderabbit_calibration_review_resume_requires_full_cache_key(
+    tmp_path: Path,
+) -> None:
+    review_run = tmp_path / "reviews" / "sample" / "quick" / "20260422-000000"
+    review_run.mkdir(parents=True)
+    (review_run / "review.md").write_text("quick review", encoding="utf-8")
+    (review_run / "review-cache-key.json").write_text(
+        json.dumps(
+            run_public_coderabbit_calibration.expected_review_cache_key(
+                head_sha="reviewed-commit",
+                base_ref="origin/main",
+                depth="quick",
+                model="gpt-5.4-mini",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    stale_key = run_public_coderabbit_calibration.expected_review_cache_key(
+        head_sha="reviewed-commit",
+        base_ref="origin/main",
+        depth="deep",
+        model="gpt-5.4-mini",
+    )
+
+    reusable = run_public_coderabbit_calibration.newest_complete_review_run(
+        review_run.parent, stale_key
+    )
+
+    assert reusable is None
+
+
+def test_public_coderabbit_calibration_comparison_resume_requires_review_file(
+    tmp_path: Path,
+) -> None:
+    comparison_file = tmp_path / "quality-comparison" / "quality-comparison.json"
+    cache_key_file = tmp_path / "comparison-cache-key.json"
+    old_review_file = tmp_path / "old" / "review.md"
+    new_review_file = tmp_path / "new" / "review.md"
+    comparison_file.parent.mkdir(parents=True)
+    old_review_file.parent.mkdir(parents=True)
+    new_review_file.parent.mkdir(parents=True)
+    comparison_file.write_text(json.dumps({"findings": []}), encoding="utf-8")
+    old_review_file.write_text("old", encoding="utf-8")
+    new_review_file.write_text("new", encoding="utf-8")
+    cache_key_file.write_text(
+        json.dumps(
+            run_public_coderabbit_calibration.comparison_cache_key(
+                github_repo="owner/name",
+                pr_number=123,
+                source="rest",
+                review_file=old_review_file,
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    is_current = run_public_coderabbit_calibration.comparison_file_is_current(
+        comparison_file,
+        cache_key_file,
+        run_public_coderabbit_calibration.comparison_cache_key(
+            github_repo="owner/name",
+            pr_number=123,
+            source="rest",
+            review_file=new_review_file,
+        ),
+    )
+
+    assert is_current is False
+
+
+def test_public_coderabbit_calibration_prefers_original_comment_commit() -> None:
+    choose_original_comment_commit = cast(
+        Callable[[list[dict[str, Any]]], str | None],
+        run_public_coderabbit_calibration.choose_original_comment_commit,
+    )
+
+    commit = choose_original_comment_commit(
+        [
+            {"original_commit_id": "old-a", "commit_id": "new-a"},
+            {"original_commit_id": "old-b", "commit_id": "new-b"},
+            {"original_commit_id": "old-a", "commit_id": "new-c"},
+        ]
+    )
+
+    assert commit == "old-a"

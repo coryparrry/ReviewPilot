@@ -386,3 +386,17 @@ Review response:
 - For every transition, list the companion state surfaces that should change with it.
 - Verify that leaving a gated state clears the gating artifacts as well as the headline status.
 - Treat disagreement between status and queue or approval surfaces as a correctness bug even when the main transition "worked."
+
+## 31. Optimistic Rollback Must Cover Thrown Failures
+
+Repeated failure mode:
+
+- A UI applied an optimistic local state update before awaiting a server action.
+- The rollback path only ran when the action returned an `{ error }` payload.
+- If the action threw instead, the optimistic state stayed visible and drifted from persisted truth.
+
+Review response:
+
+- Check both returned-error and thrown-exception paths for every optimistic mutation.
+- Require rollback, resync, or invalidation in a `catch`/`finally` path when the mutation can throw.
+- Treat "the action usually returns errors" as incomplete unless the caller also handles thrown transport, validation, or unexpected failures.

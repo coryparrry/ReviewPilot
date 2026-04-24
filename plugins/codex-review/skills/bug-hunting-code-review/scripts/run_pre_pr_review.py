@@ -407,13 +407,20 @@ def build_prompt(
         - Use the exact headings: Findings, Open questions, Change summary.
         - Each finding needs a short title, one short "Why this is a bug:" sentence, and one short "Evidence:" sentence.
         - Prioritize findings that are directly caused by the changed files, changed hunks, or the state transitions they now control.
+        - Before reporting a finding, name the concrete trigger scenario and the changed code path that makes it newly possible.
+        - For clear bugs and security issues, do not skip a real defect only because the trigger is narrow.
+        - For lower-severity concerns, report only when you can confidently explain the failure path from source evidence.
+        - Do not speculate about broken callers, missing definitions, or incomplete scopes unless the specific affected code path is visible in the review context.
+        - If the visible diff ends at an opening scope such as `if`, `for`, `try`, or a function body, treat that as a context boundary, not automatically as incomplete code.
         - Name the concrete symbol, field, error type, or state surface that is wrong.
         - When the issue is stale state, source-of-truth drift, or contract mismatch, name both sides that disagree.
         - Prefer concrete API names, field names, functions, enums, and error names.
+        - For every `[high]` risk prompt in Surface scan, either turn it into a finding or add an `Open questions` line starting `Verified high-risk prompt:` that names the prompt and the concrete code evidence that made it safe.
+        - Do not claim a high-risk prompt is verified just because the happy path handles returned errors; for optimistic rollback, explicitly check thrown or rejected awaited mutations too.
 
         Review loop:
         1. Pressure-test the changed code first for missing guards, guard-then-write races, rollback gaps, stale-status cleanup, and read-vs-write drift.
-        2. Use the scan section below to inspect the highest-risk adjacent paths.
+        2. Use the scan section below to inspect every `[high]` risk prompt before lower-risk cleanup.
         3. If you find one real bug in a touched area, check the sibling branch or mirrored path for the same failure class.
         4. Only then spend time on broader repo drift.
 
@@ -560,9 +567,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--depth",
-        default="deep",
+        default="quick",
         choices=["quick", "deep"],
-        help="Prompt depth. quick uses a lighter prompt package; deep uses the fuller one.",
+        help=(
+            "Prompt depth. Defaults to quick to keep normal runs budget-safe; "
+            "deep uses the fuller package and should be requested deliberately."
+        ),
     )
     parser.add_argument(
         "--review-file", help="Path to an existing review artifact to score."
