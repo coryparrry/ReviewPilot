@@ -19,6 +19,7 @@ DEEP_PASS_ORDER = [
     "changed-hunks",
     "concurrency-state",
     "validation-contract",
+    "boundary-fidelity",
     "workflow-lifecycle",
     "async-helpers",
 ]
@@ -58,9 +59,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--depth",
-        default="deep",
+        default="quick",
         choices=["quick", "deep"],
-        help="Prompt depth. quick skips benchmarks by default; deep keeps the fuller review package.",
+        help=(
+            "Prompt depth. Defaults to quick to keep normal runs budget-safe; "
+            "deep keeps the fuller review package and should be requested deliberately."
+        ),
     )
     parser.add_argument(
         "--quality-comparison",

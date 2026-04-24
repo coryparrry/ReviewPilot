@@ -12,7 +12,7 @@ DEFAULT_SET_PATH = Path(
     "plugins/codex-review/references/public-coderabbit-calibration-set.json"
 )
 ALLOWED_DEPTHS = {"quick", "deep"}
-DEFAULT_DEPTHS = ["deep"]
+DEFAULT_DEPTHS = ["quick"]
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
         default=",".join(DEFAULT_DEPTHS),
         help=(
             "Comma-separated review depths to compare. Allowed values: quick,deep. "
-            "Defaults to deep for backward compatibility."
+            "Defaults to quick so calibration runs do not spend deep-review budget unless requested."
         ),
     )
     parser.add_argument(

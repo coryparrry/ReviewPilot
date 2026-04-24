@@ -481,6 +481,27 @@ def test_ingest_classifies_connector_boundary_comment() -> None:
     )
 
 
+def test_local_review_runners_default_to_quick(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_codex_review.py", "--repo", ".", "--prepare-only"],
+    )
+    codex_args = run_codex_review.parse_args()
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["run_pre_pr_review.py", "--repo", ".", "--prepare-only"],
+    )
+    pre_pr_args = run_pre_pr_review.parse_args()
+
+    assert codex_args.depth == "quick"
+    assert pre_pr_args.depth == "quick"
+
+
 def test_public_pr_quality_cycle_requires_review_artifact_for_auto_learning(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -982,6 +1003,15 @@ def test_select_deep_pass_names_adds_boundary_fidelity_pass() -> None:
     ]
 
 
+def test_deep_pass_order_includes_boundary_fidelity() -> None:
+    deep_pass_order = getattr(run_codex_review, "DEEP_PASS_ORDER")
+
+    assert "boundary-fidelity" in deep_pass_order
+    assert deep_pass_order.index("boundary-fidelity") > deep_pass_order.index(
+        "validation-contract"
+    )
+
+
 def test_build_pass_prompts_limits_deep_pass_count() -> None:
     build_pass_prompts = cast(
         Callable[[str, str, dict[str, Any], int], list[tuple[str, str]]],
@@ -1250,6 +1280,10 @@ def test_public_coderabbit_calibration_parse_depths() -> None:
         parse_depths("quick,full")
     with pytest.raises(ValueError, match="at least one depth"):
         parse_depths(" , ")
+
+
+def test_public_coderabbit_calibration_defaults_to_quick() -> None:
+    assert run_public_coderabbit_calibration.DEFAULT_DEPTHS == ["quick"]
 
 
 def test_public_coderabbit_calibration_aggregate_tracks_depth_delta(

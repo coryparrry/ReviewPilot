@@ -562,9 +562,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--depth",
-        default="deep",
+        default="quick",
         choices=["quick", "deep"],
-        help="Prompt depth. quick uses a lighter prompt package; deep uses the fuller one.",
+        help=(
+            "Prompt depth. Defaults to quick to keep normal runs budget-safe; "
+            "deep uses the fuller package and should be requested deliberately."
+        ),
     )
     parser.add_argument(
         "--review-file", help="Path to an existing review artifact to score."
