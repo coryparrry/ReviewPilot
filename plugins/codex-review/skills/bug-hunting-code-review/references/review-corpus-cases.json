@@ -132,6 +132,44 @@
     ]
   },
   {
+    "id": "transport-preserve-non-2xx-failure-detail",
+    "title": "Preserve non-2xx connector failure payload details across transport boundaries",
+    "severity": "high",
+    "category": "boundary-fidelity",
+    "source": "binder-pr-review-evidence:connector-workflow-boundary",
+    "expected_groups": [
+      [
+        "non-?2xx|status",
+        "failure payload|error payload|response body|detail",
+        "preserv|drop|lost|surface"
+      ],
+      [
+        "gateway|connector|transport|fetch",
+        "error|failure",
+        "payload|body|json"
+      ]
+    ]
+  },
+  {
+    "id": "workflow-boundary-current-run-and-bounded-await",
+    "title": "Keep workflow boundary state current-run scoped and external awaits bounded",
+    "severity": "high",
+    "category": "boundary-fidelity",
+    "source": "binder-pr-review-evidence:connector-workflow-boundary",
+    "expected_groups": [
+      [
+        "wake|claim|pending|current run|current-run|run status",
+        "global pending|wrong run|current run",
+        "stale|race|duplicate|skip"
+      ],
+      [
+        "external await|fetch|request|connector",
+        "timeout|abort|bounded",
+        "hang|stall|indefinite"
+      ]
+    ]
+  },
+  {
     "id": "optimistic-rollback-thrown-action",
     "title": "Rollback optimistic UI state when awaited actions throw",
     "severity": "high",

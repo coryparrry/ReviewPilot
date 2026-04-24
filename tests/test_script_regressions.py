@@ -385,6 +385,27 @@ def test_scan_risks_flags_optimistic_rollback_gap() -> None:
     assert "optimistic-rollback" in keys
 
 
+def test_scan_risks_flags_connector_workflow_boundary() -> None:
+    scan_risks = cast(
+        Callable[..., list[dict[str, str]]],
+        getattr(review_surface_scan, "scan_risks"),
+    )
+    text = """
+    const response = await connector.fetchGateway(payload);
+    if (response.status >= 400) {
+      return { error: "Gateway failed" };
+    }
+    const wrapped = await response.json();
+    const wakeStatus = globalPendingQueue.length ? "pending" : run.status;
+    const adapter = fallbackRuntimeAdapter ?? defaultAdapter;
+    """
+
+    risks = scan_risks(text, code_like_change_present=True)
+    keys = {risk["key"] for risk in risks}
+
+    assert "connector-workflow-boundary" in keys
+
+
 def test_ingest_classifies_optimistic_rollback_comment() -> None:
     classify_comment = cast(
         Callable[[str, str | None], tuple[str, str, str]],
@@ -436,6 +457,25 @@ def test_ingest_classifies_toctou_transaction_comment() -> None:
 
     assert (category, severity, confidence) == (
         "concurrency-atomicity",
+        "high",
+        "high",
+    )
+
+
+def test_ingest_classifies_connector_boundary_comment() -> None:
+    classify_comment = cast(
+        Callable[[str, str | None], tuple[str, str, str]],
+        ingest_github_review_feedback.classify_comment,
+    )
+
+    category, severity, confidence = classify_comment(
+        "The gateway non-2xx response body contains a failure payload, but the "
+        "connector collapses it into a generic status error and drops the detail.",
+        "packages/connectors/gateway.ts",
+    )
+
+    assert (category, severity, confidence) == (
+        "boundary-fidelity",
         "high",
         "high",
     )
@@ -914,6 +954,32 @@ def test_select_deep_pass_names_prefers_relevant_subset() -> None:
     )
 
     assert selected == ["changed-hunks", "concurrency-state", "validation-contract"]
+
+
+def test_select_deep_pass_names_adds_boundary_fidelity_pass() -> None:
+    select_deep_pass_names = cast(
+        Callable[[dict[str, Any], int], list[str]],
+        getattr(run_codex_review, "select_deep_pass_names"),
+    )
+
+    selected = select_deep_pass_names(
+        {
+            "risk_hits": [
+                {"key": "connector-workflow-boundary"},
+            ],
+            "layers": {
+                "workflow-runtime": {"count": 1, "files": ["src/workflow.ts"]},
+            },
+        },
+        5,
+    )
+
+    assert selected == [
+        "changed-hunks",
+        "validation-contract",
+        "boundary-fidelity",
+        "workflow-lifecycle",
+    ]
 
 
 def test_build_pass_prompts_limits_deep_pass_count() -> None:

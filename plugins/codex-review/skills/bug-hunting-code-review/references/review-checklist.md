@@ -69,6 +69,7 @@ Questions:
 - Does the patch fix one path but leave create/update/delete inconsistent?
 - Does the returned data match what the caller now expects?
 - If runtime or binder context is duplicated, do all copied companion fields still match, or are only headline fields validated?
+- If this crosses a connector, gateway, or transport boundary, are non-2xx response bodies and structured failure details preserved?
 
 ### Workflow/scheduler/background changes
 
@@ -88,6 +89,8 @@ Questions:
 - Can duplicates run after retry, wake, or reload?
 - Is the failure persisted and surfaced correctly?
 - Are routes, services, and scheduler logic still aligned?
+- Is wake, pending, or claim status computed from the current run or item rather than global pending state?
+- Are external awaits, connector calls, and gateway requests bounded by timeout, abort, or retry policy?
 
 ### Persistence/bootstrap/migration/test-fixture changes
 
@@ -148,6 +151,16 @@ If yes, run a dedicated security pass and escalate to `$security-review` when th
 - Can stale snapshots survive after refresh or bootstrap?
 - Can async responses arrive out of order and overwrite newer truth?
 - Does local draft state resync correctly after backend changes?
+- Does explicit null or cleared state survive connector/runtime fallback normalization?
+
+### Connector and workflow boundary fidelity
+
+- Does a connector preserve non-2xx failure detail instead of collapsing it into a generic status-only error?
+- Does malformed JSON or malformed wrapped payload data produce the intended typed failure instead of escaping as a 500?
+- Do tests assert the actual wrapped payload shape returned by the route or connector, not a guessed inner shape?
+- Does fallback logic read from the canonical connector/runtime source of truth instead of a stale companion field?
+- Are gateway, connector, and external-process awaits bounded so they cannot stall the workflow indefinitely?
+- Is wake or claim state written before awaits, retries, or re-polls can observe the same work again?
 
 ### Auth, role, permission, and session handling
 

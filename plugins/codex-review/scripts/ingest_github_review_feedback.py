@@ -37,6 +37,18 @@ CATEGORY_RULES = [
         ],
     },
     {
+        "category": "boundary-fidelity",
+        "severity": "high",
+        "confidence": "medium",
+        "patterns": [
+            r"non-?2xx|status",
+            r"failure payload|error payload|response body|wrapped payload|payload shape",
+            r"gateway|connector|transport|fetch|external await|timeout",
+            r"wake|claim|pending|current run|global pending",
+            r"fallback|explicit null|cleared state",
+        ],
+    },
+    {
         "category": "state-symmetry",
         "severity": "high",
         "confidence": "medium",

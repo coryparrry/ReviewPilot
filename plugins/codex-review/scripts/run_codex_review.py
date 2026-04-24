@@ -519,6 +519,13 @@ PASS_FOCUS_SUFFIXES: dict[str, str] = {
         "- Prefer mismatches where the write path stores one source of truth but the read path still uses a live default or fallback value.\n"
         "- Prefer findings in the touched functions and their immediate callers/callees.\n"
     ),
+    "boundary-fidelity": (
+        "\n\nFocus pass:\n"
+        "- Prioritize connector/workflow boundary drift: dropped non-2xx failure payloads, malformed JSON escaping as 500s, wrapped payload/test mismatches, connector fallback drift, timeoutless external awaits, explicit-cleared-state fallback overwrites, and wake/claim races.\n"
+        "- Trace both sides of each boundary: transport response -> normalized error, connector adapter -> canonical runtime source, workflow claim -> current-run status, and wrapped payload -> test assertion.\n"
+        "- Prefer findings where the caller loses failure detail, waits forever, reads a global pending state instead of the current run, or tests assert the wrapper instead of the real payload.\n"
+        "- Prefer findings in touched boundary code and immediate call sites that depend on the preserved shape, timeout, or state source.\n"
+    ),
     "workflow-lifecycle": (
         "\n\nFocus pass:\n"
         "- Prioritize reset, cleanup, teardown, retry, process-launch, timeout, and refresh behavior.\n"
@@ -563,12 +570,22 @@ def select_deep_pass_names(
     if risk_keys & {
         "request-contract",
         "error-shaping",
+        "connector-workflow-boundary",
         "security-boundary",
         "path-reachability",
     } or layer_names & {"route-controller", "contracts-types"}:
         selected.append("validation-contract")
+    if risk_keys & {
+        "connector-workflow-boundary",
+        "registry-drift",
+        "parity-drift",
+        "explicit-null-drift",
+        "queue-claim",
+    }:
+        selected.append("boundary-fidelity")
     if (
-        risk_keys & {"state-machine", "queue-claim", "fail-open-fallback"}
+        risk_keys
+        & {"state-machine", "queue-claim", "fail-open-fallback", "connector-workflow-boundary"}
         or "workflow-runtime" in layer_names
     ):
         selected.append("workflow-lifecycle")
