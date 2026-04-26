@@ -10,6 +10,9 @@ Inspect before editing.
 
 ## Working Rules
 
+- Knowledge-Hub memory is raw-first. Do not write new repo notes, system notes, corrections, or lessons directly into `/Users/coryparry/Documents/Knowledge-Hub/wiki/`.
+- Capture durable cross-project memory under `/Users/coryparry/Documents/Knowledge-Hub/raw/agent-memory/` first. Repeated mistake lessons go in `/Users/coryparry/Documents/Knowledge-Hub/raw/agent-memory/codex-lessons.md`.
+- The Knowledge-Hub maintenance automation is responsible for sorting raw captures into indexes and synthesized wiki pages later.
 - Prefer the minimum correct practical change.
 - Preserve existing conventions unless there is a clear reason to improve them.
 - Keep docs aligned with the current project state.
