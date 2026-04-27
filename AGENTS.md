@@ -22,6 +22,12 @@ Inspect before editing.
 
 Be conscious of context-window usage. When reading long documents, large generated skills, or doing review-heavy analysis across many files, prefer subagents so the main thread stays compact.
 
+## Codex Repo Task Tracking
+
+Use this repo's Knowledge-Hub task file for Codex-owned persistent follow-ups. Before meaningful work, check only this repo's task file under `/Users/coryparry/Documents/Knowledge-Hub/wiki/tasks/repos/`. Add unfinished follow-ups for this repo with `append_repo_task.py`, and mark completed tracked tasks in this repo's task file by changing `- [ ]` to `- [x]`. Do not mark, rewrite, or reorganize task files that belong to other repos.
+
+Do not create duplicates, track temporary working steps, or use this for user-owned tasks unless explicitly asked.
+
 ## Subagent Use
 
 For non-trivial engineering work, use `$agent-team-orchestrator` from the installed Codex skills directory to decide when and how to delegate.
